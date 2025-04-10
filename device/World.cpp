@@ -94,35 +94,42 @@ void World::commitParameters()
     m_zeroVolumeData->addChangeObserver(this);
 }
 
-void World::setWorldObjectsCurrent()
+void World::setCyclesWorldObjects()
 {
   auto &state = *deviceState();
   auto *scene = state.scene;
 
-  for (auto *o : scene->objects)
-    delete o;
+  reportMessage(ANARI_SEVERITY_DEBUG,
+      "trace -- World::setCyclesWorldObjects() clearing objects");
+
   scene->objects.clear();
 
-  for (auto *g : scene->geometry)
-    delete g;
-  scene->geometry.clear();
+  reportMessage(ANARI_SEVERITY_DEBUG,
+      "trace -- World::setCyclesWorldObjects() adding zero instance");
 
-  scene->lights.clear();
+  m_zeroInstance->addInstanceObjectsToCyclesScene();
+
+  if (m_instanceData) {
+    reportMessage(ANARI_SEVERITY_DEBUG,
+        "trace -- World::setCyclesWorldObjects() adding other instances");
+
+    auto **instancesBegin = (Instance **)m_instanceData->handlesBegin();
+    auto **instancesEnd = (Instance **)m_instanceData->handlesEnd();
+
+    std::for_each(instancesBegin, instancesEnd, [](Instance *i) {
+      i->addInstanceObjectsToCyclesScene();
+    });
+  }
+
+  reportMessage(ANARI_SEVERITY_DEBUG,
+      "trace -- World::setCyclesWorldObjects() tagging manager updates");
 
   scene->object_manager->tag_update(scene, ObjectManager::UPDATE_ALL);
   scene->geometry_manager->tag_update(scene, GeometryManager::UPDATE_ALL);
   scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
 
-  m_zeroInstance->addInstanceObjectsToCurrentWorld();
-
-  if (m_instanceData) {
-    auto **instancesBegin = (Instance **)m_instanceData->handlesBegin();
-    auto **instancesEnd = (Instance **)m_instanceData->handlesEnd();
-
-    std::for_each(instancesBegin, instancesEnd, [](Instance *i) {
-      i->addInstanceObjectsToCurrentWorld();
-    });
-  }
+  reportMessage(
+      ANARI_SEVERITY_DEBUG, "trace -- World::setCyclesWorldObjects() done");
 }
 
 box3 World::bounds() const

@@ -41,10 +41,10 @@ Group *Instance::group() const
   return m_group.ptr;
 }
 
-void Instance::addInstanceObjectsToCurrentWorld()
+void Instance::addInstanceObjectsToCyclesScene()
 {
   if (m_group)
-    m_group->addGroupToCurrentWorld(m_xfm);
+    m_group->addGroupToCurrentCyclesScene(m_xfm);
 }
 
 box3 Instance::bounds() const

@@ -277,7 +277,6 @@ CyclesDevice::~CyclesDevice()
   state.commitBuffer.clear();
 
   // We don't want the ccl::Scene deleting these objects, they are already gone
-  state.scene->lights.clear();
   state.scene->shaders.clear();
 
   reportMessage(ANARI_SEVERITY_DEBUG, "destroyed cycles device (%p)", this);

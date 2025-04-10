@@ -10,15 +10,18 @@
 
 namespace cycles {
 
-struct Geometry : public Object {
+struct Geometry : public Object
+{
   Geometry(CyclesGlobalState *s);
   ~Geometry() override;
 
-  static Geometry *createInstance(std::string_view type, CyclesGlobalState *state);
+  static Geometry *createInstance(
+      std::string_view type, CyclesGlobalState *state);
 
-  virtual std::unique_ptr<ccl::Geometry> makeCyclesGeometry() = 0;
+  virtual ccl::Geometry *createCyclesGeometryNode() = 0;
+  virtual void syncCyclesNode(ccl::Geometry *node) const = 0;
 };
 
-}  // namespace cycles
+} // namespace cycles
 
 CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Geometry *, ANARI_GEOMETRY);

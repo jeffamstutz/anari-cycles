@@ -23,7 +23,7 @@ void Group::commitParameters()
   m_lightData = getParamObject<ObjectArray>("light");
 }
 
-void Group::addGroupToCurrentWorld(const ccl::Transform &xfm) const
+void Group::addGroupToCurrentCyclesScene(const ccl::Transform &xfm) const
 {
   auto &state = *deviceState();
 
@@ -36,19 +36,13 @@ void Group::addGroupToCurrentWorld(const ccl::Transform &xfm) const
         s->warnIfUnknownObject();
         return;
       }
-
-      auto g = s->makeCyclesGeometry();
-      g->tag_update(state.scene, true);
-
-      auto o = std::make_unique<ccl::Object>();
-      o->set_geometry(g.get());
+      auto *o = state.scene->create_node<ccl::Object>();
+      o->set_geometry(s->cyclesGeometry());
       o->set_tfm(xfm);
-      state.scene->objects.push_back(std::move(o));
-
-      state.scene->geometry.push_back(std::move(g));
     });
   }
 
+#if 0
   if (m_volumeData) {
     auto **volumesBegin = (Volume **)m_volumeData->handlesBegin();
     auto **volumesEnd = (Volume **)m_volumeData->handlesEnd();
@@ -58,18 +52,12 @@ void Group::addGroupToCurrentWorld(const ccl::Transform &xfm) const
         v->warnIfUnknownObject();
         return;
       }
-
-      auto g = v->makeCyclesGeometry();
-      g->tag_update(state.scene, true);
-
-      auto o = std::make_unique<ccl::Object>();
-      o->set_geometry(g.get());
+      auto *o = state.scene->create_node<ccl::Object>();
+      o->set_geometry(v->cyclesGeometry());
       o->set_tfm(xfm);
-      state.scene->objects.push_back(std::move(o));
-
-      state.scene->geometry.push_back(std::move(g));
     });
   }
+#endif
 
   if (m_lightData) {
     auto **lightsBegin = (Light **)m_lightData->handlesBegin();
@@ -80,10 +68,9 @@ void Group::addGroupToCurrentWorld(const ccl::Transform &xfm) const
         l->warnIfUnknownObject();
         return;
       }
-
-      auto cl = l->cyclesLight();
-      cl->tag_update(state.scene);
-      state.scene->lights.push_back(std::move(cl));
+      auto *o = state.scene->create_node<ccl::Object>();
+      o->set_geometry(l->cyclesLight());
+      o->set_tfm(xfm);
     });
   }
 }

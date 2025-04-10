@@ -16,7 +16,7 @@ struct Instance : public Object
 
   Group *group() const;
 
-  void addInstanceObjectsToCurrentWorld();
+  void addInstanceObjectsToCyclesScene();
 
   box3 bounds() const override;
 

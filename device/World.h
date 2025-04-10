@@ -18,7 +18,7 @@ struct World : public Object {
 
   void commitParameters() override;
 
-  void setWorldObjectsCurrent();
+  void setCyclesWorldObjects();
 
   box3 bounds() const override;
 

@@ -125,11 +125,13 @@ std::unique_ptr<ccl::Geometry> StructuredRegularField::makeCyclesGeometry()
     face_normals.push_back(cross(e1, e2));
   }
 
+#if 0
   Attribute *attr_fN = volume->attributes.add(ATTR_STD_FACE_NORMAL);
   float3 *fN = attr_fN->data_float3();
   for (size_t i = 0; i < face_normals.size(); ++i) {
     fN[i] = face_normals[i];
   }
+#endif
 
   return volume;
 }

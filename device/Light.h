@@ -20,7 +20,7 @@ struct Light : public Object
 
   virtual void commitParameters() override;
 
-  std::unique_ptr<ccl::Light> cyclesLight();
+  ccl::Light *cyclesLight() const;
 
  protected:
   ccl::Light *m_cyclesLight{nullptr};

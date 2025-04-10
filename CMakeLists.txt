@@ -19,8 +19,6 @@ set(CMAKE_BUILD_TYPE_INIT Release)
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
 set(CMAKE_INSTALL_MESSAGE LAZY)
 
-include(CMakePrintHelpers)
-
 ## Top-level project ##
 
 project(anari-cycles LANGUAGES C CXX)
@@ -28,6 +26,9 @@ project(anari-cycles LANGUAGES C CXX)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+include(CMakePrintHelpers)
+include(GNUInstallDirs)
 
 ## Dependencies ##
 
@@ -52,7 +53,7 @@ set(WITH_CYCLES_OSL                   OFF CACHE BOOL "")
 set(WITH_CYCLES_PUGIXML               ON  CACHE BOOL "")
 set(WITH_CYCLES_USD                   OFF CACHE BOOL "")
 
-add_subdirectory(cycles)
+add_subdirectory(cycles EXCLUDE_FROM_ALL)
 
 ## ANARI device library ##
 

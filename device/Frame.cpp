@@ -106,7 +106,7 @@ void Frame::renderFrame()
     m_camera->setCameraCurrent(m_frameData.size.x, m_frameData.size.y);
     m_renderer->makeRendererCurrent();
     if (currentFrameChanged || shouldUpdateCyclesScene()) {
-      m_world->setWorldObjectsCurrent();
+      m_world->setCyclesWorldObjects();
       m_worldLastChanged = helium::newTimeStamp();
     }
 

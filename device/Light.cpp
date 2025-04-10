@@ -21,11 +21,17 @@ struct Directional : public Light
   float m_irradiance{1.f};
 };
 
-// Light definitions /////////////////////////////////////////////////////////
+// Light definitions //////////////////////////////////////////////////////////
 
-Light::Light(CyclesGlobalState *s) : Object(ANARI_CAMERA, s) {}
+Light::Light(CyclesGlobalState *s) : Object(ANARI_CAMERA, s)
+{
+  m_cyclesLight = s->scene->create_node<ccl::Light>();
+}
 
-Light::~Light() = default;
+Light::~Light()
+{
+  reportMessage(ANARI_SEVERITY_WARNING, "TODO: cleanup Cycles light objects");
+}
 
 Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
 {
@@ -40,23 +46,9 @@ void Light::commitParameters()
   m_color = getParam<anari_vec::float3>("color", {1.f, 1.f, 1.f});
 }
 
-std::unique_ptr<ccl::Light> Light::cyclesLight()
+ccl::Light *Light::cyclesLight() const
 {
-  auto cl = std::make_unique<ccl::Light>();
-
-  cl->set_shader(deviceState()->scene->default_light);
-  cl->set_use_camera(true);
-  cl->set_use_diffuse(true);
-  cl->set_use_glossy(true);
-  cl->set_use_transmission(true);
-  cl->set_use_scatter(true);
-  cl->set_cast_shadow(true);
-
-  m_cyclesLight = cl.get();
-  this->finalize();
-  m_cyclesLight = nullptr;
-
-  return cl;
+  return m_cyclesLight;
 }
 
 // Directional definitions ////////////////////////////////////////////////////
@@ -75,22 +67,21 @@ void Directional::commitParameters()
 
 void Directional::finalize()
 {
-  if (!m_cyclesLight)
-    return;
-
   m_cyclesLight->set_light_type(LIGHT_DISTANT);
 
   auto direction = normalize(
       ccl::make_float3(m_direction[0], m_direction[1], m_direction[2]));
   auto color = ccl::make_float3(m_color[0], m_color[1], m_color[2]);
 
-  auto &state = *deviceState();
   m_cyclesLight->set_strength(m_irradiance * color);
 
+#if 0
   auto tfm = m_cyclesLight->get_tfm();
   transform_set_column(&tfm, 2, -direction);
   m_cyclesLight->set_tfm(tfm);
-  m_cyclesLight->tag_update(state.scene);
+#endif
+
+  m_cyclesLight->tag_update(deviceState()->scene);
 }
 
 } // namespace cycles

@@ -73,10 +73,18 @@ PRIVATE
   OpenImageIO::OpenImageIO
 )
 
-## Code generation
+## ANARI query code generation ##
 
 anari_generate_queries(
   DEVICE_TARGET ${PROJECT_NAME}
   CPP_NAMESPACE cycles
   JSON_DEFINITIONS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/cycles_device.json
+)
+
+## Installation ##
+
+install(TARGETS ${PROJECT_NAME}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )

@@ -33,19 +33,21 @@ struct Triangle : public Geometry
   ~Triangle() override;
 
   void commitParameters() override;
+  void finalize() override;
 
-  std::unique_ptr<ccl::Geometry> makeCyclesGeometry() override;
+  ccl::Geometry *createCyclesGeometryNode() override;
+  void syncCyclesNode(ccl::Geometry *node) const override;
 
   box3 bounds() const override;
 
  private:
-  void setVertexPosition(ccl::Mesh *mesh);
-  void setPrimitiveIndex(ccl::Mesh *mesh);
-  void setVertexNormal(ccl::Mesh *mesh);
-  void setVertexColor(ccl::Mesh *mesh);
+  void setVertexPosition(ccl::Mesh *mesh) const;
+  void setPrimitiveIndex(ccl::Mesh *mesh) const;
+  void setVertexNormal(ccl::Mesh *mesh) const;
+  void setVertexColor(ccl::Mesh *mesh) const;
   void setVertexAttribute(ccl::Mesh *mesh,
       const helium::IntrusivePtr<Array1D> &array,
-      const char *name);
+      const char *name) const;
 
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
@@ -75,30 +77,38 @@ void Triangle::commitParameters()
   m_vertexAttribute1 = getParamObject<Array1D>("vertex.attribute1");
   m_vertexAttribute2 = getParamObject<Array1D>("vertex.attribute2");
   m_vertexAttribute3 = getParamObject<Array1D>("vertex.attribute3");
+}
 
+void Triangle::finalize()
+{
   if (!m_vertexPosition) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "missing required parameter 'vertex.position' on triangle geometry");
-    return;
   }
 }
 
-std::unique_ptr<ccl::Geometry> Triangle::makeCyclesGeometry()
+ccl::Geometry *Triangle::createCyclesGeometryNode()
 {
-  auto mesh = std::make_unique<ccl::Mesh>();
+  return deviceState()->scene->create_node<ccl::Mesh>();
+}
 
-  if (!m_vertexPosition)
-    reportMessage(ANARI_SEVERITY_WARNING, "detected incomplete geometry");
+void Triangle::syncCyclesNode(ccl::Geometry *node) const
+{
+  auto *mesh = (ccl::Mesh *)node;
 
-  setVertexPosition(mesh.get());
-  setPrimitiveIndex(mesh.get());
-  setVertexNormal(mesh.get());
-  setVertexColor(mesh.get());
-  setVertexAttribute(mesh.get(), m_vertexAttribute0, "vertex.attribute0");
-  setVertexAttribute(mesh.get(), m_vertexAttribute1, "vertex.attribute1");
-  setVertexAttribute(mesh.get(), m_vertexAttribute2, "vertex.attribute2");
-  setVertexAttribute(mesh.get(), m_vertexAttribute3, "vertex.attribute3");
-  return mesh;
+  if (!m_vertexPosition) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "Triangle::syncCyclesNode() detected incomplete geometry");
+  }
+
+  setVertexPosition(mesh);
+  setPrimitiveIndex(mesh);
+  setVertexNormal(mesh);
+  setVertexColor(mesh);
+  setVertexAttribute(mesh, m_vertexAttribute0, "vertex.attribute0");
+  setVertexAttribute(mesh, m_vertexAttribute1, "vertex.attribute1");
+  setVertexAttribute(mesh, m_vertexAttribute2, "vertex.attribute2");
+  setVertexAttribute(mesh, m_vertexAttribute3, "vertex.attribute3");
 }
 
 box3 Triangle::bounds() const
@@ -114,7 +124,7 @@ box3 Triangle::bounds() const
   return b;
 }
 
-void Triangle::setVertexPosition(ccl::Mesh *mesh)
+void Triangle::setVertexPosition(ccl::Mesh *mesh) const
 {
   ccl::array<ccl::float3> P;
   auto *dst = P.resize(m_vertexPosition->size());
@@ -125,7 +135,7 @@ void Triangle::setVertexPosition(ccl::Mesh *mesh)
   mesh->set_verts(P);
 }
 
-void Triangle::setPrimitiveIndex(ccl::Mesh *mesh)
+void Triangle::setPrimitiveIndex(ccl::Mesh *mesh) const
 {
   const uint32_t numTriangles =
       m_index ? m_index->size() : m_vertexPosition->size() / 3;
@@ -142,7 +152,7 @@ void Triangle::setPrimitiveIndex(ccl::Mesh *mesh)
   }
 }
 
-void Triangle::setVertexNormal(ccl::Mesh *mesh)
+void Triangle::setVertexNormal(ccl::Mesh *mesh) const
 {
   if (!m_vertexNormal)
     return;
@@ -156,7 +166,7 @@ void Triangle::setVertexNormal(ccl::Mesh *mesh)
       [](const anari_vec::float3 &v) { return make_float3(v[0], v[1], v[2]); });
 }
 
-void Triangle::setVertexColor(ccl::Mesh *mesh)
+void Triangle::setVertexColor(ccl::Mesh *mesh) const
 {
   auto &array = m_vertexColor;
   if (!array)
@@ -178,7 +188,7 @@ void Triangle::setVertexColor(ccl::Mesh *mesh)
 
 void Triangle::setVertexAttribute(ccl::Mesh *mesh,
     const helium::IntrusivePtr<Array1D> &array,
-    const char *name)
+    const char *name) const
 {
   if (!array)
     return;
@@ -206,14 +216,16 @@ struct Sphere : public Geometry
   ~Sphere() override;
 
   void commitParameters() override;
+  void finalize() override;
 
-  std::unique_ptr<ccl::Geometry> makeCyclesGeometry() override;
+  ccl::Geometry *createCyclesGeometryNode() override;
+  void syncCyclesNode(ccl::Geometry *node) const override;
 
   box3 bounds() const override;
 
  private:
-  void setSpheres(ccl::PointCloud *pc);
-  void setAttributes(ccl::PointCloud *pc);
+  void setSpheres(ccl::PointCloud *pc) const;
+  void setAttributes(ccl::PointCloud *pc) const;
 
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
@@ -245,24 +257,31 @@ void Sphere::commitParameters()
   m_vertexAttribute3 = getParamObject<Array1D>("vertex.attribute3");
   m_vertexRadius = getParamObject<Array1D>("vertex.radius");
   m_radius = getParam<float>("radius", 1.f);
+}
 
+void Sphere::finalize()
+{
   if (!m_vertexPosition) {
     reportMessage(ANARI_SEVERITY_WARNING,
-        "missing required parameter 'vertex.position' on triangle geometry");
-    return;
+        "missing required parameter 'vertex.position' on sphere geometry");
   }
 }
 
-std::unique_ptr<ccl::Geometry> Sphere::makeCyclesGeometry()
+ccl::Geometry *Sphere::createCyclesGeometryNode()
 {
-  auto pc = std::make_unique<ccl::PointCloud>();
+  return deviceState()->scene->create_node<ccl::PointCloud>();
+}
 
-  if (!m_vertexPosition)
-    reportMessage(ANARI_SEVERITY_WARNING, "detected incomplete geometry");
+void Sphere::syncCyclesNode(ccl::Geometry *node) const
+{
+  if (!m_vertexPosition) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "Spheres::syncCyclesNode() detected incomplete geometry");
+  }
 
-  setSpheres(pc.get());
-  setAttributes(pc.get());
-  return pc;
+  auto *pc = (ccl::PointCloud *)node;
+  setSpheres(pc);
+  setAttributes(pc);
 }
 
 box3 Sphere::bounds() const
@@ -278,7 +297,7 @@ box3 Sphere::bounds() const
   return b;
 }
 
-void Sphere::setSpheres(ccl::PointCloud *pc)
+void Sphere::setSpheres(ccl::PointCloud *pc) const
 {
   ccl::array<ccl::float3> points;
   ccl::array<float> radius;
@@ -312,7 +331,7 @@ void Sphere::setSpheres(ccl::PointCloud *pc)
   pc->set_shader(shader);
 }
 
-void Sphere::setAttributes(ccl::PointCloud *pc)
+void Sphere::setAttributes(ccl::PointCloud *pc) const
 {
   float3 *dstC = nullptr;
   float3 *dst0 = nullptr;

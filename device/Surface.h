@@ -16,18 +16,25 @@ struct Surface : public Object
   ~Surface() override;
 
   void commitParameters() override;
+  void finalize() override;
 
   const Geometry *geometry() const;
   const Material *material() const;
 
-  std::unique_ptr<ccl::Geometry> makeCyclesGeometry();
+  ccl::Geometry *cyclesGeometry() const;
 
   bool isValid() const override;
   void warnIfUnknownObject() const override;
 
  private:
-  helium::IntrusivePtr<Geometry> m_geometry;
+  void cleanupCyclesNode();
+
+  helium::ChangeObserverPtr<Geometry> m_geometry;
   helium::IntrusivePtr<Material> m_material;
+
+  ccl::Geometry *m_cyclesGeometryNode{nullptr};
+  bool m_geometryHandleChanged{false};
+  bool m_materialHandleChanged{false};
 };
 
 } // namespace cycles

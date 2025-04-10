@@ -126,9 +126,7 @@ Material::Material(CyclesGlobalState *s) : Object(ANARI_SURFACE, s)
 {
   auto &state = *deviceState();
 
-  auto shader = std::make_unique<ccl::Shader>();
-  m_shader = shader.get();
-  state.scene->shaders.push_back(std::move(shader));
+  m_shader = state.scene->create_node<ccl::Shader>();
 
   auto graph = std::make_unique<ccl::ShaderGraph>();
   m_graph = graph.get();

@@ -54,11 +54,7 @@ void Object::markCommitted()
 {
   helium::BaseObject::markCommitted();
   switch (type()) {
-  case ANARI_GEOMETRY:
-  case ANARI_SAMPLER:
-  case ANARI_MATERIAL:
   case ANARI_SURFACE:
-  case ANARI_SPATIAL_FIELD:
   case ANARI_VOLUME:
   case ANARI_GROUP:
   case ANARI_INSTANCE:
