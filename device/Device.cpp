@@ -324,6 +324,10 @@ void CyclesDevice::initDevice()
   state.session_params.use_resolution_divider = false;
   state.session_params.samples = 1;
 
+  reportMessage(ANARI_SEVERITY_INFO,
+      "Using Cycles Device '%s'",
+      ccl::Device::string_from_type(state.session_params.device.type).c_str());
+
   state.session =
       std::make_unique<ccl::Session>(state.session_params, state.scene_params);
   state.scene = state.session->scene.get();
