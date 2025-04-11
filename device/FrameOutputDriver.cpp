@@ -21,19 +21,22 @@ static uint32_t cvt_uint32(const float &f)
 
 static uint32_t cvt_uint32_vec(const float4 &v)
 {
-  return (cvt_uint32(v.x) << 0) | (cvt_uint32(v.y) << 8) | (cvt_uint32(v.z) << 16) |
-         (cvt_uint32(v.w) << 24);
+  return (cvt_uint32(v.x) << 0) | (cvt_uint32(v.y) << 8)
+      | (cvt_uint32(v.z) << 16) | (cvt_uint32(v.w) << 24);
 }
 
 static uint32_t cvt_uint32_vec_srgb(const float4 &v)
 {
-  return cvt_uint32_vec(make_float4(
-      std::pow(v.x, 1.f / 2.2f), std::pow(v.y, 1.f / 2.2f), std::pow(v.z, 1.f / 2.2f), v.w));
+  return cvt_uint32_vec(make_float4(std::pow(v.x, 1.f / 2.2f),
+      std::pow(v.y, 1.f / 2.2f),
+      std::pow(v.z, 1.f / 2.2f),
+      v.w));
 }
 
 // FrameOutputDriver definitions //////////////////////////////////////////////
 
-struct FrameOutputDriver::Impl {
+struct FrameOutputDriver::Impl
+{
   helium::IntrusivePtr<Frame> frame;
   std::vector<float4> buffer;
   bool renderFinished{true};
@@ -62,11 +65,11 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
   const int width = tile.size.x;
   const int height = tile.size.y;
 
-  frame.reportMessage(ANARI_SEVERITY_DEBUG, "receiving %i x %i frame", width, height);
+  frame.reportMessage(
+      ANARI_SEVERITY_DEBUG, "receiving %i x %i frame", width, height);
 
   if (frameData.size.x != width || frameData.size.y != height) {
-    frame.reportMessage(
-        ANARI_SEVERITY_WARNING,
+    frame.reportMessage(ANARI_SEVERITY_WARNING,
         "rejecting frame -- buffer size mismatch, got {%i, %i} but target is {%i, %i}",
         width,
         height,
@@ -96,7 +99,8 @@ void FrameOutputDriver::renderEnd()
   std::lock_guard<std::mutex> lock(m_impl->mutex);
 
   auto end = std::chrono::steady_clock::now();
-  m_impl->frame->m_duration = std::chrono::duration<float>(end - m_impl->start).count();
+  m_impl->frame->m_duration =
+      std::chrono::duration<float>(end - m_impl->start).count();
 
   m_impl->frame = nullptr;
   m_impl->renderFinished = true;
@@ -132,18 +136,24 @@ void FrameOutputDriver::extractColorPass(const Tile &tile)
   if (!isFloat)
     m_impl->buffer.resize(width * height);
 
-  float *dst = isFloat ? (float *)m_impl->frame->m_pixelBuffer.data() :
-                         (float *)m_impl->buffer.data();
+  float *dst = isFloat ? (float *)m_impl->frame->m_pixelBuffer.data()
+                       : (float *)m_impl->buffer.data();
   if (!tile.get_pass_pixels("combined", 4, dst))
-    m_impl->frame->reportMessage(ANARI_SEVERITY_ERROR, "Failed to read 'combined' pass");
+    m_impl->frame->reportMessage(
+        ANARI_SEVERITY_ERROR, "Failed to read 'combined' pass");
 
   if (!isFloat) {
     auto *transformDst = (uint32_t *)m_impl->frame->m_pixelBuffer.data();
     if (format == ANARI_UFIXED8_VEC4)
-      std::transform(m_impl->buffer.begin(), m_impl->buffer.end(), transformDst, cvt_uint32_vec);
-    else  // srgb
-      std::transform(
-          m_impl->buffer.begin(), m_impl->buffer.end(), transformDst, cvt_uint32_vec_srgb);
+      std::transform(m_impl->buffer.begin(),
+          m_impl->buffer.end(),
+          transformDst,
+          cvt_uint32_vec);
+    else // srgb
+      std::transform(m_impl->buffer.begin(),
+          m_impl->buffer.end(),
+          transformDst,
+          cvt_uint32_vec_srgb);
   }
 }
 
@@ -153,7 +163,8 @@ void FrameOutputDriver::extractDepthPass(const Tile &tile)
     return;
 
   if (!tile.get_pass_pixels("depth", 1, m_impl->frame->m_depthBuffer.data()))
-    m_impl->frame->reportMessage(ANARI_SEVERITY_ERROR, "Failed to read 'depth' pass");
+    m_impl->frame->reportMessage(
+        ANARI_SEVERITY_ERROR, "Failed to read 'depth' pass");
 }
 
-}  // namespace cycles
+} // namespace cycles

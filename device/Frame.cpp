@@ -174,8 +174,7 @@ bool Frame::ready() const
 
 void Frame::wait() const
 {
-  auto &state = *deviceState();
-  state.output_driver->wait();
+  deviceState()->output_driver->wait();
 }
 
 bool Frame::resetAccumulationNextFrame() const

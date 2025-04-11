@@ -304,23 +304,26 @@ void CyclesDevice::initDevice()
   reportMessage(ANARI_SEVERITY_DEBUG, "initializing cycles device (%p)", this);
 
   auto devices = ccl::Device::available_devices();
+  ccl::DeviceInfo selectedDevice;
   for (ccl::DeviceInfo &info : devices) {
     reportMessage(ANARI_SEVERITY_INFO,
         "Found Cycles Device: %-7s| %s",
         ccl::Device::string_from_type(info.type).c_str(),
         info.description.c_str());
+    if (info.type == ccl::DEVICE_OPTIX)
+      selectedDevice = info;
+    else if (selectedDevice.type != ccl::DEVICE_OPTIX
+        && info.type == ccl::DEVICE_CUDA)
+      selectedDevice = info;
   }
 
   auto &state = *deviceState();
 
-  auto *useGPU = getenv("ANARI_CYCLES_USE_GPU");
-
-  state.session_params.device.type =
-      useGPU ? ccl::DEVICE_OPTIX : ccl::DEVICE_CPU;
+  state.session_params.device = selectedDevice;
   state.session_params.background = false;
   state.session_params.headless = false;
   state.session_params.use_auto_tile = false;
-  state.session_params.tile_size = 64; // 2048
+  state.session_params.tile_size = 2048;
   state.session_params.use_resolution_divider = false;
   state.session_params.samples = 1;
 

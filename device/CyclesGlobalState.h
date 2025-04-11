@@ -21,11 +21,6 @@ struct CyclesGlobalState : public helium::BaseGlobalDeviceState
 {
   struct ObjectUpdates
   {
-#if 0
-    helium::TimeStamp lastBLSReconstructSceneRequest{0};
-    helium::TimeStamp lastBLSCommitSceneRequest{0};
-    helium::TimeStamp lastTLSReconstructSceneRequest{0};
-#endif
     helium::TimeStamp lastSceneChange{0};
     helium::TimeStamp lastAccumulationReset{0};
   } objectUpdates;
