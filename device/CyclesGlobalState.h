@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "FrameDisplayDriver.h"
 #include "FrameOutputDriver.h"
 // helium
 #include "helium/BaseGlobalDeviceState.h"
@@ -33,7 +34,11 @@ struct CyclesGlobalState : public helium::BaseGlobalDeviceState
   ccl::SceneParams scene_params;
   ccl::BufferParams buffer_params;
 
+#if 0
   FrameOutputDriver *output_driver{nullptr};
+#else
+  FrameDisplayDriver *output_driver{nullptr};
+#endif
 
   ccl::BackgroundNode *background{nullptr};
   ccl::BackgroundNode *ambient{nullptr};

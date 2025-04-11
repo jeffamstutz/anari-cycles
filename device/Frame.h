@@ -48,6 +48,7 @@ struct Frame : public helium::BaseFrame
   bool shouldUpdateCyclesScene() const;
 
   friend struct FrameOutputDriver;
+  friend struct FrameDisplayDriver;
 
   //// Data ////
 

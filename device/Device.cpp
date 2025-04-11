@@ -348,8 +348,13 @@ void CyclesDevice::initDevice()
   pass_depth->set_name(OIIO::ustring("depth"));
   pass_depth->set_type(ccl::PASS_DEPTH);
 
+#if 0
   auto output_driver = std::make_unique<FrameOutputDriver>();
   state.output_driver = output_driver.get();
+#else
+  auto output_driver = std::make_unique<FrameDisplayDriver>();
+  state.display_driver = output_driver.get();
+#endif
 
   state.session->set_output_driver(std::move(output_driver));
 

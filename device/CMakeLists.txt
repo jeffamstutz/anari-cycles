@@ -31,6 +31,7 @@ PRIVATE
   Camera.cpp
   Device.cpp
   Frame.cpp
+  FrameDisplayDriver.cpp
   FrameOutputDriver.cpp
   Geometry.cpp
   Group.cpp
