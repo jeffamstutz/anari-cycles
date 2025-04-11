@@ -35,7 +35,7 @@ struct Object : public helium::BaseObject
 
   virtual box3 bounds() const;
 
-  virtual void markCommitted() override;
+  virtual void markFinalized() override;
 
   CyclesGlobalState *deviceState() const;
 };

@@ -50,9 +50,9 @@ box3 Object::bounds() const
   return empty_box3();
 }
 
-void Object::markCommitted()
+void Object::markFinalized()
 {
-  helium::BaseObject::markCommitted();
+  helium::BaseObject::markFinalized();
   switch (type()) {
   case ANARI_SURFACE:
   case ANARI_VOLUME:

@@ -122,7 +122,7 @@ void PhysicallyBasedMaterial::finalize()
 
 // Material definitions ///////////////////////////////////////////////////////
 
-Material::Material(CyclesGlobalState *s) : Object(ANARI_SURFACE, s)
+Material::Material(CyclesGlobalState *s) : Object(ANARI_MATERIAL, s)
 {
   auto &state = *deviceState();
 

@@ -23,7 +23,7 @@ struct Directional : public Light
 
 // Light definitions //////////////////////////////////////////////////////////
 
-Light::Light(CyclesGlobalState *s) : Object(ANARI_CAMERA, s)
+Light::Light(CyclesGlobalState *s) : Object(ANARI_LIGHT, s)
 {
   m_cyclesLight = s->scene->create_node<ccl::Light>();
 }
