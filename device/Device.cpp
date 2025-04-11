@@ -315,7 +315,7 @@ void CyclesDevice::initDevice()
 
   auto &state = *deviceState();
 
-  auto *useGPU = getenv("CYCLES_ANARI_USE_GPU");
+  auto *useGPU = getenv("ANARI_CYCLES_USE_GPU");
 
   state.session_params.device.type =
       useGPU ? ccl::DEVICE_OPTIX : ccl::DEVICE_CPU;
