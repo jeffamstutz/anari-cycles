@@ -6,8 +6,8 @@
 // helium
 #include "helium/array/ObjectArray.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 using ObjectArray = helium::ObjectArray;
 
-} // namespace cycles
+} // namespace anari_cycles

@@ -8,7 +8,7 @@
 #include "Volume.h"
 #include "array/ObjectArray.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Group : public Object {
   Group(CyclesGlobalState *s);
@@ -26,7 +26,7 @@ struct Group : public Object {
   helium::ChangeObserverPtr<ObjectArray> m_lightData;
 };
 
-}  // namespace cycles
+}  // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Group *, ANARI_WORLD);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Group *, ANARI_WORLD);
 

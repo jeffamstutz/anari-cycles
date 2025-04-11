@@ -3,7 +3,7 @@
 
 #include "Frame.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 Frame::Frame(CyclesGlobalState *s) : helium::BaseFrame(s) {}
 
@@ -190,6 +190,6 @@ bool Frame::shouldUpdateCyclesScene() const
   return m_worldLastChanged < state.objectUpdates.lastSceneChange;
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Frame *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Frame *);

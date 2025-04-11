@@ -7,7 +7,7 @@
 // cycles
 #include "scene/object.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 World::World(CyclesGlobalState *s)
     : Object(ANARI_WORLD, s),
@@ -56,25 +56,25 @@ void World::commitParameters()
       m_zeroSurfaceData || m_zeroLightData || m_zeroVolumeData;
 
   if (addZeroInstance)
-    reportMessage(ANARI_SEVERITY_DEBUG, "cycles::World will add zero instance");
+    reportMessage(ANARI_SEVERITY_DEBUG, "anari_cycles::World will add zero instance");
 
   if (m_zeroSurfaceData) {
     reportMessage(
-        ANARI_SEVERITY_DEBUG, "cycles::World found surfaces in zero instance");
+        ANARI_SEVERITY_DEBUG, "anari_cycles::World found surfaces in zero instance");
     m_zeroGroup->setParamDirect("surface", getParamDirect("surface"));
   } else
     m_zeroGroup->removeParam("surface");
 
   if (m_zeroLightData) {
     reportMessage(
-        ANARI_SEVERITY_DEBUG, "cycles::World found lights in zero instance");
+        ANARI_SEVERITY_DEBUG, "anari_cycles::World found lights in zero instance");
     m_zeroGroup->setParamDirect("light", getParamDirect("light"));
   } else
     m_zeroGroup->removeParam("light");
 
   if (m_zeroVolumeData) {
     reportMessage(
-        ANARI_SEVERITY_DEBUG, "cycles::World found volumes in zero instance");
+        ANARI_SEVERITY_DEBUG, "anari_cycles::World found volumes in zero instance");
     m_zeroGroup->setParamDirect("volume", getParamDirect("volume"));
   } else {
     m_zeroGroup->removeParam("volume");
@@ -151,6 +151,6 @@ box3 World::bounds() const
   return b;
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::World *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::World *);

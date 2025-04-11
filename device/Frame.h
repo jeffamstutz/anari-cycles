@@ -11,7 +11,7 @@
 // std
 #include <vector>
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Frame : public helium::BaseFrame
 {
@@ -79,6 +79,6 @@ struct Frame : public helium::BaseFrame
   helium::TimeStamp m_lastCommitOccured{0};
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Frame *, ANARI_FRAME);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Frame *, ANARI_FRAME);

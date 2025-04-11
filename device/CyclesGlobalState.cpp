@@ -4,7 +4,7 @@
 #include "CyclesGlobalState.h"
 #include "Frame.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 CyclesGlobalState::CyclesGlobalState(ANARIDevice d)
     : helium::BaseGlobalDeviceState(d)
@@ -15,4 +15,4 @@ void CyclesGlobalState::waitOnCurrentFrame() const
   output_driver->wait();
 }
 
-} // namespace cycles
+} // namespace anari_cycles

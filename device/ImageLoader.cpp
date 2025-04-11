@@ -6,7 +6,7 @@
 
 #include "ImageLoader.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 ANARIImageLoader::ANARIImageLoader(const StructuredRegularField *field_ptr) : p_field(field_ptr) {}
 
@@ -72,4 +72,4 @@ bool ANARIImageLoader::is_vdb_loader() const
   return false;
 }
 
-} // namespace cycles
+} // namespace anari_cycles

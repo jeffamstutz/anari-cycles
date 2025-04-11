@@ -10,7 +10,7 @@
 #include "scene/volume.h"
 #include "util/path.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 Volume::Volume(CyclesGlobalState *s) : Object(ANARI_VOLUME, s) {}
 
@@ -156,6 +156,6 @@ box3 TransferFunction1D::bounds() const
 
 // void TransferFunction1D::cleanup() {}
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Volume *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Volume *);

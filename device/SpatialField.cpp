@@ -11,7 +11,7 @@
 #include "scene/volume.h"
 #include "util/hash.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 SpatialField::SpatialField(CyclesGlobalState *s)
     : Object(ANARI_SPATIAL_FIELD, s)
@@ -153,6 +153,6 @@ box3 StructuredRegularField::bounds() const
   return b;
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::SpatialField *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::SpatialField *);

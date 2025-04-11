@@ -11,7 +11,7 @@
 // std
 #include <string_view>
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Object : public helium::BaseObject
 {
@@ -54,6 +54,6 @@ struct UnknownObject : public Object
   std::string m_subtype;
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Object *, ANARI_OBJECT);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Object *, ANARI_OBJECT);

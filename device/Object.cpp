@@ -6,7 +6,7 @@
 #include <atomic>
 #include <cstdarg>
 
-namespace cycles {
+namespace anari_cycles {
 
 // Object definitions /////////////////////////////////////////////////////////
 
@@ -98,6 +98,6 @@ void UnknownObject::warnIfUnknownObject() const
       m_subtype.c_str());
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Object *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Object *);

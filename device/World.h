@@ -5,7 +5,7 @@
 
 #include "Instance.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct World : public Object {
   World(CyclesGlobalState *s);
@@ -32,6 +32,6 @@ struct World : public Object {
   helium::IntrusivePtr<ObjectArray> m_instanceData;
 };
 
-}  // namespace cycles
+}  // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::World *, ANARI_WORLD);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::World *, ANARI_WORLD);

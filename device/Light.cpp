@@ -5,7 +5,7 @@
 // cycles
 #include "scene/camera.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 // Subtype declarations ///////////////////////////////////////////////////////
 
@@ -84,6 +84,6 @@ void Directional::finalize()
   m_cyclesLight->tag_update(deviceState()->scene);
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Light *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Light *);

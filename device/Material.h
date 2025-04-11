@@ -9,7 +9,7 @@
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Material : public Object
 {
@@ -45,6 +45,6 @@ struct Material : public Object
   } m_attributeNodes;
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Material *, ANARI_MATERIAL);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Material *, ANARI_MATERIAL);

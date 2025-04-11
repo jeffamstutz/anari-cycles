@@ -3,7 +3,7 @@
 
 #include "Surface.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 Surface::Surface(CyclesGlobalState *s)
     : Object(ANARI_SURFACE, s), m_geometry(this)
@@ -83,6 +83,6 @@ void Surface::cleanupCyclesNode()
   m_cyclesGeometryNode = nullptr;
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Surface *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Surface *);

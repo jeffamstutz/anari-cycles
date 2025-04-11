@@ -7,7 +7,7 @@
 #include "Object.h"
 #include "SpatialField.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Volume : public Object
 {
@@ -61,6 +61,6 @@ struct TransferFunction1D : public Volume
   ccl::Shader *cyclesShader();
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Volume *, ANARI_VOLUME);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Volume *, ANARI_VOLUME);

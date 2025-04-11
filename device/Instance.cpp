@@ -5,7 +5,7 @@
 // std
 #include <cstring>
 
-namespace cycles {
+namespace anari_cycles {
 
 Instance::Instance(CyclesGlobalState *s) : Object(ANARI_INSTANCE, s) {}
 
@@ -85,4 +85,4 @@ bool Instance::isValid() const
   return m_group;
 }
 
-} // namespace cycles
+} // namespace anari_cycles

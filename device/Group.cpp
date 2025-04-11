@@ -5,7 +5,7 @@
 // cycles
 #include "scene/object.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 Group::Group(CyclesGlobalState *s)
     : Object(ANARI_GROUP, s),
@@ -103,6 +103,6 @@ box3 Group::bounds() const
   return b;
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Group *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Group *);

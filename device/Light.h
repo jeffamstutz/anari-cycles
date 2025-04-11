@@ -9,7 +9,7 @@
 // std
 #include <memory>
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Light : public Object
 {
@@ -28,6 +28,6 @@ struct Light : public Object
   anari_vec::float3 m_color;
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Light *, ANARI_LIGHT);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Light *, ANARI_LIGHT);

@@ -5,7 +5,7 @@
 
 #include "Group.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Instance : public Object
 {
@@ -27,4 +27,4 @@ struct Instance : public Object
   ccl::Transform m_xfm;
 };
 
-} // namespace cycles
+} // namespace anari_cycles

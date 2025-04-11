@@ -5,7 +5,7 @@
 // cycles
 #include "scene/camera.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 // Subtype declarations ///////////////////////////////////////////////////////
 
@@ -137,6 +137,6 @@ void Orthographic::setCameraCurrent(int width, int height)
   state.scene->camera->viewplane.top = scale;
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Camera *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Camera *);

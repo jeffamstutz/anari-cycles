@@ -8,7 +8,7 @@
 // cycles
 #include "scene/geometry.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Geometry : public Object
 {
@@ -22,6 +22,6 @@ struct Geometry : public Object
   virtual void syncCyclesNode(ccl::Geometry *node) const = 0;
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Geometry *, ANARI_GEOMETRY);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Geometry *, ANARI_GEOMETRY);

@@ -8,7 +8,7 @@
 // cycles
 #include "scene/geometry.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Surface : public Object
 {
@@ -37,6 +37,6 @@ struct Surface : public Object
   bool m_materialHandleChanged{false};
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Surface *, ANARI_SURFACE);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Surface *, ANARI_SURFACE);

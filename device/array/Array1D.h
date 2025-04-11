@@ -6,9 +6,9 @@
 // helium
 #include "helium/array/Array1D.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 using Array1DMemoryDescriptor = helium::Array1DMemoryDescriptor;
 using Array1D = helium::Array1D;
 
-} // namespace cycles
+} // namespace anari_cycles

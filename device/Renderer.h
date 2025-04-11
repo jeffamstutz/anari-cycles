@@ -5,7 +5,7 @@
 
 #include "Object.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Renderer : public Object
 {
@@ -22,6 +22,6 @@ struct Renderer : public Object
   float m_ambientIntensity;
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Renderer *, ANARI_RENDERER);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Renderer *, ANARI_RENDERER);

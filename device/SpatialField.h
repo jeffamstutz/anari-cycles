@@ -12,7 +12,7 @@
 // ours
 #include "scene/geometry.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct SpatialField : public Object
 {
@@ -54,7 +54,7 @@ struct StructuredRegularField : public SpatialField
   helium::IntrusivePtr<Array3D> m_data;
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
 CYCLES_ANARI_TYPEFOR_SPECIALIZATION(
-    cycles::SpatialField *, ANARI_SPATIAL_FIELD);
+    anari_cycles::SpatialField *, ANARI_SPATIAL_FIELD);

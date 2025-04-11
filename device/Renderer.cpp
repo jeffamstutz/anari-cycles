@@ -6,7 +6,7 @@
 #include "scene/background.h"
 #include "scene/shader_nodes.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 Renderer::Renderer(CyclesGlobalState *s) : Object(ANARI_RENDERER, s)
 {
@@ -42,6 +42,6 @@ void Renderer::makeRendererCurrent() const
   state.scene->background->tag_update(state.scene);
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Renderer *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Renderer *);

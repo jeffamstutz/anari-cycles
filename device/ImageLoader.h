@@ -8,7 +8,7 @@
 #include "SpatialField.h"
 #include "scene/image.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 class ANARIImageLoader : public ImageLoader {
  public:
@@ -35,6 +35,6 @@ class ANARIImageLoader : public ImageLoader {
   const StructuredRegularField *p_field;
 };
 
-} // namespace cycles
+} // namespace anari_cycles
 
 #endif /* __IMAGE_ANARI__ */

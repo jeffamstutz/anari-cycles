@@ -33,7 +33,7 @@
 #include "anari/backend/LibraryImpl.h"
 #include "anari_library_cycles_export.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 const char **query_extensions();
 
@@ -63,17 +63,17 @@ const char **CyclesLibrary::getDeviceExtensions(const char * /*deviceType*/)
   return query_extensions();
 }
 
-}  // namespace cycles
+}  // namespace anari_cycles
 
 // Define library entrypoint //////////////////////////////////////////////////
 
 extern "C" CYCLES_DEVICE_INTERFACE ANARI_DEFINE_LIBRARY_ENTRYPOINT(cycles, handle, scb, scbPtr)
 {
-  return (ANARILibrary) new cycles::CyclesLibrary(handle, scb, scbPtr);
+  return (ANARILibrary) new anari_cycles::CyclesLibrary(handle, scb, scbPtr);
 }
 
 extern "C" CYCLES_DEVICE_INTERFACE ANARIDevice
 anariNewCyclesDevice(ANARIStatusCallback defaultCallback, const void *userPtr)
 {
-  return (ANARIDevice) new cycles::CyclesDevice(defaultCallback, userPtr);
+  return (ANARIDevice) new anari_cycles::CyclesDevice(defaultCallback, userPtr);
 }

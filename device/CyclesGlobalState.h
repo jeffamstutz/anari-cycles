@@ -15,7 +15,7 @@ namespace ccl {
 struct BackgroundNode;
 } // namespace ccl
 
-namespace cycles {
+namespace anari_cycles {
 
 struct CyclesGlobalState : public helium::BaseGlobalDeviceState
 {
@@ -54,4 +54,4 @@ struct CyclesGlobalState : public helium::BaseGlobalDeviceState
   ANARI_TYPEFOR_DEFINITION(type);                                              \
   }
 
-} // namespace cycles
+} // namespace anari_cycles

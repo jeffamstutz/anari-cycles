@@ -5,7 +5,7 @@
 
 #include "Object.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Camera : public Object {
 
@@ -25,6 +25,6 @@ struct Camera : public Object {
   anari_vec::float3 m_up;
 };
 
-}  // namespace cycles
+}  // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(cycles::Camera *, ANARI_CAMERA);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Camera *, ANARI_CAMERA);

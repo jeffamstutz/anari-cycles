@@ -6,7 +6,7 @@
 #include "scene/mesh.h"
 #include "scene/pointcloud.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 // Helper types/functions /////////////////////////////////////////////////////
 
@@ -453,6 +453,6 @@ Geometry *Geometry::createInstance(std::string_view type, CyclesGlobalState *s)
     return (Geometry *)new UnknownObject(ANARI_GEOMETRY, type, s);
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Geometry *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Geometry *);

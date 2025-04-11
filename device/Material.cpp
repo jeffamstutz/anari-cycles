@@ -3,7 +3,7 @@
 
 #include "Material.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 // MatteMaterial definitions //////////////////////////////////////////////////
 
@@ -232,6 +232,6 @@ ccl::Shader *Material::cyclesShader()
   return m_shader;
 }
 
-} // namespace cycles
+} // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_DEFINITION(cycles::Material *);
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Material *);

@@ -16,7 +16,7 @@
 
 #include "FrameOutputDriver.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helper functions ///////////////////////////////////////////////////////////
@@ -206,7 +206,7 @@ ANARIWorld CyclesDevice::newWorld()
 
 const char **CyclesDevice::getObjectSubtypes(ANARIDataType objectType)
 {
-  return cycles::query_object_types(objectType);
+  return anari_cycles::query_object_types(objectType);
 }
 
 const void *CyclesDevice::getObjectInfo(ANARIDataType objectType,
@@ -214,7 +214,7 @@ const void *CyclesDevice::getObjectInfo(ANARIDataType objectType,
     const char *infoName,
     ANARIDataType infoType)
 {
-  return cycles::query_object_info(
+  return anari_cycles::query_object_info(
       objectType, objectSubtype, infoName, infoType);
 }
 
@@ -225,7 +225,7 @@ const void *CyclesDevice::getParameterInfo(ANARIDataType objectType,
     const char *infoName,
     ANARIDataType infoType)
 {
-  return cycles::query_param_info(objectType,
+  return anari_cycles::query_param_info(objectType,
       objectSubtype,
       parameterName,
       parameterType,
@@ -403,4 +403,4 @@ CyclesGlobalState *CyclesDevice::deviceState() const
   return (CyclesGlobalState *)helium::BaseDevice::m_state.get();
 }
 
-} // namespace cycles
+} // namespace anari_cycles

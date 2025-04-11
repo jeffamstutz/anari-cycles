@@ -10,7 +10,7 @@
 #include <mutex>
 #include <vector>
 
-namespace cycles {
+namespace anari_cycles {
 
 // Helper functions ///////////////////////////////////////////////////////////
 
@@ -167,4 +167,4 @@ void FrameOutputDriver::extractDepthPass(const Tile &tile)
         ANARI_SEVERITY_ERROR, "Failed to read 'depth' pass");
 }
 
-} // namespace cycles
+} // namespace anari_cycles

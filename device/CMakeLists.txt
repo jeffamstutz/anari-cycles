@@ -77,7 +77,7 @@ PRIVATE
 
 anari_generate_queries(
   DEVICE_TARGET ${PROJECT_NAME}
-  CPP_NAMESPACE cycles
+  CPP_NAMESPACE anari_cycles
   JSON_DEFINITIONS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/cycles_device.json
 )
 

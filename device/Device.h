@@ -11,7 +11,7 @@
 
 #include "anari_library_cycles_queries.h"
 
-namespace cycles {
+namespace anari_cycles {
 
 struct CyclesDevice : public helium::BaseDevice
 {
@@ -99,4 +99,4 @@ struct CyclesDevice : public helium::BaseDevice
   bool m_initialized{false};
 };
 
-} // namespace cycles
+} // namespace anari_cycles

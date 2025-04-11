@@ -9,7 +9,7 @@
 // std
 #include <memory>
 
-namespace cycles {
+namespace anari_cycles {
 
 struct Frame;
 
@@ -32,4 +32,4 @@ struct FrameOutputDriver : public ccl::OutputDriver {
   std::shared_ptr<Impl> m_impl;
 };
 
-}  // namespace cycles
+}  // namespace anari_cycles
