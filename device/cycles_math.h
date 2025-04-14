@@ -9,6 +9,8 @@
 // anari
 #include <anari/anari_cpp.hpp>
 #include <anari/anari_cpp/ext/std.h>
+// helium
+#include <helium/helium_math.h>
 // std
 #include <limits>
 

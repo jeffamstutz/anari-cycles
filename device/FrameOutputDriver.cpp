@@ -14,29 +14,6 @@
 
 namespace anari_cycles {
 
-// Helper functions ///////////////////////////////////////////////////////////
-
-static uint32_t cvt_uint32(const float &f)
-{
-  return static_cast<uint32_t>(255.f * std::clamp(f, 0.f, 1.f));
-}
-
-static uint32_t cvt_uint32_vec(const float4 &v)
-{
-  return (cvt_uint32(v.x) << 0) | (cvt_uint32(v.y) << 8)
-      | (cvt_uint32(v.z) << 16) | (cvt_uint32(v.w) << 24);
-}
-
-static uint32_t cvt_uint32_vec_srgb(const float4 &v)
-{
-  return cvt_uint32_vec(make_float4(std::pow(v.x, 1.f / 2.2f),
-      std::pow(v.y, 1.f / 2.2f),
-      std::pow(v.z, 1.f / 2.2f),
-      v.w));
-}
-
-// FrameOutputDriver definitions //////////////////////////////////////////////
-
 struct FrameOutputDriver::Impl
 {
   helium::IntrusivePtr<Frame> frame;
@@ -72,7 +49,8 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
 
   if (frameData.size.x != width || frameData.size.y != height) {
     frame.reportMessage(ANARI_SEVERITY_WARNING,
-        "rejecting frame -- buffer size mismatch, got {%i, %i} but target is {%i, %i}",
+        "rejecting frame -- buffer size mismatch,"
+        " got {%i, %i} but target is {%i, %i}",
         width,
         height,
         frameData.size.x,
@@ -147,9 +125,11 @@ void FrameOutputDriver::extractColorPass(const Tile &tile)
   if (!isFloat) {
     auto *transformDst = (uint32_t *)m_impl->frame->m_pixelBuffer.data();
     parallel_for(size_t(0), m_impl->buffer.size(), [&](size_t i) {
+      helium::float4 v;
+      std::memcpy(&v, &m_impl->buffer[i], sizeof(v));
       transformDst[i] = format == ANARI_UFIXED8_VEC4
-          ? cvt_uint32_vec(m_impl->buffer[i])
-          : cvt_uint32_vec_srgb(m_impl->buffer[i]);
+          ? helium::cvt_color_to_uint32(v)
+          : helium::cvt_color_to_uint32_srgb(v);
     });
   }
 }
