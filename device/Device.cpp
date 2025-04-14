@@ -303,6 +303,8 @@ void CyclesDevice::initDevice()
 
   reportMessage(ANARI_SEVERITY_DEBUG, "initializing cycles device (%p)", this);
 
+  auto *forceCPU = getenv("ANARI_CYCLES_FORCE_CPU");
+
   auto devices = ccl::Device::available_devices();
   ccl::DeviceInfo selectedDevice;
   for (ccl::DeviceInfo &info : devices) {
@@ -310,9 +312,9 @@ void CyclesDevice::initDevice()
         "Found Cycles Device: %-7s| %s",
         ccl::Device::string_from_type(info.type).c_str(),
         info.description.c_str());
-    if (info.type == ccl::DEVICE_OPTIX)
+    if (!forceCPU && info.type == ccl::DEVICE_OPTIX)
       selectedDevice = info;
-    else if (selectedDevice.type != ccl::DEVICE_OPTIX
+    else if (!forceCPU && selectedDevice.type != ccl::DEVICE_OPTIX
         && info.type == ccl::DEVICE_CUDA)
       selectedDevice = info;
   }
