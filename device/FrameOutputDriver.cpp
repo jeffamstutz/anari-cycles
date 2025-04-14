@@ -10,6 +10,8 @@
 #include <mutex>
 #include <vector>
 
+#include "util/tbb.h"
+
 namespace anari_cycles {
 
 // Helper functions ///////////////////////////////////////////////////////////
@@ -144,16 +146,11 @@ void FrameOutputDriver::extractColorPass(const Tile &tile)
 
   if (!isFloat) {
     auto *transformDst = (uint32_t *)m_impl->frame->m_pixelBuffer.data();
-    if (format == ANARI_UFIXED8_VEC4)
-      std::transform(m_impl->buffer.begin(),
-          m_impl->buffer.end(),
-          transformDst,
-          cvt_uint32_vec);
-    else // srgb
-      std::transform(m_impl->buffer.begin(),
-          m_impl->buffer.end(),
-          transformDst,
-          cvt_uint32_vec_srgb);
+    parallel_for(size_t(0), m_impl->buffer.size(), [&](size_t i) {
+      transformDst[i] = format == ANARI_UFIXED8_VEC4
+          ? cvt_uint32_vec(m_impl->buffer[i])
+          : cvt_uint32_vec_srgb(m_impl->buffer[i]);
+    });
   }
 }
 
