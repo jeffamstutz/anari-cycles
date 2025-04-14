@@ -59,18 +59,12 @@ bool Frame::getProperty(
     const std::string_view &name, ANARIDataType type, void *ptr, uint32_t flags)
 {
   if (type == ANARI_FLOAT32 && name == "duration") {
-    if (flags & ANARI_WAIT)
-      wait();
     helium::writeToVoidP(ptr, m_duration);
     return true;
   } else if (type == ANARI_INT32 && name == "numSamples") {
-    if (flags & ANARI_WAIT)
-      wait();
     helium::writeToVoidP(ptr, int(deviceState()->sessionSamples));
     return true;
   } else if (type == ANARI_BOOL && name == "nextFrameReset") {
-    if (flags & ANARI_WAIT)
-      wait();
     if (ready())
       deviceState()->commitBuffer.flush();
     bool doReset = resetAccumulationNextFrame();
