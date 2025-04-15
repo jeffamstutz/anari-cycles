@@ -14,7 +14,7 @@ Instance::~Instance() = default;
 void Instance::commitParameters()
 {
   m_group = getParamObject<Group>("group");
-  m_xfm = mat4ToCycles(getParam<helium::mat4>("transform", linalg::identity));
+  m_xfm = getParam<helium::mat4>("transform", linalg::identity);
 }
 
 Group *Instance::group() const
@@ -33,30 +33,31 @@ box3 Instance::bounds() const
   box3 b = empty_box3();
   if (m_group) {
     auto gb = m_group->bounds();
+    auto xfm = mat4ToCycles(m_xfm);
     extend(b,
         ccl::transform_point(
-            &m_xfm, make_float3(gb.lower.x, gb.lower.y, gb.lower.z)));
+            &xfm, make_float3(gb.lower.x, gb.lower.y, gb.lower.z)));
     extend(b,
         ccl::transform_point(
-            &m_xfm, make_float3(gb.lower.x, gb.upper.y, gb.lower.z)));
+            &xfm, make_float3(gb.lower.x, gb.upper.y, gb.lower.z)));
     extend(b,
         ccl::transform_point(
-            &m_xfm, make_float3(gb.upper.x, gb.upper.y, gb.lower.z)));
+            &xfm, make_float3(gb.upper.x, gb.upper.y, gb.lower.z)));
     extend(b,
         ccl::transform_point(
-            &m_xfm, make_float3(gb.upper.x, gb.lower.y, gb.lower.z)));
+            &xfm, make_float3(gb.upper.x, gb.lower.y, gb.lower.z)));
     extend(b,
         ccl::transform_point(
-            &m_xfm, make_float3(gb.lower.x, gb.lower.y, gb.upper.z)));
+            &xfm, make_float3(gb.lower.x, gb.lower.y, gb.upper.z)));
     extend(b,
         ccl::transform_point(
-            &m_xfm, make_float3(gb.lower.x, gb.upper.y, gb.upper.z)));
+            &xfm, make_float3(gb.lower.x, gb.upper.y, gb.upper.z)));
     extend(b,
         ccl::transform_point(
-            &m_xfm, make_float3(gb.upper.x, gb.upper.y, gb.upper.z)));
+            &xfm, make_float3(gb.upper.x, gb.upper.y, gb.upper.z)));
     extend(b,
         ccl::transform_point(
-            &m_xfm, make_float3(gb.upper.x, gb.lower.y, gb.upper.z)));
+            &xfm, make_float3(gb.upper.x, gb.lower.y, gb.upper.z)));
   }
   return b;
 }

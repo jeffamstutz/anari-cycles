@@ -24,7 +24,7 @@ struct Instance : public Object
 
  private:
   helium::IntrusivePtr<Group> m_group;
-  ccl::Transform m_xfm;
+  math::mat4 m_xfm;
 };
 
 } // namespace anari_cycles

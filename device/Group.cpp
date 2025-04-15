@@ -23,9 +23,11 @@ void Group::commitParameters()
   m_lightData = getParamObject<ObjectArray>("light");
 }
 
-void Group::addGroupToCurrentCyclesScene(const ccl::Transform &xfm) const
+void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm) const
 {
   auto &state = *deviceState();
+
+  auto cxfm = mat4ToCycles(xfm);
 
   if (m_surfaceData) {
     auto **surfacesBegin = (Surface **)m_surfaceData->handlesBegin();
@@ -38,7 +40,7 @@ void Group::addGroupToCurrentCyclesScene(const ccl::Transform &xfm) const
       }
       auto *o = state.scene->create_node<ccl::Object>();
       o->set_geometry(s->cyclesGeometry());
-      o->set_tfm(xfm);
+      o->set_tfm(cxfm);
     });
   }
 
@@ -70,7 +72,7 @@ void Group::addGroupToCurrentCyclesScene(const ccl::Transform &xfm) const
       }
       auto *o = state.scene->create_node<ccl::Object>();
       o->set_geometry(l->cyclesLight());
-      o->set_tfm(xfm);
+      o->set_tfm(mat4ToCycles(math::mul(xfm, l->xfm())));
     });
   }
 }

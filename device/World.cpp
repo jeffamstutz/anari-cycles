@@ -55,26 +55,28 @@ void World::commitParameters()
   const bool addZeroInstance =
       m_zeroSurfaceData || m_zeroLightData || m_zeroVolumeData;
 
-  if (addZeroInstance)
-    reportMessage(ANARI_SEVERITY_DEBUG, "anari_cycles::World will add zero instance");
+  if (addZeroInstance) {
+    reportMessage(
+        ANARI_SEVERITY_DEBUG, "anari_cycles::World will add zero instance");
+  }
 
   if (m_zeroSurfaceData) {
-    reportMessage(
-        ANARI_SEVERITY_DEBUG, "anari_cycles::World found surfaces in zero instance");
+    reportMessage(ANARI_SEVERITY_DEBUG,
+        "anari_cycles::World found surfaces in zero instance");
     m_zeroGroup->setParamDirect("surface", getParamDirect("surface"));
   } else
     m_zeroGroup->removeParam("surface");
 
   if (m_zeroLightData) {
-    reportMessage(
-        ANARI_SEVERITY_DEBUG, "anari_cycles::World found lights in zero instance");
+    reportMessage(ANARI_SEVERITY_DEBUG,
+        "anari_cycles::World found lights in zero instance");
     m_zeroGroup->setParamDirect("light", getParamDirect("light"));
   } else
     m_zeroGroup->removeParam("light");
 
   if (m_zeroVolumeData) {
-    reportMessage(
-        ANARI_SEVERITY_DEBUG, "anari_cycles::World found volumes in zero instance");
+    reportMessage(ANARI_SEVERITY_DEBUG,
+        "anari_cycles::World found volumes in zero instance");
     m_zeroGroup->setParamDirect("volume", getParamDirect("volume"));
   } else {
     m_zeroGroup->removeParam("volume");

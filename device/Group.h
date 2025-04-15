@@ -16,7 +16,7 @@ struct Group : public Object {
 
   void commitParameters() override;
 
-  void addGroupToCurrentCyclesScene(const ccl::Transform &xfm) const;
+  void addGroupToCurrentCyclesScene(const math::mat4 &xfm) const;
 
   box3 bounds() const override;
 

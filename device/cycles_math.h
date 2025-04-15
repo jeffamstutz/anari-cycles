@@ -18,6 +18,8 @@ namespace anari_cycles {
 
 using namespace ccl;
 
+namespace math = anari::math;
+
 namespace anari_vec {
 
 using namespace anari::std_types;
@@ -75,7 +77,12 @@ inline float radians(float degrees)
   return degrees * float(M_PI) / 180.f;
 }
 
-inline ccl::Transform mat4ToCycles(const anari::math::mat4 &m)
+inline float degrees(float radians)
+{
+  return radians * 180.f / float(M_PI);
+}
+
+inline ccl::Transform mat4ToCycles(const math::mat4 &m)
 {
   ccl::Transform xfm;
   xfm.x.x = m[0].x;

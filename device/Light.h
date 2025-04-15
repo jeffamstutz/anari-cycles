@@ -21,6 +21,7 @@ struct Light : public Object
   virtual void commitParameters() override;
 
   ccl::Light *cyclesLight() const;
+  virtual math::mat4 xfm() const = 0;
 
  protected:
   ccl::Light *m_cyclesLight{nullptr};
