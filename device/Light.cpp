@@ -76,7 +76,7 @@ Light::Light(CyclesGlobalState *s) : Object(ANARI_LIGHT, s)
 
 Light::~Light()
 {
-  reportMessage(ANARI_SEVERITY_WARNING, "TODO: cleanup Cycles light objects");
+  deviceState()->scene->delete_node(m_cyclesLight);
 }
 
 Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)

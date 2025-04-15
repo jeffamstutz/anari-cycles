@@ -25,8 +25,11 @@ struct Material : public Object
   void connectAttributes(ccl::ShaderNode *bsdf,
       const std::string &mode,
       const char *input,
-      const float3 &v,
-      bool singleComponent = true);
+      float v);
+  void connectAttributes(ccl::ShaderNode *bsdf,
+      const std::string &mode,
+      const char *input,
+      const float3 &v);
 
   ccl::Shader *m_shader{nullptr};
   ccl::ShaderGraph *m_graph{nullptr};
@@ -43,6 +46,13 @@ struct Material : public Object
     ccl::SeparateColorNode *attr2_sc{nullptr};
     ccl::SeparateColorNode *attr3_sc{nullptr};
   } m_attributeNodes;
+
+ private:
+  void connectAttributesImpl(ccl::ShaderNode *bsdf,
+      const std::string &mode,
+      const char *input,
+      const float3 &v,
+      bool singleComponent);
 };
 
 } // namespace anari_cycles

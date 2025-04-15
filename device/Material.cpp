@@ -36,7 +36,7 @@ void MatteMaterial::commitParameters()
 
 void MatteMaterial::finalize()
 {
-  connectAttributes(m_bsdf, m_colorMode, "Color", m_color, false);
+  connectAttributes(m_bsdf, m_colorMode, "Color", m_color);
   m_shader->tag_update(deviceState()->scene);
 }
 
@@ -60,6 +60,14 @@ struct PhysicallyBasedMaterial : public Material
   float m_roughness{1.f};
   std::string m_metallicMode;
   float m_metallic{0.f};
+  std::string m_clearcoatMode;
+  float m_clearcoat{0.f};
+  std::string m_clearcoatRoughnessMode;
+  float m_clearcoatRoughness{0.f};
+  std::string m_emissiveMode;
+  float3 m_emissive{0.f};
+  std::string m_transmissionMode;
+  float m_transmission{0.f};
   float m_ior{1.5f};
 };
 
@@ -68,6 +76,7 @@ PhysicallyBasedMaterial::PhysicallyBasedMaterial(CyclesGlobalState *s)
 {
   auto *bsdf = m_graph->create_node<ccl::PrincipledBsdfNode>();
   m_graph->connect(bsdf->output("BSDF"), m_graph->output()->input("Surface"));
+  bsdf->input("Emission Strength")->set(1.f);
   m_bsdf = bsdf;
 }
 
@@ -85,36 +94,32 @@ void PhysicallyBasedMaterial::commitParameters()
   m_metallicMode = getParamString("metallic", "");
   m_metallic = getParam<float>("metallic", 1.f);
 
+  m_clearcoatMode = getParamString("clearcoat", "");
+  m_clearcoat = getParam<float>("clearcoat", 0.f);
+
+  m_clearcoatRoughnessMode = getParamString("clearcoatRoughness", "");
+  m_clearcoatRoughness = getParam<float>("clearcoatRoughness", 0.f);
+
+  m_emissiveMode = getParamString("emissive", "");
+  m_emissive = getParam<float3>("emissive", zero_float3());
+
+  m_transmissionMode = getParamString("transmission", "");
+  m_transmission = getParam<float>("transmission", 0.f);
   m_ior = getParam<float>("ior", 1.5f);
 }
 
 void PhysicallyBasedMaterial::finalize()
 {
-  connectAttributes(m_bsdf, m_colorMode, "Base Color", m_color, false);
-  connectAttributes(m_bsdf, m_opacityMode, "Alpha", make_float3(m_opacity));
-#if 0
-  auto specularMode = getParamString("specular", "");
-  auto specular = getParam<float>("specular", 0.f);
-  connectAttributes(m_bsdf, specularMode, "Specular", make_float3(specular));
-#endif
+  connectAttributes(m_bsdf, m_colorMode, "Base Color", m_color);
+  connectAttributes(m_bsdf, m_opacityMode, "Alpha", m_opacity);
+  connectAttributes(m_bsdf, m_roughnessMode, "Roughness", m_roughness);
+  connectAttributes(m_bsdf, m_metallicMode, "Metallic", m_metallic);
+  connectAttributes(m_bsdf, m_clearcoatMode, "Coat Weight", m_clearcoat);
   connectAttributes(
-      m_bsdf, m_roughnessMode, "Roughness", make_float3(m_roughness));
+      m_bsdf, m_clearcoatRoughnessMode, "Coat Roughness", m_clearcoatRoughness);
+  connectAttributes(m_bsdf, m_emissiveMode, "Emission Color", m_emissive);
   connectAttributes(
-      m_bsdf, m_metallicMode, "Metallic", make_float3(m_metallic));
-#if 0
-  auto transmissionMode = getParamString("transmission", "");
-  auto transmission = getParam<float>("transmission", 0.f);
-  connectAttributes(m_bsdf, transmissionMode, "Transmission", make_float3(transmission));
-
-  auto clearcoatMode = getParamString("clearcoat", "");
-  auto clearcoat = getParam<float>("clearcoat", 0.f);
-  connectAttributes(m_bsdf, clearcoatMode, "Clearcoat", make_float3(clearcoat));
-
-  auto clearcoatRoughnessMode = getParamString("clearcoatRoughness", "");
-  auto clearcoatRoughness = getParam<float>("clearcoatRoughness", 0.f);
-  connectAttributes(
-      m_bsdf, clearcoatRoughnessMode, "Clearcoat Roughness", make_float3(clearcoatRoughness));
-#endif
+      m_bsdf, m_transmissionMode, "Transmission Weight", m_transmission);
   m_bsdf->input("IOR")->set(m_ior);
 
   m_shader->tag_update(deviceState()->scene);
@@ -178,8 +183,7 @@ Material::Material(CyclesGlobalState *s) : Object(ANARI_MATERIAL, s)
 
 Material::~Material()
 {
-  auto &state = *deviceState();
-  state.scene->shaders.erase(cyclesShader());
+  deviceState()->scene->delete_node(cyclesShader());
 }
 
 Material *Material::createInstance(std::string_view type, CyclesGlobalState *s)
@@ -192,7 +196,26 @@ Material *Material::createInstance(std::string_view type, CyclesGlobalState *s)
     return (Material *)new UnknownObject(ANARI_MATERIAL, type, s);
 }
 
+ccl::Shader *Material::cyclesShader()
+{
+  return m_shader;
+}
+
+void Material::connectAttributes(
+    ccl::ShaderNode *bsdf, const std::string &mode, const char *input, float v)
+{
+  connectAttributesImpl(bsdf, mode, input, make_float3(v), true);
+}
+
 void Material::connectAttributes(ccl::ShaderNode *bsdf,
+    const std::string &mode,
+    const char *input,
+    const float3 &v)
+{
+  connectAttributesImpl(bsdf, mode, input, v, false);
+}
+
+void Material::connectAttributesImpl(ccl::ShaderNode *bsdf,
     const std::string &mode,
     const char *input,
     const float3 &v,
@@ -225,11 +248,6 @@ void Material::connectAttributes(ccl::ShaderNode *bsdf,
     else
       bsdf->input(input)->set(v);
   }
-}
-
-ccl::Shader *Material::cyclesShader()
-{
-  return m_shader;
 }
 
 } // namespace anari_cycles
