@@ -269,15 +269,12 @@ CyclesDevice::CyclesDevice(ANARILibrary l) : helium::BaseDevice(l)
 
 CyclesDevice::~CyclesDevice()
 {
-  auto &state = *deviceState();
-
-  state.session->cancel(true);
-  state.session->wait();
-
-  state.commitBuffer.clear();
-
-  // We don't want the ccl::Scene deleting these objects, they are already gone
-  state.scene->shaders.clear();
+  if (m_initialized) {
+    auto &state = *deviceState();
+    state.session->cancel(true);
+    state.session->wait();
+    state.commitBuffer.clear();
+  }
 
   reportMessage(ANARI_SEVERITY_DEBUG, "destroyed cycles device (%p)", this);
 }
