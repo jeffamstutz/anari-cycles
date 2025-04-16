@@ -44,8 +44,10 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
   const int width = tile.size.x;
   const int height = tile.size.y;
 
+#if 0
   frame.reportMessage(
       ANARI_SEVERITY_DEBUG, "receiving %i x %i frame", width, height);
+#endif
 
   if (frameData.size.x != width || frameData.size.y != height) {
     frame.reportMessage(ANARI_SEVERITY_WARNING,
