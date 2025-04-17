@@ -10,8 +10,12 @@
       "khr_device_synchronization",
       "khr_geometry_sphere",
       "khr_geometry_triangle",
+      "khr_instance_transform",
+      "khr_light_directional",
       "khr_material_matte",
-      "khr_material_physicallyBased"
+      "khr_material_physically_based",
+      "khr_renderer_ambient_light",
+      "khr_renderer_background_color"
     ]
   },
   "objects": [
