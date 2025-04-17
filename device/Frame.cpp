@@ -115,6 +115,13 @@ void Frame::renderFrame()
 
   state.session->set_samples(++state.sessionSamples);
   state.session->start();
+
+  // NOTE(jda): Everything is still implemented as asynchronous, but on some
+  //            machines performance plummets (render thread de-prioritized?),
+  //            which doesn't happen if we immediately synchronize.
+  //
+  // TODO: Investigate how to keep performance and maintain asynchronicity...
+  wait();
 }
 
 void *Frame::map(std::string_view channel,
