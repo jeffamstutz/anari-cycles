@@ -22,6 +22,7 @@ struct Material : public Object
   ccl::Shader *cyclesShader();
 
  protected:
+  virtual void makeGraph();
   void connectAttributes(ccl::ShaderNode *bsdf,
       const std::string &mode,
       const char *input,
@@ -35,16 +36,16 @@ struct Material : public Object
   ccl::ShaderGraph *m_graph{nullptr};
   struct Nodes
   {
-    ccl::AttributeNode *attrC{nullptr};
-    ccl::AttributeNode *attr0{nullptr};
-    ccl::AttributeNode *attr1{nullptr};
-    ccl::AttributeNode *attr2{nullptr};
-    ccl::AttributeNode *attr3{nullptr};
-    ccl::SeparateColorNode *attrC_sc{nullptr};
-    ccl::SeparateColorNode *attr0_sc{nullptr};
-    ccl::SeparateColorNode *attr1_sc{nullptr};
-    ccl::SeparateColorNode *attr2_sc{nullptr};
-    ccl::SeparateColorNode *attr3_sc{nullptr};
+    ccl::ShaderOutput *attrC{nullptr};
+    ccl::ShaderOutput *attr0{nullptr};
+    ccl::ShaderOutput *attr1{nullptr};
+    ccl::ShaderOutput *attr2{nullptr};
+    ccl::ShaderOutput *attr3{nullptr};
+    ccl::ShaderOutput *attrC_sc{nullptr};
+    ccl::ShaderOutput *attr0_sc{nullptr};
+    ccl::ShaderOutput *attr1_sc{nullptr};
+    ccl::ShaderOutput *attr2_sc{nullptr};
+    ccl::ShaderOutput *attr3_sc{nullptr};
   } m_attributeNodes;
 
  private:

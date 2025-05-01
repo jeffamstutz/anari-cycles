@@ -16,28 +16,33 @@ struct MatteMaterial : public Material
   void finalize() override;
 
  private:
+  void makeGraph() override;
+
   ccl::DiffuseBsdfNode *m_bsdf{nullptr};
-  std::string m_colorMode;
+  std::string m_colorAttr;
   float3 m_color;
 };
 
-MatteMaterial::MatteMaterial(CyclesGlobalState *s) : Material(s)
-{
-  auto *bsdf = m_graph->create_node<ccl::DiffuseBsdfNode>();
-  m_graph->connect(bsdf->output("BSDF"), m_graph->output()->input("Surface"));
-  m_bsdf = bsdf;
-}
+MatteMaterial::MatteMaterial(CyclesGlobalState *s) : Material(s) {}
 
 void MatteMaterial::commitParameters()
 {
-  m_colorMode = getParamString("color", "");
+  m_colorAttr = getParamString("color", "");
   m_color = getParam<float3>("color", make_float3(1.f, 1.f, 1.f));
 }
 
 void MatteMaterial::finalize()
 {
-  connectAttributes(m_bsdf, m_colorMode, "Color", m_color);
+  makeGraph();
+  connectAttributes(m_bsdf, m_colorAttr, "Color", m_color);
   m_shader->tag_update(deviceState()->scene);
+}
+
+void MatteMaterial::makeGraph()
+{
+  Material::makeGraph();
+  m_bsdf = m_graph->create_node<ccl::DiffuseBsdfNode>();
+  m_graph->connect(m_bsdf->output("BSDF"), m_graph->output()->input("Surface"));
 }
 
 // PhysicallyBasedMaterial ////////////////////////////////////////////////////
@@ -51,88 +56,116 @@ struct PhysicallyBasedMaterial : public Material
   void finalize() override;
 
  private:
+  void makeGraph() override;
+
   ccl::PrincipledBsdfNode *m_bsdf{nullptr};
-  std::string m_colorMode;
+  std::string m_colorAttr;
   float3 m_color{make_float3(0.8f, 0.8f, 0.8f)};
-  std::string m_opacityMode;
+  std::string m_opacityAttr;
   float m_opacity{1.f};
-  std::string m_roughnessMode;
+  std::string m_roughnessAttr;
   float m_roughness{1.f};
-  std::string m_metallicMode;
+  std::string m_metallicAttr;
   float m_metallic{0.f};
-  std::string m_clearcoatMode;
+  std::string m_clearcoatAttr;
   float m_clearcoat{0.f};
-  std::string m_clearcoatRoughnessMode;
+  std::string m_clearcoatRoughnessAttr;
   float m_clearcoatRoughness{0.f};
-  std::string m_emissiveMode;
+  std::string m_emissiveAttr;
   float3 m_emissive{0.f};
-  std::string m_transmissionMode;
+  std::string m_transmissionAttr;
   float m_transmission{0.f};
   float m_ior{1.5f};
 };
 
 PhysicallyBasedMaterial::PhysicallyBasedMaterial(CyclesGlobalState *s)
     : Material(s)
-{
-  auto *bsdf = m_graph->create_node<ccl::PrincipledBsdfNode>();
-  m_graph->connect(bsdf->output("BSDF"), m_graph->output()->input("Surface"));
-  bsdf->input("Emission Strength")->set(1.f);
-  m_bsdf = bsdf;
-}
+{}
 
 void PhysicallyBasedMaterial::commitParameters()
 {
-  m_colorMode = getParamString("baseColor", "");
+  m_colorAttr = getParamString("baseColor", "");
   m_color = getParam<float3>("baseColor", make_float3(1.f, 1.f, 1.f));
 
-  m_opacityMode = getParamString("opacity", "");
+  m_opacityAttr = getParamString("opacity", "");
   m_opacity = getParam<float>("opacity", 1.f);
 
-  m_roughnessMode = getParamString("roughness", "");
+  m_roughnessAttr = getParamString("roughness", "");
   m_roughness = getParam<float>("roughness", 1.f);
 
-  m_metallicMode = getParamString("metallic", "");
+  m_metallicAttr = getParamString("metallic", "");
   m_metallic = getParam<float>("metallic", 1.f);
 
-  m_clearcoatMode = getParamString("clearcoat", "");
+  m_clearcoatAttr = getParamString("clearcoat", "");
   m_clearcoat = getParam<float>("clearcoat", 0.f);
 
-  m_clearcoatRoughnessMode = getParamString("clearcoatRoughness", "");
+  m_clearcoatRoughnessAttr = getParamString("clearcoatRoughness", "");
   m_clearcoatRoughness = getParam<float>("clearcoatRoughness", 0.f);
 
-  m_emissiveMode = getParamString("emissive", "");
+  m_emissiveAttr = getParamString("emissive", "");
   m_emissive = getParam<float3>("emissive", zero_float3());
 
-  m_transmissionMode = getParamString("transmission", "");
+  m_transmissionAttr = getParamString("transmission", "");
   m_transmission = getParam<float>("transmission", 0.f);
   m_ior = getParam<float>("ior", 1.5f);
 }
 
 void PhysicallyBasedMaterial::finalize()
 {
-  connectAttributes(m_bsdf, m_colorMode, "Base Color", m_color);
-  connectAttributes(m_bsdf, m_opacityMode, "Alpha", m_opacity);
-  connectAttributes(m_bsdf, m_roughnessMode, "Roughness", m_roughness);
-  connectAttributes(m_bsdf, m_metallicMode, "Metallic", m_metallic);
-  connectAttributes(m_bsdf, m_clearcoatMode, "Coat Weight", m_clearcoat);
+  makeGraph();
+  connectAttributes(m_bsdf, m_colorAttr, "Base Color", m_color);
+  connectAttributes(m_bsdf, m_opacityAttr, "Alpha", m_opacity);
+  connectAttributes(m_bsdf, m_roughnessAttr, "Roughness", m_roughness);
+  connectAttributes(m_bsdf, m_metallicAttr, "Metallic", m_metallic);
+  connectAttributes(m_bsdf, m_clearcoatAttr, "Coat Weight", m_clearcoat);
   connectAttributes(
-      m_bsdf, m_clearcoatRoughnessMode, "Coat Roughness", m_clearcoatRoughness);
-  connectAttributes(m_bsdf, m_emissiveMode, "Emission Color", m_emissive);
+      m_bsdf, m_clearcoatRoughnessAttr, "Coat Roughness", m_clearcoatRoughness);
+  connectAttributes(m_bsdf, m_emissiveAttr, "Emission Color", m_emissive);
   connectAttributes(
-      m_bsdf, m_transmissionMode, "Transmission Weight", m_transmission);
+      m_bsdf, m_transmissionAttr, "Transmission Weight", m_transmission);
   m_bsdf->input("IOR")->set(m_ior);
 
   m_shader->tag_update(deviceState()->scene);
+}
+
+void PhysicallyBasedMaterial::makeGraph()
+{
+  Material::makeGraph();
+  m_bsdf = m_graph->create_node<ccl::PrincipledBsdfNode>();
+  m_graph->connect(m_bsdf->output("BSDF"), m_graph->output()->input("Surface"));
+  m_bsdf->input("Emission Strength")->set(1.f);
 }
 
 // Material definitions ///////////////////////////////////////////////////////
 
 Material::Material(CyclesGlobalState *s) : Object(ANARI_MATERIAL, s)
 {
-  auto &state = *deviceState();
+  m_shader = s->scene->create_node<ccl::Shader>();
+  // makeGraph();
+}
 
-  m_shader = state.scene->create_node<ccl::Shader>();
+Material::~Material()
+{
+  deviceState()->scene->delete_node(cyclesShader());
+}
 
+Material *Material::createInstance(std::string_view type, CyclesGlobalState *s)
+{
+  if (type == "matte")
+    return new MatteMaterial(s);
+  else if (type == "physicallyBased")
+    return new PhysicallyBasedMaterial(s);
+  else
+    return (Material *)new UnknownObject(ANARI_MATERIAL, type, s);
+}
+
+ccl::Shader *Material::cyclesShader()
+{
+  return m_shader;
+}
+
+void Material::makeGraph()
+{
   auto graph = std::make_unique<ccl::ShaderGraph>();
   m_graph = graph.get();
 
@@ -169,36 +202,16 @@ Material::Material(CyclesGlobalState *s) : Object(ANARI_MATERIAL, s)
 
   m_shader->set_graph(std::move(graph));
 
-  m_attributeNodes.attrC = vertexColor;
-  m_attributeNodes.attr0 = attr0;
-  m_attributeNodes.attr1 = attr1;
-  m_attributeNodes.attr2 = attr2;
-  m_attributeNodes.attr3 = attr3;
-  m_attributeNodes.attrC_sc = vertexColor_sc;
-  m_attributeNodes.attr0_sc = attr0_sc;
-  m_attributeNodes.attr1_sc = attr1_sc;
-  m_attributeNodes.attr2_sc = attr2_sc;
-  m_attributeNodes.attr3_sc = attr3_sc;
-}
-
-Material::~Material()
-{
-  deviceState()->scene->delete_node(cyclesShader());
-}
-
-Material *Material::createInstance(std::string_view type, CyclesGlobalState *s)
-{
-  if (type == "matte")
-    return new MatteMaterial(s);
-  else if (type == "physicallyBased")
-    return new PhysicallyBasedMaterial(s);
-  else
-    return (Material *)new UnknownObject(ANARI_MATERIAL, type, s);
-}
-
-ccl::Shader *Material::cyclesShader()
-{
-  return m_shader;
+  m_attributeNodes.attrC = vertexColor->output("Color");
+  m_attributeNodes.attr0 = attr0->output("Color");
+  m_attributeNodes.attr1 = attr1->output("Color");
+  m_attributeNodes.attr2 = attr2->output("Color");
+  m_attributeNodes.attr3 = attr3->output("Color");
+  m_attributeNodes.attrC_sc = vertexColor_sc->output("Red");
+  m_attributeNodes.attr0_sc = attr0_sc->output("Red");
+  m_attributeNodes.attr1_sc = attr1_sc->output("Red");
+  m_attributeNodes.attr2_sc = attr2_sc->output("Red");
+  m_attributeNodes.attr3_sc = attr3_sc->output("Red");
 }
 
 void Material::connectAttributes(
@@ -221,32 +234,34 @@ void Material::connectAttributesImpl(ccl::ShaderNode *bsdf,
     const float3 &v,
     bool singleComponent)
 {
+  auto *shaderInput = bsdf->input(input);
+  m_graph->disconnect(shaderInput);
+
   if (mode == "color") {
-    m_graph->connect(singleComponent ? m_attributeNodes.attrC_sc->output("Red")
-                                     : m_attributeNodes.attrC->output("Color"),
-        bsdf->input(input));
+    m_graph->connect(
+        singleComponent ? m_attributeNodes.attrC_sc : m_attributeNodes.attrC,
+        shaderInput);
   } else if (mode == "attribute0") {
-    m_graph->connect(singleComponent ? m_attributeNodes.attr0_sc->output("Red")
-                                     : m_attributeNodes.attr0->output("Color"),
-        bsdf->input(input));
+    m_graph->connect(
+        singleComponent ? m_attributeNodes.attr0_sc : m_attributeNodes.attr0,
+        shaderInput);
   } else if (mode == "attribute1") {
-    m_graph->connect(singleComponent ? m_attributeNodes.attr1_sc->output("Red")
-                                     : m_attributeNodes.attr1->output("Color"),
-        bsdf->input(input));
+    m_graph->connect(
+        singleComponent ? m_attributeNodes.attr1_sc : m_attributeNodes.attr1,
+        shaderInput);
   } else if (mode == "attribute2") {
-    m_graph->connect(singleComponent ? m_attributeNodes.attr2_sc->output("Red")
-                                     : m_attributeNodes.attr2->output("Color"),
-        bsdf->input(input));
+    m_graph->connect(
+        singleComponent ? m_attributeNodes.attr2_sc : m_attributeNodes.attr2,
+        shaderInput);
   } else if (mode == "attribute3") {
-    m_graph->connect(singleComponent ? m_attributeNodes.attr3_sc->output("Red")
-                                     : m_attributeNodes.attr3->output("Color"),
-        bsdf->input(input));
+    m_graph->connect(
+        singleComponent ? m_attributeNodes.attr3_sc : m_attributeNodes.attr3,
+        shaderInput);
   } else {
-    m_graph->disconnect(bsdf->input(input));
     if (singleComponent)
-      bsdf->input(input)->set(v.x);
+      shaderInput->set(v.x);
     else
-      bsdf->input(input)->set(v);
+      shaderInput->set(v);
   }
 }
 
