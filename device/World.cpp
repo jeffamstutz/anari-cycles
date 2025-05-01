@@ -51,15 +51,11 @@ void World::commitParameters()
   m_zeroSurfaceData = getParamObject<ObjectArray>("surface");
   m_zeroLightData = getParamObject<ObjectArray>("light");
   m_zeroVolumeData = getParamObject<ObjectArray>("volume");
+  m_instanceData = getParamObject<ObjectArray>("instance");
+}
 
-  const bool addZeroInstance =
-      m_zeroSurfaceData || m_zeroLightData || m_zeroVolumeData;
-
-  if (addZeroInstance) {
-    reportMessage(
-        ANARI_SEVERITY_DEBUG, "anari_cycles::World will add zero instance");
-  }
-
+void World::finalize()
+{
   if (m_zeroSurfaceData) {
     reportMessage(ANARI_SEVERITY_DEBUG,
         "anari_cycles::World found surfaces in zero instance");
@@ -78,22 +74,13 @@ void World::commitParameters()
     reportMessage(ANARI_SEVERITY_DEBUG,
         "anari_cycles::World found volumes in zero instance");
     m_zeroGroup->setParamDirect("volume", getParamDirect("volume"));
-  } else {
+  } else
     m_zeroGroup->removeParam("volume");
-  }
+
   m_zeroGroup->commitParameters();
   m_zeroGroup->finalize();
 
-  m_instanceData = getParamObject<ObjectArray>("instance");
-
-  if (m_instanceData)
-    m_instanceData->addChangeObserver(this);
-  if (m_zeroSurfaceData)
-    m_zeroSurfaceData->addChangeObserver(this);
-  if (m_zeroLightData)
-    m_zeroLightData->addChangeObserver(this);
-  if (m_zeroVolumeData)
-    m_zeroVolumeData->addChangeObserver(this);
+  Object::finalize();
 }
 
 void World::setCyclesWorldObjects()
@@ -101,37 +88,21 @@ void World::setCyclesWorldObjects()
   auto &state = *deviceState();
   auto *scene = state.scene;
 
-  reportMessage(ANARI_SEVERITY_DEBUG,
-      "trace -- World::setCyclesWorldObjects() clearing objects");
-
   scene->objects.clear();
-
-  reportMessage(ANARI_SEVERITY_DEBUG,
-      "trace -- World::setCyclesWorldObjects() adding zero instance");
 
   m_zeroInstance->addInstanceObjectsToCyclesScene();
 
   if (m_instanceData) {
-    reportMessage(ANARI_SEVERITY_DEBUG,
-        "trace -- World::setCyclesWorldObjects() adding other instances");
-
     auto **instancesBegin = (Instance **)m_instanceData->handlesBegin();
     auto **instancesEnd = (Instance **)m_instanceData->handlesEnd();
-
     std::for_each(instancesBegin, instancesEnd, [](Instance *i) {
       i->addInstanceObjectsToCyclesScene();
     });
   }
 
-  reportMessage(ANARI_SEVERITY_DEBUG,
-      "trace -- World::setCyclesWorldObjects() tagging manager updates");
-
   scene->object_manager->tag_update(scene, ObjectManager::UPDATE_ALL);
   scene->geometry_manager->tag_update(scene, GeometryManager::UPDATE_ALL);
   scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
-
-  reportMessage(
-      ANARI_SEVERITY_DEBUG, "trace -- World::setCyclesWorldObjects() done");
 }
 
 box3 World::bounds() const

@@ -17,6 +17,7 @@ struct World : public Object {
       uint32_t flags) override;
 
   void commitParameters() override;
+  void finalize() override;
 
   void setCyclesWorldObjects();
 
