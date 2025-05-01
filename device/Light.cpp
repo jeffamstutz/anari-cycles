@@ -92,6 +92,11 @@ void Light::commitParameters()
   m_color = getParam<anari_vec::float3>("color", {1.f, 1.f, 1.f});
 }
 
+void Light::finalize()
+{
+  Object::finalize();
+}
+
 ccl::Light *Light::cyclesLight() const
 {
   return m_cyclesLight;
@@ -124,6 +129,8 @@ void Directional::finalize()
   m_cyclesLight->set_strength(
       m_irradiance * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
   m_cyclesLight->tag_update(deviceState()->scene);
+
+  Light::finalize();
 }
 
 math::mat4 Directional::xfm() const

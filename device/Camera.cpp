@@ -56,6 +56,11 @@ void Camera::commitParameters()
   m_up = getParam<anari_vec::float3>("up", {0.f, 1.f, 0.f});
 }
 
+void Camera::finalize()
+{
+  Object::finalize();
+}
+
 void Camera::setCameraCurrent(int width, int height)
 {
   auto &state = *deviceState();

@@ -19,6 +19,8 @@ struct Material : public Object
   static Material *createInstance(
       std::string_view type, CyclesGlobalState *state);
 
+  virtual void finalize() override;
+
   ccl::Shader *cyclesShader();
 
  protected:

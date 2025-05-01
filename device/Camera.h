@@ -14,7 +14,9 @@ struct Camera : public Object {
 
   static Camera *createInstance(std::string_view type, CyclesGlobalState *state);
 
-  void commitParameters() override;
+  virtual void commitParameters() override;
+  virtual void finalize() override;
+
   virtual void setCameraCurrent(int width, int height);
 
  protected:

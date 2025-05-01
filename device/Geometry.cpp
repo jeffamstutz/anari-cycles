@@ -85,6 +85,8 @@ void Triangle::finalize()
     reportMessage(ANARI_SEVERITY_WARNING,
         "missing required parameter 'vertex.position' on triangle geometry");
   }
+
+  Geometry::finalize();
 }
 
 ccl::Geometry *Triangle::createCyclesGeometryNode()
@@ -265,6 +267,8 @@ void Sphere::finalize()
     reportMessage(ANARI_SEVERITY_WARNING,
         "missing required parameter 'vertex.position' on sphere geometry");
   }
+
+  Geometry::finalize();
 }
 
 ccl::Geometry *Sphere::createCyclesGeometryNode()
@@ -451,6 +455,11 @@ Geometry *Geometry::createInstance(std::string_view type, CyclesGlobalState *s)
     return new Sphere(s);
   else
     return (Geometry *)new UnknownObject(ANARI_GEOMETRY, type, s);
+}
+
+void Geometry::finalize()
+{
+  Object::finalize();
 }
 
 } // namespace anari_cycles

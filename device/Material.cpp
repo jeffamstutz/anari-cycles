@@ -36,6 +36,7 @@ void MatteMaterial::finalize()
   makeGraph();
   connectAttributes(m_bsdf, m_colorAttr, "Color", m_color);
   m_shader->tag_update(deviceState()->scene);
+  Material::finalize();
 }
 
 void MatteMaterial::makeGraph()
@@ -126,6 +127,8 @@ void PhysicallyBasedMaterial::finalize()
   m_bsdf->input("IOR")->set(m_ior);
 
   m_shader->tag_update(deviceState()->scene);
+
+  Material::finalize();
 }
 
 void PhysicallyBasedMaterial::makeGraph()
@@ -157,6 +160,11 @@ Material *Material::createInstance(std::string_view type, CyclesGlobalState *s)
     return new PhysicallyBasedMaterial(s);
   else
     return (Material *)new UnknownObject(ANARI_MATERIAL, type, s);
+}
+
+void Material::finalize()
+{
+  Object::finalize();
 }
 
 ccl::Shader *Material::cyclesShader()

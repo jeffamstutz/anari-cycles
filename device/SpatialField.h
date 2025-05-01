@@ -22,6 +22,8 @@ struct SpatialField : public Object
   static SpatialField *createInstance(
       std::string_view subtype, CyclesGlobalState *s);
 
+  void finalize() override;
+
   virtual std::unique_ptr<ccl::Geometry> makeCyclesGeometry() = 0;
   virtual box3 bounds() const = 0;
 };

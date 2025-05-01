@@ -18,6 +18,8 @@ struct Geometry : public Object
   static Geometry *createInstance(
       std::string_view type, CyclesGlobalState *state);
 
+  virtual void finalize() override;
+
   virtual ccl::Geometry *createCyclesGeometryNode() = 0;
   virtual void syncCyclesNode(ccl::Geometry *node) const = 0;
 };

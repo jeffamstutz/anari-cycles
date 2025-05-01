@@ -45,7 +45,6 @@ struct Frame : public helium::BaseFrame
 
  private:
   bool resetAccumulationNextFrame() const;
-  bool shouldUpdateCyclesScene() const;
 
   friend struct FrameOutputDriver;
 

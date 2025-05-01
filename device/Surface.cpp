@@ -26,6 +26,8 @@ void Surface::commitParameters()
 
 void Surface::finalize()
 {
+  auto *state = deviceState();
+
   if (m_geometryHandleChanged) {
     cleanupCyclesNode();
     if (m_geometry)
@@ -39,11 +41,15 @@ void Surface::finalize()
       used_shaders.push_back_slow(m_material->cyclesShader());
       m_cyclesGeometryNode->set_used_shaders(used_shaders);
     }
-    m_cyclesGeometryNode->tag_update(deviceState()->scene, true);
+    m_cyclesGeometryNode->tag_update(state->scene, true);
   }
 
   m_geometryHandleChanged = false;
   m_materialHandleChanged = false;
+
+  state->objectUpdates.lastSceneChange = helium::newTimeStamp();
+
+  Object::finalize();
 }
 
 const Geometry *Surface::geometry() const

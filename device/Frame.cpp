@@ -25,9 +25,13 @@ CyclesGlobalState *Frame::deviceState() const
 
 void Frame::commitParameters()
 {
+  auto *world = getParamObject<World>("world");
+  if (m_world.ptr != world)
+    m_worldLastChanged = 0;
+  m_world = world;
+
   m_renderer = getParamObject<Renderer>("renderer");
   m_camera = getParamObject<Camera>("camera");
-  m_world = getParamObject<World>("world");
   m_colorType = getParam<anari::DataType>("channel.color", ANARI_UNKNOWN);
   m_depthType = getParam<anari::DataType>("channel.depth", ANARI_UNKNOWN);
   m_frameData.size = getParam<uint2>("size", make_uint2(10, 10));
@@ -87,22 +91,24 @@ void Frame::renderFrame()
   if (!isValid()) {
     reportMessage(
         ANARI_SEVERITY_ERROR, "skipping render of incomplete frame object");
-    std::fill(m_pixelBuffer.begin(), m_pixelBuffer.end(), ~0);
-    state.output_driver->renderEnd();
+    std::fill(m_pixelBuffer.begin(), m_pixelBuffer.end(), 0);
+    state.output_driver->renderEnd(); // cycles render thread not going to run
     return;
   }
 
+  if (m_worldLastChanged < state.objectUpdates.lastSceneChange) {
+    reportMessage(ANARI_SEVERITY_DEBUG, "frame -- updating world");
+    m_world->setCyclesWorldObjects();
+    m_worldLastChanged = helium::newTimeStamp();
+  }
+
   if (currentFrameChanged || resetAccumulationNextFrame()) {
-    reportMessage(ANARI_SEVERITY_DEBUG, "resetting accumulation");
+    reportMessage(ANARI_SEVERITY_DEBUG, "frame -- resetting accumulation");
 
     state.objectUpdates.lastAccumulationReset = helium::newTimeStamp();
 
     m_camera->setCameraCurrent(m_frameData.size.x, m_frameData.size.y);
     m_renderer->makeRendererCurrent();
-    if (currentFrameChanged || shouldUpdateCyclesScene()) {
-      m_world->setCyclesWorldObjects();
-      m_worldLastChanged = helium::newTimeStamp();
-    }
 
     state.buffer_params.width = m_frameData.size.x;
     state.buffer_params.height = m_frameData.size.y;
@@ -180,15 +186,9 @@ void Frame::wait() const
 
 bool Frame::resetAccumulationNextFrame() const
 {
-  auto &state = *deviceState();
-  return state.objectUpdates.lastAccumulationReset
-      < state.commitBuffer.lastObjectFinalization();
-}
-
-bool Frame::shouldUpdateCyclesScene() const
-{
-  auto &state = *deviceState();
-  return m_worldLastChanged < state.objectUpdates.lastSceneChange;
+  auto *state = deviceState();
+  return state->objectUpdates.lastAccumulationReset
+      < state->commitBuffer.lastObjectFinalization();
 }
 
 } // namespace anari_cycles

@@ -21,7 +21,7 @@ void Object::commitParameters()
 
 void Object::finalize()
 {
-  // no-op
+  notifyChangeObservers();
 }
 
 bool Object::getProperty(

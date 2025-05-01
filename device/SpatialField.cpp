@@ -28,6 +28,11 @@ SpatialField *SpatialField::createInstance(
     return (SpatialField *)new UnknownObject(ANARI_SPATIAL_FIELD, subtype, s);
 }
 
+void SpatialField::finalize()
+{
+  Object::finalize();
+}
+
 // Subtypes ///////////////////////////////////////////////////////////////////
 
 // StructuredRegularField //
@@ -54,6 +59,8 @@ void StructuredRegularField::finalize()
   m_coordUpperBound = helium::float3(std::nextafter(m_dims[0] - 1, 0),
       std::nextafter(m_dims[1] - 1, 0),
       std::nextafter(m_dims[2] - 1, 0));
+
+  SpatialField::finalize();
 }
 
 bool StructuredRegularField::isValid() const

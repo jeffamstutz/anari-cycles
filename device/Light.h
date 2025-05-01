@@ -19,6 +19,7 @@ struct Light : public Object
   static Light *createInstance(std::string_view type, CyclesGlobalState *state);
 
   virtual void commitParameters() override;
+  virtual void finalize() override;
 
   ccl::Light *cyclesLight() const;
   virtual math::mat4 xfm() const = 0;
