@@ -121,7 +121,8 @@ void Directional::finalize()
   m_cyclesLight->set_light_type(LIGHT_DISTANT);
 
   if (m_prevDirection != m_direction) {
-    reportMessage(ANARI_SEVERITY_WARNING, "make light updates more efficient!");
+    reportMessage(ANARI_SEVERITY_PERFORMANCE_WARNING,
+        "make light updates more efficient!");
     deviceState()->objectUpdates.lastSceneChange = helium::newTimeStamp();
     m_prevDirection = m_direction;
   }
