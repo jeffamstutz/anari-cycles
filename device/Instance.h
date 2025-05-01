@@ -24,6 +24,7 @@ struct Instance : public Object
 
  private:
   helium::IntrusivePtr<Group> m_group;
+  helium::ChangeObserverPtr<Array1D> m_xfmArray;
   math::mat4 m_xfm;
 };
 

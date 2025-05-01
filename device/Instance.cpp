@@ -7,13 +7,16 @@
 
 namespace anari_cycles {
 
-Instance::Instance(CyclesGlobalState *s) : Object(ANARI_INSTANCE, s) {}
+Instance::Instance(CyclesGlobalState *s)
+    : Object(ANARI_INSTANCE, s), m_xfmArray(this)
+{}
 
 Instance::~Instance() = default;
 
 void Instance::commitParameters()
 {
   m_group = getParamObject<Group>("group");
+  m_xfmArray = getParamObject<Array1D>("transform");
   m_xfm = getParam<helium::mat4>("transform", linalg::identity);
 }
 
@@ -24,16 +27,30 @@ Group *Instance::group() const
 
 void Instance::addInstanceObjectsToCyclesScene()
 {
-  if (m_group)
+  if (!isValid())
+    return;
+
+  if (!m_xfmArray)
     m_group->addGroupToCurrentCyclesScene(m_xfm);
+  else {
+    auto *begin = m_xfmArray->beginAs<helium::mat4>();
+    auto *end = m_xfmArray->endAs<helium::mat4>();
+    std::for_each(begin, end, [&](const helium::mat4 &m) {
+      m_group->addGroupToCurrentCyclesScene(m);
+    });
+  }
 }
 
 box3 Instance::bounds() const
 {
   box3 b = empty_box3();
-  if (m_group) {
-    auto gb = m_group->bounds();
-    auto xfm = mat4ToCycles(m_xfm);
+  if (!isValid())
+    return b;
+
+  auto gb = m_group->bounds();
+
+  auto extendBounds = [&](const helium::mat4 &m) {
+    auto xfm = mat4ToCycles(m);
     extend(b,
         ccl::transform_point(
             &xfm, make_float3(gb.lower.x, gb.lower.y, gb.lower.z)));
@@ -58,7 +75,16 @@ box3 Instance::bounds() const
     extend(b,
         ccl::transform_point(
             &xfm, make_float3(gb.upper.x, gb.lower.y, gb.upper.z)));
+  };
+
+  if (!m_xfmArray)
+    extendBounds(m_xfm);
+  else {
+    auto *begin = m_xfmArray->beginAs<helium::mat4>();
+    auto *end = m_xfmArray->endAs<helium::mat4>();
+    std::for_each(begin, end, [&](const helium::mat4 &m) { extendBounds(m); });
   }
+
   return b;
 }
 
