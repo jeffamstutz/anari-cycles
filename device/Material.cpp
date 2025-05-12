@@ -18,9 +18,11 @@ struct MatteMaterial : public Material
  private:
   void makeGraph() override;
 
-  ccl::DiffuseBsdfNode *m_bsdf{nullptr};
+  ccl::PrincipledBsdfNode *m_bsdf{nullptr};
   std::string m_colorAttr;
-  float3 m_color;
+  float3 m_color{make_float3(0.8f, 0.8f, 0.8f)};
+  std::string m_opacityAttr;
+  float m_opacity{1.f};
 };
 
 MatteMaterial::MatteMaterial(CyclesGlobalState *s) : Material(s) {}
@@ -28,13 +30,16 @@ MatteMaterial::MatteMaterial(CyclesGlobalState *s) : Material(s) {}
 void MatteMaterial::commitParameters()
 {
   m_colorAttr = getParamString("color", "");
-  m_color = getParam<float3>("color", make_float3(1.f, 1.f, 1.f));
+  m_color = getParam<float3>("color", make_float3(0.8f, 0.8f, 0.8f));
+  m_opacityAttr = getParamString("opacity", "");
+  m_opacity = getParam<float>("opacity", 1.f);
 }
 
 void MatteMaterial::finalize()
 {
   makeGraph();
-  connectAttributes(m_bsdf, m_colorAttr, "Color", m_color);
+  connectAttributes(m_bsdf, m_colorAttr, "Base Color", m_color);
+  connectAttributes(m_bsdf, m_opacityAttr, "Alpha", m_opacity);
   m_shader->tag_update(deviceState()->scene);
   Material::finalize();
 }
@@ -42,8 +47,12 @@ void MatteMaterial::finalize()
 void MatteMaterial::makeGraph()
 {
   Material::makeGraph();
-  m_bsdf = m_graph->create_node<ccl::DiffuseBsdfNode>();
+  m_bsdf = m_graph->create_node<ccl::PrincipledBsdfNode>();
   m_graph->connect(m_bsdf->output("BSDF"), m_graph->output()->input("Surface"));
+  m_bsdf->input("Roughness")->set(1.f);
+  m_bsdf->input("Metallic")->set(0.f);
+  m_bsdf->input("Coat Weight")->set(0.f);
+  m_bsdf->input("Transmission Weight")->set(0.f);
 }
 
 // PhysicallyBasedMaterial ////////////////////////////////////////////////////
@@ -86,7 +95,7 @@ PhysicallyBasedMaterial::PhysicallyBasedMaterial(CyclesGlobalState *s)
 void PhysicallyBasedMaterial::commitParameters()
 {
   m_colorAttr = getParamString("baseColor", "");
-  m_color = getParam<float3>("baseColor", make_float3(1.f, 1.f, 1.f));
+  m_color = getParam<float3>("baseColor", make_float3(0.8f, 0.8f, 0.8f));
 
   m_opacityAttr = getParamString("opacity", "");
   m_opacity = getParam<float>("opacity", 1.f);
