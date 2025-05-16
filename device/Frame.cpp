@@ -127,7 +127,8 @@ void Frame::renderFrame()
   //            which doesn't happen if we immediately synchronize.
   //
   // TODO: Investigate how to keep performance and maintain asynchronicity...
-  wait();
+  if (!m_renderer->runAsync())
+    wait();
 }
 
 void *Frame::map(std::string_view channel,

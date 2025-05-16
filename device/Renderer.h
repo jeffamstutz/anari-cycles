@@ -16,10 +16,13 @@ struct Renderer : public Object
 
   void makeRendererCurrent() const;
 
+  bool runAsync() const;
+
  private:
   anari_vec::float4 m_backgroundColor;
   anari_vec::float3 m_ambientColor;
   float m_ambientIntensity;
+  bool m_runAsync{false};
 };
 
 } // namespace anari_cycles

@@ -21,6 +21,7 @@ void Renderer::commitParameters()
       getParam<anari_vec::float4>("background", {0.f, 0.f, 0.f, 1.f});
   m_ambientColor = getParam<anari_vec::float3>("ambientColor", {1.f, 1.f, 1.f});
   m_ambientIntensity = 0.1f * getParam<float>("ambientRadiance", 1.f);
+  m_runAsync = getParam<bool>("runAsync", false);
 }
 
 void Renderer::makeRendererCurrent() const
@@ -40,6 +41,11 @@ void Renderer::makeRendererCurrent() const
 
   state.scene->default_background->tag_update(state.scene);
   state.scene->background->tag_update(state.scene);
+}
+
+bool Renderer::runAsync() const
+{
+  return m_runAsync;
 }
 
 } // namespace anari_cycles

@@ -61,6 +61,17 @@
             1.0
           ],
           "description": "ambient light intensity"
+        },
+        {
+          "name": "runAsync",
+          "types": [
+            "ANARI_BOOL"
+          ],
+          "tags": [],
+          "default": [
+            false
+          ],
+          "description": "run anariRenderFrame() asynchronously"
         }
       ]
     }
