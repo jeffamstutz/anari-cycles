@@ -28,5 +28,5 @@ struct Group : public Object {
 
 }  // namespace anari_cycles
 
-CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Group *, ANARI_WORLD);
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Group *, ANARI_GROUP);
 

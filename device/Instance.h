@@ -29,3 +29,5 @@ struct Instance : public Object
 };
 
 } // namespace anari_cycles
+
+CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Instance *, ANARI_INSTANCE);

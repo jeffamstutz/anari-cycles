@@ -94,3 +94,5 @@ bool Instance::isValid() const
 }
 
 } // namespace anari_cycles
+
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Instance *);
