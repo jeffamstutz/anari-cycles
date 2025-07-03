@@ -7,13 +7,15 @@
 
 namespace anari_cycles {
 
-struct World : public Object {
+struct World : public Object
+{
   World(CyclesGlobalState *s);
   ~World() override;
 
   bool getProperty(const std::string_view &name,
       ANARIDataType type,
       void *ptr,
+      uint64_t size,
       uint32_t flags) override;
 
   void commitParameters() override;
@@ -33,6 +35,6 @@ struct World : public Object {
   helium::IntrusivePtr<ObjectArray> m_instanceData;
 };
 
-}  // namespace anari_cycles
+} // namespace anari_cycles
 
 CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::World *, ANARI_WORLD);

@@ -88,8 +88,11 @@ struct CyclesDevice : public helium::BaseDevice
   CyclesDevice(ANARILibrary);
   ~CyclesDevice() override;
 
-  int deviceGetProperty(
-      const char *name, ANARIDataType type, void *mem, uint64_t size) override;
+  int deviceGetProperty(const char *name,
+      ANARIDataType type,
+      void *mem,
+      uint64_t size,
+      uint32_t mask) override;
 
  private:
   void initDevice();

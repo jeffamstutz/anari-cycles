@@ -32,7 +32,7 @@ include(GNUInstallDirs)
 
 ## Dependencies ##
 
-find_package(anari 0.14.0 REQUIRED)
+find_package(anari 0.15.0 REQUIRED)
 find_package(Python3 REQUIRED)
 find_package(OpenImageIO REQUIRED)
 

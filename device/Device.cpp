@@ -279,8 +279,11 @@ CyclesDevice::~CyclesDevice()
   reportMessage(ANARI_SEVERITY_DEBUG, "destroyed cycles device (%p)", this);
 }
 
-int CyclesDevice::deviceGetProperty(
-    const char *name, ANARIDataType type, void *mem, uint64_t size)
+int CyclesDevice::deviceGetProperty(const char *name,
+    ANARIDataType type,
+    void *mem,
+    uint64_t size,
+    uint32_t mask)
 {
   std::string_view prop = name;
   if (prop == "feature" && type == ANARI_STRING_LIST) {

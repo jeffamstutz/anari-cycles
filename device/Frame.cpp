@@ -59,8 +59,11 @@ void Frame::finalize()
   m_depthBuffer.resize(m_depthType == ANARI_FLOAT32 ? numPixels : 0);
 }
 
-bool Frame::getProperty(
-    const std::string_view &name, ANARIDataType type, void *ptr, uint32_t flags)
+bool Frame::getProperty(const std::string_view &name,
+    ANARIDataType type,
+    void *ptr,
+    uint64_t size,
+    uint32_t flags)
 {
   if (type == ANARI_FLOAT32 && name == "duration") {
     helium::writeToVoidP(ptr, m_duration);
