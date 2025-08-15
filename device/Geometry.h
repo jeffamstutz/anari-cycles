@@ -3,8 +3,8 @@
 
 #pragma once
 
+#include "Array.h"
 #include "Object.h"
-#include "array/Array1D.h"
 // cycles
 #include "scene/geometry.h"
 

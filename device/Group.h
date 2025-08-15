@@ -6,11 +6,11 @@
 #include "Light.h"
 #include "Surface.h"
 #include "Volume.h"
-#include "array/ObjectArray.h"
 
 namespace anari_cycles {
 
-struct Group : public Object {
+struct Group : public Object
+{
   Group(CyclesGlobalState *s);
   ~Group() override;
 
@@ -26,7 +26,6 @@ struct Group : public Object {
   helium::ChangeObserverPtr<ObjectArray> m_lightData;
 };
 
-}  // namespace anari_cycles
+} // namespace anari_cycles
 
 CYCLES_ANARI_TYPEFOR_SPECIALIZATION(anari_cycles::Group *, ANARI_GROUP);
-

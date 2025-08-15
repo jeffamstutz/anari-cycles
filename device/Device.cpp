@@ -8,11 +8,8 @@
 #include "scene/background.h"
 #include "scene/integrator.h"
 
+#include "Array.h"
 #include "Frame.h"
-#include "array/Array1D.h"
-#include "array/Array2D.h"
-#include "array/Array3D.h"
-#include "array/ObjectArray.h"
 
 #include "FrameOutputDriver.h"
 

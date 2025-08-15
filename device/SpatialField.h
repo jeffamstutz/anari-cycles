@@ -3,10 +3,8 @@
 
 #pragma once
 
+#include "Array.h"
 #include "Object.h"
-#include "array/Array1D.h"
-#include "array/Array3D.h"
-#include "array/ObjectArray.h"
 
 #include "Material.h"
 // ours
