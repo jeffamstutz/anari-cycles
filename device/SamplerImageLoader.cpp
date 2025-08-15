@@ -29,16 +29,26 @@ bool SamplerImageLoader::load_metadata(
   metadata.width = m_dims[0];
   metadata.height = m_dims[1];
   metadata.depth = m_dims[2];
+  metadata.colorspace = ccl::u_colorspace_raw;
 
   switch (m_dataType) {
   case (ANARI_UFIXED8):
     metadata.type = IMAGE_DATA_TYPE_BYTE;
     break;
+  case (ANARI_UFIXED8_VEC4):
+    metadata.type = IMAGE_DATA_TYPE_BYTE4;
+    break;
   case (ANARI_UFIXED16):
     metadata.type = IMAGE_DATA_TYPE_USHORT;
     break;
+  case (ANARI_UFIXED16_VEC4):
+    metadata.type = IMAGE_DATA_TYPE_USHORT4;
+    break;
   case (ANARI_FLOAT32):
     metadata.type = IMAGE_DATA_TYPE_FLOAT;
+    break;
+  case (ANARI_FLOAT32_VEC4):
+    metadata.type = IMAGE_DATA_TYPE_FLOAT4;
     break;
   case (ANARI_FIXED16):
   case (ANARI_FLOAT64):
