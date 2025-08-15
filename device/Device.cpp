@@ -167,13 +167,8 @@ ANARIRenderer CyclesDevice::newRenderer(const char *subtype)
 ANARISampler CyclesDevice::newSampler(const char *subtype)
 {
   initDevice();
-#if 1
-  return (ANARISampler) new UnknownObject(
-      ANARI_SAMPLER, subtype, deviceState());
-#else
   return getHandleForAPI<ANARISampler>(
       Sampler::createInstance(subtype, deviceState()));
-#endif
 }
 
 ANARISpatialField CyclesDevice::newSpatialField(const char *subtype)

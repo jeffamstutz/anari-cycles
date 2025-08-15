@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Geometry.h"
+#include "Sampler.h"
 // cycles
 #include "scene/shader.h"
 #include "scene/shader_graph.h"
