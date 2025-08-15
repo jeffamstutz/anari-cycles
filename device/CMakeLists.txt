@@ -34,7 +34,6 @@ PRIVATE
   FrameOutputDriver.cpp
   Geometry.cpp
   Group.cpp
-  ImageLoader.cpp
   Instance.cpp
   Library.cpp
   Light.cpp
@@ -45,6 +44,7 @@ PRIVATE
   SpatialField.cpp
   Surface.cpp
   Volume.cpp
+  VolumeImageLoader.cpp
   World.cpp
 )
 

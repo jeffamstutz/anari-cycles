@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // std
-#include <cfloat>
+#include <limits>
 // ours
-// #include "Array.h"
-#include "ImageLoader.h"
 #include "SpatialField.h"
+#include "VolumeImageLoader.h"
 // cycles
 #include "scene/volume.h"
 #include "util/hash.h"
@@ -73,7 +72,7 @@ std::unique_ptr<ccl::Geometry> StructuredRegularField::makeCyclesGeometry()
   auto volume = std::make_unique<ccl::Volume>();
   volume->name = ccl::ustring("ANARI Volume");
 
-  volume->set_clipping(-FLT_MAX);
+  volume->set_clipping(-std::numeric_limits<float>::max());
   volume->set_object_space(true);
 #if 0
   volume->set_volume_mesh(true);
@@ -81,7 +80,7 @@ std::unique_ptr<ccl::Geometry> StructuredRegularField::makeCyclesGeometry()
 
   Attribute *attr = volume->attributes.add(
       ustring("voxels"), TypeDesc::TypeFloat, ATTR_ELEMENT_VOXEL);
-  auto loader = std::make_unique<ANARIImageLoader>(this);
+  auto loader = std::make_unique<VolumeImageLoader>(this);
   ImageParams params;
   auto &state = *deviceState();
   attr->data_voxel() =
