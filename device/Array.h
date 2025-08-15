@@ -11,6 +11,8 @@
 
 namespace anari_cycles {
 
+using Array = helium::Array;
+
 using Array1DMemoryDescriptor = helium::Array1DMemoryDescriptor;
 using Array1D = helium::Array1D;
 

@@ -41,6 +41,7 @@ PRIVATE
   Object.cpp
   Renderer.cpp
   Sampler.cpp
+  SamplerImageLoader.cpp
   SpatialField.cpp
   Surface.cpp
   Volume.cpp
