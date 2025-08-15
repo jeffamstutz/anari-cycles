@@ -19,6 +19,7 @@ namespace anari_cycles {
 using namespace ccl;
 
 namespace math = anari::math;
+using mat4 = anari::math::mat4;
 
 namespace anari_vec {
 

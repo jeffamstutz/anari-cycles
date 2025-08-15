@@ -2,24 +2,70 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Sampler.h"
+#include "Array.h"
+#include "cycles_math.h"
 
 namespace anari_cycles {
 
-Sampler::Sampler(CyclesGlobalState *s) : Object(ANARI_SAMPLER, s)
+// Image2D Sampler ////////////////////////////////////////////////////////////
+
+struct Image2D : public Sampler
 {
-  // TODO
+  Image2D(CyclesGlobalState *d);
+
+  bool isValid() const override;
+  void commitParameters() override;
+
+ private:
+  helium::IntrusivePtr<Array2D> m_image;
+  helium::Attribute m_inAttribute{helium::Attribute::NONE};
+  helium::WrapMode m_wrapMode1{helium::WrapMode::DEFAULT};
+  helium::WrapMode m_wrapMode2{helium::WrapMode::DEFAULT};
+  bool m_linearFilter{true};
+  mat4 m_inTransform{mat4(linalg::identity)};
+  helium::float4 m_inOffset{0.f, 0.f, 0.f, 0.f};
+  mat4 m_outTransform{mat4(linalg::identity)};
+  helium::float4 m_outOffset{0.f, 0.f, 0.f, 0.f};
+};
+
+Image2D::Image2D(CyclesGlobalState *d) : Sampler(d) {}
+
+bool Image2D::isValid() const
+{
+  return m_image;
 }
+
+void Image2D::commitParameters()
+{
+  Sampler::commitParameters();
+  m_image = getParamObject<Array2D>("image");
+  m_inAttribute =
+      helium::attributeFromString(getParamString("inAttribute", "attribute0"));
+  m_linearFilter = getParamString("filter", "linear") != "nearest";
+  m_wrapMode1 =
+      helium::wrapModeFromString(getParamString("wrapMode1", "clampToEdge"));
+  m_wrapMode2 =
+      helium::wrapModeFromString(getParamString("wrapMode2", "clampToEdge"));
+  m_inTransform = getParam<mat4>("inTransform", mat4(linalg::identity));
+  m_inOffset =
+      getParam<helium::float4>("inOffset", helium::float4(0.f, 0.f, 0.f, 0.f));
+  m_outTransform = getParam<mat4>("outTransform", mat4(linalg::identity));
+  m_outOffset =
+      getParam<helium::float4>("outOffset", helium::float4(0.f, 0.f, 0.f, 0.f));
+}
+
+// Sampler definitions ////////////////////////////////////////////////////////
+
+Sampler::Sampler(CyclesGlobalState *s) : Object(ANARI_SAMPLER, s) {}
 
 Sampler::~Sampler() = default;
 
 Sampler *Sampler::createInstance(std::string_view subtype, CyclesGlobalState *s)
 {
-#if 0
   if (subtype == "image2D")
-    return new StructuredRegularField(s);
+    return new Image2D(s);
   else
-#endif
-  return (Sampler *)new UnknownObject(ANARI_SAMPLER, subtype, s);
+    return (Sampler *)new UnknownObject(ANARI_SAMPLER, subtype, s);
 }
 
 } // namespace anari_cycles
