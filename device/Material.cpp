@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Material.h"
+#include "Sampler.h"
 
 namespace anari_cycles {
 
@@ -21,24 +22,51 @@ struct MatteMaterial : public Material
   ccl::PrincipledBsdfNode *m_bsdf{nullptr};
   std::string m_colorAttr;
   float3 m_color{make_float3(0.8f, 0.8f, 0.8f)};
+  helium::ChangeObserverPtr<Sampler> m_colorSampler;
   std::string m_opacityAttr;
   float m_opacity{1.f};
 };
 
-MatteMaterial::MatteMaterial(CyclesGlobalState *s) : Material(s) {}
+MatteMaterial::MatteMaterial(CyclesGlobalState *s)
+    : Material(s), m_colorSampler(this)
+{}
 
 void MatteMaterial::commitParameters()
 {
   m_colorAttr = getParamString("color", "");
   m_color = getParam<float3>("color", make_float3(0.8f, 0.8f, 0.8f));
+  m_colorSampler = getParamObject<Sampler>("color");
   m_opacityAttr = getParamString("opacity", "");
   m_opacity = getParam<float>("opacity", 1.f);
 }
 
 void MatteMaterial::finalize()
 {
+  auto &state = *deviceState();
+
   makeGraph();
-  connectAttributes(m_bsdf, m_colorAttr, "Base Color", m_color);
+
+  if (m_colorSampler) {
+    auto *shaderInput = m_bsdf->input("Base Color");
+    m_graph->disconnect(shaderInput);
+
+    // TODO: check if this can be set repeadedly, or if is one-shot only
+    auto loader = m_colorSampler->makeCyclesImageLoader();
+    auto params = m_colorSampler->makeCyclesImageParams();
+    auto handle =
+        state.scene->image_manager->add_image(std::move(loader), params, false);
+    m_samplerNodes.color->handle = handle;
+
+    // TODO: assume attribute0 has uvs...need to generalize
+    auto *imageInput = m_samplerNodes.color->input("Vector");
+    m_graph->connect(m_attributeNodes.attr0, imageInput);
+
+    auto *imageOutput = m_samplerNodes.color->output("Color");
+    m_graph->connect(imageOutput, shaderInput);
+  } else {
+    connectAttributes(m_bsdf, m_colorAttr, "Base Color", m_color);
+  }
+
   connectAttributes(m_bsdf, m_opacityAttr, "Alpha", m_opacity);
   m_shader->tag_update(deviceState()->scene);
   Material::finalize();
@@ -71,6 +99,7 @@ struct PhysicallyBasedMaterial : public Material
   ccl::PrincipledBsdfNode *m_bsdf{nullptr};
   std::string m_colorAttr;
   float3 m_color{make_float3(0.8f, 0.8f, 0.8f)};
+  helium::ChangeObserverPtr<Sampler> m_colorSampler;
   std::string m_opacityAttr;
   float m_opacity{1.f};
   std::string m_roughnessAttr;
@@ -89,13 +118,14 @@ struct PhysicallyBasedMaterial : public Material
 };
 
 PhysicallyBasedMaterial::PhysicallyBasedMaterial(CyclesGlobalState *s)
-    : Material(s)
+    : Material(s), m_colorSampler(this)
 {}
 
 void PhysicallyBasedMaterial::commitParameters()
 {
   m_colorAttr = getParamString("baseColor", "");
   m_color = getParam<float3>("baseColor", make_float3(0.8f, 0.8f, 0.8f));
+  m_colorSampler = getParamObject<Sampler>("baseColor");
 
   m_opacityAttr = getParamString("opacity", "");
   m_opacity = getParam<float>("opacity", 1.f);
@@ -122,8 +152,32 @@ void PhysicallyBasedMaterial::commitParameters()
 
 void PhysicallyBasedMaterial::finalize()
 {
+  auto &state = *deviceState();
+
   makeGraph();
-  connectAttributes(m_bsdf, m_colorAttr, "Base Color", m_color);
+
+  // TODO: repetitive to the 'matte' implementation...need to generalize
+  if (m_colorSampler) {
+    auto *shaderInput = m_bsdf->input("Base Color");
+    m_graph->disconnect(shaderInput);
+
+    // TODO: check if this can be set repeadedly, or if is one-shot only
+    auto loader = m_colorSampler->makeCyclesImageLoader();
+    auto params = m_colorSampler->makeCyclesImageParams();
+    auto handle =
+        state.scene->image_manager->add_image(std::move(loader), params, false);
+    m_samplerNodes.color->handle = handle;
+
+    // TODO: assume attribute0 has uvs...need to generalize
+    auto *imageInput = m_samplerNodes.color->input("Vector");
+    m_graph->connect(m_attributeNodes.attr0, imageInput);
+
+    auto *imageOutput = m_samplerNodes.color->output("Color");
+    m_graph->connect(imageOutput, shaderInput);
+  } else {
+    connectAttributes(m_bsdf, m_colorAttr, "Base Color", m_color);
+  }
+
   connectAttributes(m_bsdf, m_opacityAttr, "Alpha", m_opacity);
   connectAttributes(m_bsdf, m_roughnessAttr, "Roughness", m_roughness);
   connectAttributes(m_bsdf, m_metallicAttr, "Metallic", m_metallic);
@@ -153,7 +207,6 @@ void PhysicallyBasedMaterial::makeGraph()
 Material::Material(CyclesGlobalState *s) : Object(ANARI_MATERIAL, s)
 {
   m_shader = s->scene->create_node<ccl::Shader>();
-  // makeGraph();
 }
 
 Material::~Material()
@@ -216,6 +269,8 @@ void Material::makeGraph()
 
   auto *attr3_sc = m_graph->create_node<ccl::SeparateColorNode>();
   m_graph->connect(attr3->output("Color"), attr3_sc->input("Color"));
+
+  m_samplerNodes.color = m_graph->create_node<ccl::ImageTextureNode>();
 
   m_shader->set_graph(std::move(graph));
 

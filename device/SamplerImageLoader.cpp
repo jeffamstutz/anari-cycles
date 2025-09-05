@@ -21,6 +21,9 @@ SamplerImageLoader::~SamplerImageLoader() = default;
 bool SamplerImageLoader::load_metadata(
     const ccl::ImageDeviceFeatures &features, ccl::ImageMetaData &metadata)
 {
+  if (!m_array2d)
+    return false;
+
   metadata.byte_size =
       m_dims[0] * m_dims[1] * m_dims[2] * anari::sizeOf(m_dataType);
   metadata.channels = anariComponentsOf(m_dataType);
@@ -64,6 +67,8 @@ bool SamplerImageLoader::load_metadata(
 bool SamplerImageLoader::load_pixels(
     const ccl::ImageMetaData &, void *pixels, const size_t, const bool)
 {
+  if (!m_array2d)
+    return false;
   auto bytes = m_dims[0] * m_dims[1] * m_dims[2] * anari::sizeOf(m_dataType);
   std::memcpy(pixels, m_pixels, bytes);
   return true;

@@ -16,6 +16,9 @@ struct Image2D : public Sampler
   bool isValid() const override;
   void commitParameters() override;
 
+  std::unique_ptr<SamplerImageLoader> makeCyclesImageLoader() const override;
+  ccl::ImageParams makeCyclesImageParams() const override;
+
  private:
   helium::IntrusivePtr<Array2D> m_image;
   helium::Attribute m_inAttribute{helium::Attribute::NONE};
@@ -54,6 +57,19 @@ void Image2D::commitParameters()
       getParam<helium::float4>("outOffset", helium::float4(0.f, 0.f, 0.f, 0.f));
 }
 
+std::unique_ptr<SamplerImageLoader> Image2D::makeCyclesImageLoader() const
+{
+  return std::make_unique<SamplerImageLoader>(m_image.ptr);
+}
+
+ccl::ImageParams Image2D::makeCyclesImageParams() const
+{
+  ccl::ImageParams retval;
+  retval.interpolation =
+      m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
+  return retval;
+}
+
 // Sampler definitions ////////////////////////////////////////////////////////
 
 Sampler::Sampler(CyclesGlobalState *s) : Object(ANARI_SAMPLER, s) {}
@@ -68,4 +84,16 @@ Sampler *Sampler::createInstance(std::string_view subtype, CyclesGlobalState *s)
     return (Sampler *)new UnknownObject(ANARI_SAMPLER, subtype, s);
 }
 
+std::unique_ptr<SamplerImageLoader> Sampler::makeCyclesImageLoader() const
+{
+  return {};
+}
+
+ccl::ImageParams Sampler::makeCyclesImageParams() const
+{
+  return {};
+}
+
 } // namespace anari_cycles
+
+CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Sampler *);

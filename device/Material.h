@@ -37,7 +37,7 @@ struct Material : public Object
 
   ccl::Shader *m_shader{nullptr};
   ccl::ShaderGraph *m_graph{nullptr};
-  struct Nodes
+  struct AttributeNodes
   {
     ccl::ShaderOutput *attrC{nullptr};
     ccl::ShaderOutput *attr0{nullptr};
@@ -50,6 +50,11 @@ struct Material : public Object
     ccl::ShaderOutput *attr2_sc{nullptr};
     ccl::ShaderOutput *attr3_sc{nullptr};
   } m_attributeNodes;
+
+  struct SamplerNodes
+  {
+    ccl::ImageTextureNode *color{nullptr};
+  } m_samplerNodes;
 
  private:
   void connectAttributesImpl(ccl::ShaderNode *bsdf,
