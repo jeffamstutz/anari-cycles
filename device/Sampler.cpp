@@ -63,6 +63,7 @@ void Image2D::finalize()
   auto &state = *deviceState();
   auto loader = std::make_unique<SamplerImageLoader>(m_image.ptr);
   ccl::ImageParams params;
+  params.alpha_type = IMAGE_ALPHA_AUTO;
   params.interpolation =
       m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
   m_handle =

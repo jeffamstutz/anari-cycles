@@ -30,14 +30,14 @@ struct Material : public Object
       const std::string &mode,
       const char *input,
       float v,
-      ccl::ImageTextureNode *textureNode = nullptr,
-      Sampler *sampler = nullptr);
+      ccl::ShaderNode *textureNodeIn = nullptr,
+      ccl::ShaderNode *textureNodeOut = nullptr);
   void connectAttributes(ccl::ShaderNode *bsdf,
       const std::string &mode,
       const char *input,
       const float3 &v,
-      ccl::ImageTextureNode *textureNode = nullptr,
-      Sampler *sampler = nullptr);
+      ccl::ShaderNode *textureNodeIn = nullptr,
+      ccl::ShaderNode *textureNodeOut = nullptr);
 
   ccl::Shader *m_shader{nullptr};
   ccl::ShaderGraph *m_graph{nullptr};
@@ -58,16 +58,22 @@ struct Material : public Object
   struct SamplerNodes
   {
     ccl::ImageTextureNode *color{nullptr};
+    ccl::ImageTextureNode *opacityIn{nullptr};
+    ccl::SeparateXYZNode *opacityOut{nullptr};
+    ccl::ImageTextureNode *roughnessIn{nullptr};
+    ccl::SeparateXYZNode *roughnessOut{nullptr};
+    ccl::ImageTextureNode *metallicIn{nullptr};
+    ccl::SeparateXYZNode *metallicOut{nullptr};
   } m_samplerNodes;
 
  private:
   void connectAttributesImpl(ccl::ShaderNode *bsdf,
       const std::string &mode,
-      ccl::ImageTextureNode *textureNode,
+      ccl::ShaderNode *textureNodeIn,
+      ccl::ShaderNode *textureNodeOut,
       const char *input,
       const float3 &v,
-      bool singleComponent,
-      Sampler *sampler);
+      bool singleComponent);
 };
 
 } // namespace anari_cycles
