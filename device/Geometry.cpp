@@ -362,7 +362,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
 
   if (m_vertexColor) {
     Attribute *attr = pc->attributes.add(
-        ustring("vertex.color"), TypeDesc::TypeColor, ATTR_ELEMENT_VERTEX);
+        ustring("vertex.color"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
     dstC = attr->data_float3();
     srcC = m_vertexColor->data();
@@ -371,7 +371,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
 
   if (m_vertexAttribute0) {
     Attribute *attr = pc->attributes.add(
-        ustring("vertex.attribute0"), TypeDesc::TypeColor, ATTR_ELEMENT_VERTEX);
+        ustring("vertex.attribute0"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
     dst0 = attr->data_float3();
     src0 = m_vertexAttribute0->data();
@@ -380,7 +380,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
 
   if (m_vertexAttribute1) {
     Attribute *attr = pc->attributes.add(
-        ustring("vertex.attribute1"), TypeDesc::TypeColor, ATTR_ELEMENT_VERTEX);
+        ustring("vertex.attribute1"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
     dst1 = attr->data_float3();
     src1 = m_vertexAttribute1->data();
@@ -389,7 +389,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
 
   if (m_vertexAttribute2) {
     Attribute *attr = pc->attributes.add(
-        ustring("vertex.attribute2"), TypeDesc::TypeColor, ATTR_ELEMENT_VERTEX);
+        ustring("vertex.attribute2"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
     dst2 = attr->data_float3();
     src2 = m_vertexAttribute2->data();
@@ -398,7 +398,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
 
   if (m_vertexAttribute3) {
     Attribute *attr = pc->attributes.add(
-        ustring("vertex.attribute3"), TypeDesc::TypeColor, ATTR_ELEMENT_VERTEX);
+        ustring("vertex.attribute3"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
     dst3 = attr->data_float3();
     src3 = m_vertexAttribute3->data();

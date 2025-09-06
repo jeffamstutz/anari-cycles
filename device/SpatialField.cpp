@@ -9,6 +9,7 @@
 // cycles
 #include "scene/volume.h"
 #include "util/hash.h"
+#include "util/param.h"
 
 namespace anari_cycles {
 
@@ -79,7 +80,7 @@ std::unique_ptr<ccl::Geometry> StructuredRegularField::makeCyclesGeometry()
 #endif
 
   Attribute *attr = volume->attributes.add(
-      ustring("voxels"), TypeDesc::TypeFloat, ATTR_ELEMENT_VOXEL);
+      ustring("voxels"), ccl::TypeFloat, ATTR_ELEMENT_VOXEL);
   auto loader = std::make_unique<VolumeImageLoader>(this);
   ImageParams params;
   auto &state = *deviceState();
