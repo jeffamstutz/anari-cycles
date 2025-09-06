@@ -31,7 +31,7 @@ class SamplerImageLoader : public ccl::ImageLoader
   virtual bool is_vdb_loader() const override;
 
  private:
-  helium::IntrusivePtr<Array2D> m_array2d;
+  Array2D *m_array2d{nullptr};
 
   anari::DataType m_dataType{ANARI_UNKNOWN};
   uint3 m_dims{1, 1, 1};

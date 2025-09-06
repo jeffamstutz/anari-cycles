@@ -20,8 +20,10 @@ struct Sampler : public Object
   static Sampler *createInstance(
       std::string_view subtype, CyclesGlobalState *s);
 
-  virtual std::unique_ptr<SamplerImageLoader> makeCyclesImageLoader() const;
-  virtual ccl::ImageParams makeCyclesImageParams() const;
+  virtual ccl::ImageHandle getCyclesImageHandle();
+
+ protected:
+  ccl::ImageHandle m_handle{};
 };
 
 } // namespace anari_cycles

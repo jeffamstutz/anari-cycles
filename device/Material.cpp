@@ -50,12 +50,7 @@ void MatteMaterial::finalize()
     auto *shaderInput = m_bsdf->input("Base Color");
     m_graph->disconnect(shaderInput);
 
-    // TODO: check if this can be set repeadedly, or if is one-shot only
-    auto loader = m_colorSampler->makeCyclesImageLoader();
-    auto params = m_colorSampler->makeCyclesImageParams();
-    auto handle =
-        state.scene->image_manager->add_image(std::move(loader), params, false);
-    m_samplerNodes.color->handle = handle;
+    m_samplerNodes.color->handle = m_colorSampler->getCyclesImageHandle();
 
     // TODO: assume attribute0 has uvs...need to generalize
     auto *imageInput = m_samplerNodes.color->input("Vector");
@@ -161,12 +156,7 @@ void PhysicallyBasedMaterial::finalize()
     auto *shaderInput = m_bsdf->input("Base Color");
     m_graph->disconnect(shaderInput);
 
-    // TODO: check if this can be set repeadedly, or if is one-shot only
-    auto loader = m_colorSampler->makeCyclesImageLoader();
-    auto params = m_colorSampler->makeCyclesImageParams();
-    auto handle =
-        state.scene->image_manager->add_image(std::move(loader), params, false);
-    m_samplerNodes.color->handle = handle;
+    m_samplerNodes.color->handle = m_colorSampler->getCyclesImageHandle();
 
     // TODO: assume attribute0 has uvs...need to generalize
     auto *imageInput = m_samplerNodes.color->input("Vector");
