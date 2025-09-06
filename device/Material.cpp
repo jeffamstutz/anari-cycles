@@ -46,21 +46,12 @@ void MatteMaterial::finalize()
 
   makeGraph();
 
-  if (m_colorSampler) {
-    auto *shaderInput = m_bsdf->input("Base Color");
-    m_graph->disconnect(shaderInput);
-
-    m_samplerNodes.color->handle = m_colorSampler->getCyclesImageHandle();
-
-    // TODO: assume attribute0 has uvs...need to generalize
-    auto *imageInput = m_samplerNodes.color->input("Vector");
-    m_graph->connect(m_attributeNodes.attr0, imageInput);
-
-    auto *imageOutput = m_samplerNodes.color->output("Color");
-    m_graph->connect(imageOutput, shaderInput);
-  } else {
-    connectAttributes(m_bsdf, m_colorAttr, "Base Color", m_color);
-  }
+  connectAttributes(m_bsdf,
+      m_colorAttr,
+      "Base Color",
+      m_color,
+      m_samplerNodes.color,
+      m_colorSampler.get());
 
   connectAttributes(m_bsdf, m_opacityAttr, "Alpha", m_opacity);
   m_shader->tag_update(deviceState()->scene);
@@ -151,22 +142,12 @@ void PhysicallyBasedMaterial::finalize()
 
   makeGraph();
 
-  // TODO: repetitive to the 'matte' implementation...need to generalize
-  if (m_colorSampler) {
-    auto *shaderInput = m_bsdf->input("Base Color");
-    m_graph->disconnect(shaderInput);
-
-    m_samplerNodes.color->handle = m_colorSampler->getCyclesImageHandle();
-
-    // TODO: assume attribute0 has uvs...need to generalize
-    auto *imageInput = m_samplerNodes.color->input("Vector");
-    m_graph->connect(m_attributeNodes.attr0, imageInput);
-
-    auto *imageOutput = m_samplerNodes.color->output("Color");
-    m_graph->connect(imageOutput, shaderInput);
-  } else {
-    connectAttributes(m_bsdf, m_colorAttr, "Base Color", m_color);
-  }
+  connectAttributes(m_bsdf,
+      m_colorAttr,
+      "Base Color",
+      m_color,
+      m_samplerNodes.color,
+      m_colorSampler.get());
 
   connectAttributes(m_bsdf, m_opacityAttr, "Alpha", m_opacity);
   connectAttributes(m_bsdf, m_roughnessAttr, "Roughness", m_roughness);
@@ -276,46 +257,63 @@ void Material::makeGraph()
   m_attributeNodes.attr3_sc = attr3_sc->output("Red");
 }
 
-void Material::connectAttributes(
-    ccl::ShaderNode *bsdf, const std::string &mode, const char *input, float v)
+void Material::connectAttributes(ccl::ShaderNode *bsdf,
+    const std::string &attributeSource,
+    const char *input,
+    float v,
+    ccl::ImageTextureNode *textureNode,
+    Sampler *sampler)
 {
-  connectAttributesImpl(bsdf, mode, input, make_float3(v), true);
+  connectAttributesImpl(
+      bsdf, attributeSource, textureNode, input, make_float3(v), true, sampler);
 }
 
 void Material::connectAttributes(ccl::ShaderNode *bsdf,
-    const std::string &mode,
+    const std::string &attributeSource,
     const char *input,
-    const float3 &v)
+    const float3 &v,
+    ccl::ImageTextureNode *textureNode,
+    Sampler *sampler)
 {
-  connectAttributesImpl(bsdf, mode, input, v, false);
+  connectAttributesImpl(
+      bsdf, attributeSource, textureNode, input, v, false, sampler);
 }
 
 void Material::connectAttributesImpl(ccl::ShaderNode *bsdf,
-    const std::string &mode,
+    const std::string &attributeSource,
+    ccl::ImageTextureNode *textureNode,
     const char *input,
     const float3 &v,
-    bool singleComponent)
+    bool singleComponent,
+    Sampler *sampler)
 {
   auto *shaderInput = bsdf->input(input);
   m_graph->disconnect(shaderInput);
 
-  if (mode == "color") {
+  if (sampler && textureNode) {
+    textureNode->handle = sampler->getCyclesImageHandle();
+    auto *imageInput = m_samplerNodes.color->input("Vector");
+    // TODO: assumes attribute0 has uvs...need to generalize
+    m_graph->connect(m_attributeNodes.attr0, imageInput);
+    auto *imageOutput = m_samplerNodes.color->output("Color");
+    m_graph->connect(imageOutput, shaderInput);
+  } else if (attributeSource == "color") {
     m_graph->connect(
         singleComponent ? m_attributeNodes.attrC_sc : m_attributeNodes.attrC,
         shaderInput);
-  } else if (mode == "attribute0") {
+  } else if (attributeSource == "attribute0") {
     m_graph->connect(
         singleComponent ? m_attributeNodes.attr0_sc : m_attributeNodes.attr0,
         shaderInput);
-  } else if (mode == "attribute1") {
+  } else if (attributeSource == "attribute1") {
     m_graph->connect(
         singleComponent ? m_attributeNodes.attr1_sc : m_attributeNodes.attr1,
         shaderInput);
-  } else if (mode == "attribute2") {
+  } else if (attributeSource == "attribute2") {
     m_graph->connect(
         singleComponent ? m_attributeNodes.attr2_sc : m_attributeNodes.attr2,
         shaderInput);
-  } else if (mode == "attribute3") {
+  } else if (attributeSource == "attribute3") {
     m_graph->connect(
         singleComponent ? m_attributeNodes.attr3_sc : m_attributeNodes.attr3,
         shaderInput);
