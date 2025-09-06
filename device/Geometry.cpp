@@ -178,7 +178,7 @@ void Triangle::setVertexColor(ccl::Mesh *mesh) const
   anari::DataType type = array->elementType();
 
   Attribute *attr = mesh->attributes.add(
-      ustring("vertex.color"), TypeDesc::TypeColor, ATTR_ELEMENT_VERTEX);
+      ustring("vertex.color"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
   attr->std = ATTR_STD_VERTEX_COLOR;
   float3 *dst = attr->data_float3();
   for (uint32_t i = 0; i < array->size(); i++) {
@@ -198,14 +198,17 @@ void Triangle::setVertexAttribute(ccl::Mesh *mesh,
   anari::DataType type = array->elementType();
   const void *src = array->data();
 
-  Attribute *attr = mesh->attributes.add(ATTR_STD_UV, ustring(name));
-  float2 *dst = attr->data_float2();
+  Attribute *attr =
+      mesh->attributes.add(ustring(name), ccl::TypeFloat4, ATTR_ELEMENT_VERTEX);
+  float4 *dst = attr->data_float4();
   size_t i = 0;
-  std::for_each(dst, dst + m_vertexPosition->size(), [&](float2 &v) {
+  std::for_each(dst, dst + m_vertexPosition->size(), [&](float4 &v) {
     auto r = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
         type, src, i);
     v.x = r[0];
     v.y = r[1];
+    v.z = r[2];
+    v.w = r[3];
     i++;
   });
 }
