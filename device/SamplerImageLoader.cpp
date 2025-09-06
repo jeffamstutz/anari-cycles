@@ -41,6 +41,10 @@ bool SamplerImageLoader::load_metadata(
   case (ANARI_UFIXED8_VEC4):
     metadata.type = IMAGE_DATA_TYPE_BYTE4;
     break;
+  case (ANARI_UFIXED8_RGBA_SRGB):
+    metadata.type = IMAGE_DATA_TYPE_BYTE4;
+    metadata.colorspace = ccl::u_colorspace_srgb;
+    break;
   case (ANARI_UFIXED16):
     metadata.type = IMAGE_DATA_TYPE_USHORT;
     break;
@@ -56,6 +60,7 @@ bool SamplerImageLoader::load_metadata(
   case (ANARI_FIXED16):
   case (ANARI_FLOAT64):
   case (ANARI_UNKNOWN):
+  default:
     std::cerr << "Unsupported voxel data type " << anari::toString(m_dataType)
               << " for ANARI SamplerImageLoader" << std::endl;
     return false;
