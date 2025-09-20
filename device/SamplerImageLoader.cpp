@@ -54,6 +54,7 @@ bool SamplerImageLoader::load_metadata(
   case (ANARI_FLOAT32):
     metadata.type = IMAGE_DATA_TYPE_FLOAT;
     break;
+  case (ANARI_FLOAT32_VEC3):
   case (ANARI_FLOAT32_VEC4):
     metadata.type = IMAGE_DATA_TYPE_FLOAT4;
     break;
