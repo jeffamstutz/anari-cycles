@@ -379,7 +379,8 @@ void Material::connectAttributesImpl(ccl::ShaderNode *bsdf,
     bool singleComponent)
 {
   auto *shaderInput = bsdf->input(input);
-  m_graph->disconnect(shaderInput);
+  if (shaderInput->link)
+    m_graph->disconnect(shaderInput);
 
   if (textureNodeIn && textureNodeOut) {
     // TODO: assumes attribute0 has uvs...need to generalize
