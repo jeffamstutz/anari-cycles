@@ -69,7 +69,7 @@
           ],
           "tags": [],
           "default": [
-            false
+            true
           ],
           "description": "run anariRenderFrame() asynchronously"
         }

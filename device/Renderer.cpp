@@ -21,7 +21,7 @@ void Renderer::commitParameters()
       getParam<anari_vec::float4>("background", {0.f, 0.f, 0.f, 1.f});
   m_ambientColor = getParam<anari_vec::float3>("ambientColor", {1.f, 1.f, 1.f});
   m_ambientIntensity = 0.1f * getParam<float>("ambientRadiance", 1.f);
-  m_runAsync = getParam<bool>("runAsync", false);
+  m_runAsync = getParam<bool>("runAsync", true);
 }
 
 void Renderer::makeRendererCurrent() const
