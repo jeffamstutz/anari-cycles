@@ -3,8 +3,9 @@
 
 #pragma once
 
-#include "Geometry.h"
 #include "Sampler.h"
+// std
+#include <map>
 // cycles
 #include "scene/shader.h"
 #include "scene/shader_graph.h"
@@ -30,14 +31,19 @@ struct Material : public Object
       const std::string &mode,
       const char *input,
       float v,
-      ccl::ShaderNode *textureNodeIn = nullptr,
-      ccl::ShaderNode *textureNodeOut = nullptr);
+      Sampler *sampler = nullptr);
   void connectAttributes(ccl::ShaderNode *bsdf,
       const std::string &mode,
       const char *input,
       const float3 &v,
-      ccl::ShaderNode *textureNodeIn = nullptr,
-      ccl::ShaderNode *textureNodeOut = nullptr);
+      Sampler *sampler = nullptr);
+  
+  // Store sampler outputs for reuse
+  struct SamplerOutputCache {
+    Sampler::SamplerOutputs outputs;
+    bool isValid{false};
+  };
+  std::map<Sampler*, SamplerOutputCache> m_samplerOutputs;
 
   ccl::Shader *m_shader{nullptr};
   ccl::ShaderGraph *m_graph{nullptr};
@@ -55,22 +61,13 @@ struct Material : public Object
     ccl::ShaderOutput *attr3_sc{nullptr};
   } m_attributeNodes;
 
-  struct SamplerNodes
-  {
-    ccl::ImageTextureNode *color{nullptr};
-    ccl::ImageTextureNode *opacityIn{nullptr};
-    ccl::SeparateXYZNode *opacityOut{nullptr};
-    ccl::ImageTextureNode *roughnessIn{nullptr};
-    ccl::SeparateXYZNode *roughnessOut{nullptr};
-    ccl::ImageTextureNode *metallicIn{nullptr};
-    ccl::SeparateXYZNode *metallicOut{nullptr};
-  } m_samplerNodes;
+  // Get or create sampler outputs for a given sampler
+  Sampler::SamplerOutputs getSamplerOutputs(Sampler *sampler);
 
  private:
   void connectAttributesImpl(ccl::ShaderNode *bsdf,
       const std::string &mode,
-      ccl::ShaderNode *textureNodeIn,
-      ccl::ShaderNode *textureNodeOut,
+      Sampler *sampler,
       const char *input,
       const float3 &v,
       bool singleComponent);
