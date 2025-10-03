@@ -5,7 +5,9 @@
 // std
 #include <algorithm>
 // cycles
+#include "scene/devicescene.h"
 #include "scene/object.h"
+#include "scene/background.h"
 
 namespace anari_cycles {
 
@@ -103,9 +105,72 @@ void World::setCyclesWorldObjects()
     });
   }
 
+  // Handle HDRI light management after objects are set up
+  setupHDRIBackground();
+
   scene->object_manager->tag_update(scene, ObjectManager::UPDATE_ALL);
   scene->geometry_manager->tag_update(scene, GeometryManager::UPDATE_ALL);
-  scene->light_manager->tag_update(scene, LightManager::UPDATE_ALL);
+  scene->light_manager->tag_update(scene, ccl::LightManager::UPDATE_ALL);
+  scene->shader_manager->tag_update(scene, ShaderManager::UPDATE_ALL);
+}
+
+Light *World::findFirstHDRILight() const
+{
+  // Check lights in the zero instance
+  if (m_zeroLightData) {
+    auto **lightsBegin = (Light **)m_zeroLightData->handlesBegin();
+    auto **lightsEnd = (Light **)m_zeroLightData->handlesEnd();
+    
+      for (Light **lightPtr = lightsBegin; lightPtr != lightsEnd; ++lightPtr) {
+          if (Light *light = *lightPtr; light) {
+            // Check if this is an HDRI light - we'll do this by checking the cycles light type
+            if (light->cyclesLight()->get_light_type() == ccl::LIGHT_BACKGROUND) {
+              return light;
+            }
+          }
+        }
+    }
+  
+  // Check lights in instances
+  if (m_instanceData) {
+    auto **instancesBegin = (Instance **)m_instanceData->handlesBegin();
+    auto **instancesEnd = (Instance **)m_instanceData->handlesEnd();
+    
+    for (auto **instPtr = instancesBegin; instPtr != instancesEnd; ++instPtr) {
+      Instance *instance = *instPtr;
+      if (instance && instance->group()) {
+        auto *group = instance->group();
+        if (group->lightData()) {
+          auto **lightsBegin = (Light **)group->lightData()->handlesBegin();
+          auto **lightsEnd = (Light **)group->lightData()->handlesEnd();
+          
+          for (Light **lightPtr = lightsBegin; lightPtr != lightsEnd; ++lightPtr) {
+            if (Light *light = *lightPtr; light) {
+              // Check if this is an HDRI light - we'll do this by checking the cycles light type
+              if (light->cyclesLight()->get_light_type() == ccl::LIGHT_BACKGROUND) {
+                return light;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+void World::setupHDRIBackground()
+{
+  // Find first HDRI light from the world
+  if (Light *hdriLight = findFirstHDRILight()) {
+    // Set the new HDRI background
+    deviceState()->scene->background->set_shader(hdriLight->cyclesShader());
+    deviceState()->scene->background->tag_update(deviceState()->scene);
+  } else {
+    // Clear any existing HDRI background first
+    deviceState()->scene->background->set_shader(nullptr);
+  }
 }
 
 box3 World::bounds() const

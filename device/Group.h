@@ -20,6 +20,9 @@ struct Group : public Object
 
   box3 bounds() const override;
 
+  // Accessor for light data (needed for HDRI light discovery)
+  const ObjectArray* lightData() const { return m_lightData.get(); }
+
  private:
   helium::ChangeObserverPtr<ObjectArray> m_surfaceData;
   helium::ChangeObserverPtr<ObjectArray> m_volumeData;

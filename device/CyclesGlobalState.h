@@ -7,6 +7,7 @@
 // helium
 #include "helium/BaseGlobalDeviceState.h"
 // cycles
+#include "scene/shader_nodes.h"
 #include "session/session.h"
 // std
 #include <atomic>
@@ -35,8 +36,9 @@ struct CyclesGlobalState : public helium::BaseGlobalDeviceState
 
   FrameOutputDriver *output_driver{nullptr};
 
-  ccl::BackgroundNode *background{nullptr};
-  ccl::BackgroundNode *ambient{nullptr};
+  ccl::ColorNode *backgroundColor{nullptr};
+  ccl::ColorNode *ambientColor{nullptr};
+  ccl::ValueNode *ambientIntensity{nullptr};
 
   // Helper methods //
 

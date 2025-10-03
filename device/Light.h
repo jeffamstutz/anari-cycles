@@ -6,6 +6,7 @@
 #include "Object.h"
 // cycles
 #include "scene/light.h"
+#include "scene/shader.h"
 // std
 #include <memory>
 
@@ -22,10 +23,13 @@ struct Light : public Object
   virtual void finalize() override;
 
   ccl::Light *cyclesLight() const;
+  ccl::Shader *cyclesShader() const;
+
   virtual math::mat4 xfm() const = 0;
 
  protected:
   ccl::Light *m_cyclesLight{nullptr};
+  ccl::Shader *m_cyclesShader{nullptr};
 
   anari_vec::float3 m_color;
 };
