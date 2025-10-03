@@ -23,9 +23,12 @@ struct World : public Object
 
   void setCyclesWorldObjects();
 
+  Light *findFirstHDRILight() const;
+
   box3 bounds() const override;
 
  private:
+  void setupHDRIBackground();
   helium::ChangeObserverPtr<ObjectArray> m_zeroSurfaceData;
   helium::ChangeObserverPtr<ObjectArray> m_zeroLightData;
   helium::ChangeObserverPtr<ObjectArray> m_zeroVolumeData;

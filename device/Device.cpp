@@ -7,6 +7,7 @@
 // cycles
 #include "scene/background.h"
 #include "scene/integrator.h"
+#include "scene/shader_nodes.h"
 
 #include "Array.h"
 #include "Frame.h"
@@ -347,47 +348,7 @@ void CyclesDevice::initDevice()
 
   state.session->set_output_driver(std::move(output_driver));
 
-  // setup background shader (divides out ambient and bg color)
-  {
-    auto *shader = state.scene->default_background;
-    auto graph = std::make_unique<ccl::ShaderGraph>();
-    auto *mix = graph->create_node<ccl::MixClosureNode>();
-    auto *lightPath = graph->create_node<ccl::LightPathNode>();
-    auto *bg = graph->create_node<ccl::BackgroundNode>();
-    bg->name = "background_shader";
-    auto *ambient = graph->create_node<ccl::BackgroundNode>();
-    ambient->name = "ambient_shader";
-
-    state.background = bg;
-    state.ambient = ambient;
-
-    graph->connect(ambient->output("Background"), mix->input("Closure1"));
-    graph->connect(bg->output("Background"), mix->input("Closure2"));
-    graph->connect(lightPath->output("Is Camera Ray"), mix->input("Fac"));
-    graph->connect(mix->output("Closure"), graph->output()->input("Surface"));
-
-    shader->set_graph(std::move(graph));
-
-    state.scene->background->set_shader(state.scene->default_background);
-    state.scene->background->set_use_shader(true);
-  }
-
-  // setup global light shader
-  {
-    auto *shader = state.scene->default_light;
-    auto graph = std::make_unique<ccl::ShaderGraph>();
-
-    auto *emission = graph->create_node<ccl::EmissionNode>();
-    emission->set_color(make_float3(1.f, 1.f, 1.f));
-    emission->set_strength(4.0f); // to match VisRTX
-
-    graph->connect(
-        emission->output("Emission"), graph->output()->input("Surface"));
-
-    shader->name = "default_anari_light";
-    shader->set_graph(std::move(graph));
-    shader->reference();
-  }
+ 
 
   m_initialized = true;
 }

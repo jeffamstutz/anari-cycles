@@ -14,15 +14,23 @@ struct Renderer : public Object
 
   void commitParameters() override;
 
-  void makeRendererCurrent() const;
+  void makeRendererCurrent();
 
   bool runAsync() const;
 
  private:
-  anari_vec::float4 m_backgroundColor;
-  anari_vec::float3 m_ambientColor;
+  struct {
+    int background : 1;
+    int ambientLight : 1;
+  } m_needsUpdateStatus = {true, true};
+
+  math::float4 m_backgroundColor;
+  math::float3 m_ambientColor;
   float m_ambientIntensity;
   bool m_runAsync{false};
+
+  void rebuildDefaultLightShader();
+  void rebuildDefaultBackgroundShader();
 };
 
 } // namespace anari_cycles
