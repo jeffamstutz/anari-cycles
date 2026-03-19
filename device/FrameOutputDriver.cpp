@@ -17,6 +17,7 @@ namespace anari_cycles {
 struct FrameOutputDriver::Impl
 {
   helium::IntrusivePtr<Frame> frame;
+  Frame *lastFrame{nullptr};
   std::vector<float4> buffer;
   bool renderFinished{true};
   std::mutex mutex;
@@ -70,10 +71,11 @@ bool FrameOutputDriver::renderBegin(Frame *f)
 {
   std::lock_guard<std::mutex> lock(m_impl->mutex);
   m_impl->start = std::chrono::steady_clock::now();
-  bool newFrame = m_impl->frame.ptr == f;
+  bool frameChanged = m_impl->lastFrame != nullptr && m_impl->lastFrame != f;
   m_impl->frame = f;
+  m_impl->lastFrame = f;
   m_impl->renderFinished = false;
-  return newFrame;
+  return frameChanged;
 }
 
 void FrameOutputDriver::renderEnd()
@@ -93,10 +95,8 @@ void FrameOutputDriver::renderEnd()
 
 void FrameOutputDriver::wait()
 {
-  if (!ready()) {
-    std::unique_lock<std::mutex> lock(m_impl->mutex);
-    m_impl->cv.wait(lock, [this] { return ready(); });
-  }
+  std::unique_lock<std::mutex> lock(m_impl->mutex);
+  m_impl->cv.wait(lock, [this] { return m_impl->renderFinished; });
 }
 
 bool FrameOutputDriver::ready() const

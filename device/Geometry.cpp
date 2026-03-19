@@ -201,16 +201,14 @@ void Triangle::setVertexAttribute(ccl::Mesh *mesh,
   Attribute *attr =
       mesh->attributes.add(ustring(name), ccl::TypeFloat4, ATTR_ELEMENT_VERTEX);
   float4 *dst = attr->data_float4();
-  size_t i = 0;
-  std::for_each(dst, dst + m_vertexPosition->size(), [&](float4 &v) {
+  for (size_t i = 0; i < array->size(); i++) {
     auto r = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
         type, src, i);
-    v.x = r[0];
-    v.y = r[1];
-    v.z = r[2];
-    v.w = r[3];
-    i++;
-  });
+    dst[i].x = r[0];
+    dst[i].y = r[1];
+    dst[i].z = r[2];
+    dst[i].w = r[3];
+  }
 }
 
 // Sphere definitions /////////////////////////////////////////////////////////

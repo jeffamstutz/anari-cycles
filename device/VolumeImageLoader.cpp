@@ -28,7 +28,6 @@ bool VolumeImageLoader::load_metadata(
 
   metadata.width = p_field->m_dims[0];
   metadata.height = p_field->m_dims[1];
-  metadata.depth = p_field->m_dims[2];
 
   switch (p_field->m_data->elementType()) {
   case (ANARI_UFIXED8):

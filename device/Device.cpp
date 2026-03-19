@@ -237,9 +237,7 @@ int CyclesDevice::getProperty(ANARIObject object,
 {
   if (mask == ANARI_WAIT) {
     auto lock = scopeLockObject();
-#if 0 // TODO: this causes a crash in anariViewer...(???)
     deviceState()->waitOnCurrentFrame();
-#endif
   }
 
   return helium::BaseDevice::getProperty(object, name, type, mem, size, mask);
@@ -299,7 +297,8 @@ void CyclesDevice::initDevice()
   auto *forceCPU = getenv("ANARI_CYCLES_FORCE_CPU");
 
   auto devices = ccl::Device::available_devices();
-  ccl::DeviceInfo selectedDevice;
+  ccl::DeviceInfo selectedDevice =
+      ccl::Device::available_devices(ccl::DEVICE_MASK_CPU).front();
   for (ccl::DeviceInfo &info : devices) {
     reportMessage(ANARI_SEVERITY_INFO,
         "Found Cycles Device: %-7s| %s",
@@ -347,8 +346,6 @@ void CyclesDevice::initDevice()
   state.output_driver = output_driver.get();
 
   state.session->set_output_driver(std::move(output_driver));
-
- 
 
   m_initialized = true;
 }
