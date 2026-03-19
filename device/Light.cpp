@@ -3,7 +3,6 @@
 
 #include "Light.h"
 #include <anari/anari_cpp/ext/linalg.h>
-#include <zstd_errors.h>
 #include <cmath>
 #include <cstdio>
 #include "Sampler.h"
@@ -217,7 +216,6 @@ void HDRI::finalize()
   if (m_cyclesShader) {
     m_cyclesShader->dereference();
     deviceState()->scene->delete_node(m_cyclesShader);
-    assert(m_cyclesShader->reference_count() == 0);
     m_cyclesShader = nullptr;
   }
 
@@ -291,7 +289,6 @@ void HDRI::finalize()
 
     // Create shader and assign graph
     m_cyclesShader = deviceState()->scene->create_node<ccl::Shader>();
-    graph->dump_graph("/tmp/blender.graph.world.dot");
     m_cyclesShader->set_graph(std::move(graph));
     m_cyclesShader->tag_update(deviceState()->scene);
     m_cyclesShader->reference();

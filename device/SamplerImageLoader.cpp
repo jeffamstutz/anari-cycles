@@ -31,7 +31,6 @@ bool SamplerImageLoader::load_metadata(
 
   metadata.width = m_dims[0];
   metadata.height = m_dims[1];
-  metadata.depth = m_dims[2];
   metadata.colorspace = ccl::u_colorspace_raw;
 
   switch (m_dataType) {

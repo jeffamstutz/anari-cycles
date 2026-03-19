@@ -73,7 +73,6 @@ std::unique_ptr<ccl::Geometry> StructuredRegularField::makeCyclesGeometry()
   auto volume = std::make_unique<ccl::Volume>();
   volume->name = ccl::ustring("ANARI Volume");
 
-  volume->set_clipping(-std::numeric_limits<float>::max());
   volume->set_object_space(true);
 #if 0
   volume->set_volume_mesh(true);
