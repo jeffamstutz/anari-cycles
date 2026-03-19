@@ -79,7 +79,7 @@ bool Frame::getProperty(const std::string_view &name,
     return true;
   }
 
-  return 0;
+  return false;
 }
 
 void Frame::renderFrame()

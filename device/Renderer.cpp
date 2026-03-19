@@ -47,26 +47,26 @@ void Renderer::rebuildDefaultBackgroundShader()
   auto *lightPath = graph->create_node<ccl::LightPathNode>();
   auto *bg = graph->create_node<ccl::BackgroundNode>();
 
-  auto  mathR = graph->create_node<ccl::MathNode>();
+  auto *mathR = graph->create_node<ccl::MathNode>();
   mathR->set_math_type(ccl::NODE_MATH_MULTIPLY);
   mathR->set_value1(m_backgroundColor.x);
   graph->connect(lightPath->output("Is Camera Ray"), mathR->input("Value2"));
 
-  auto  mathG = graph->create_node<ccl::MathNode>();
+  auto *mathG = graph->create_node<ccl::MathNode>();
   mathG->set_math_type(ccl::NODE_MATH_MULTIPLY);
   mathG->set_value1(m_backgroundColor.y);
   graph->connect(lightPath->output("Is Camera Ray"), mathG->input("Value2"));
 
-  auto  mathB = graph->create_node<ccl::MathNode>();
+  auto *mathB = graph->create_node<ccl::MathNode>();
   mathB->set_math_type(ccl::NODE_MATH_MULTIPLY);
   mathB->set_value1(m_backgroundColor.z);
   graph->connect(lightPath->output("Is Camera Ray"), mathB->input("Value2"));
 
-  auto combineColor = graph->create_node<ccl::CombineRGBNode>();
-  graph->connect(mathR->output("Value"), combineColor->input("R"));
-  graph->connect(mathG->output("Value"), combineColor->input("G"));
-  graph->connect(mathB->output("Value"), combineColor->input("B"));
-  graph->connect(combineColor->output("Image"), bg->input("Color"));
+  auto *combineColor = graph->create_node<ccl::CombineColorNode>();
+  graph->connect(mathR->output("Value"), combineColor->input("Red"));
+  graph->connect(mathG->output("Value"), combineColor->input("Green"));
+  graph->connect(mathB->output("Value"), combineColor->input("Blue"));
+  graph->connect(combineColor->output("Color"), bg->input("Color"));
 
   graph->connect(bg->output("Background"), graph->output()->input("Surface"));
 

@@ -44,23 +44,6 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm) const
     });
   }
 
-#if 0
-  if (m_volumeData) {
-    auto **volumesBegin = (Volume **)m_volumeData->handlesBegin();
-    auto **volumesEnd = (Volume **)m_volumeData->handlesEnd();
-
-    std::for_each(volumesBegin, volumesEnd, [&](Volume *v) {
-      if (!v->isValid()) {
-        v->warnIfUnknownObject();
-        return;
-      }
-      auto *o = state.scene->create_node<ccl::Object>();
-      o->set_geometry(v->cyclesGeometry());
-      o->set_tfm(xfm);
-    });
-  }
-#endif
-
   if (m_lightData) {
     auto **lightsBegin = (Light **)m_lightData->handlesBegin();
     auto **lightsEnd = (Light **)m_lightData->handlesEnd();
