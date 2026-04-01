@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Object.h"
+// anari
+#include "anari/anari_cpp.hpp"
 // std
 #include <atomic>
 #include <cstdarg>
+#include <cstring>
 
 namespace anari_cycles {
 
@@ -32,6 +35,15 @@ bool Object::getProperty(const std::string_view &name,
 {
   if (name == "valid" && type == ANARI_BOOL) {
     helium::writeToVoidP(ptr, isValid());
+    return true;
+  } else if (name == "bounds" && type == ANARI_FLOAT32_BOX3
+      && (this->type() == ANARI_WORLD || this->type() == ANARI_GROUP
+          || this->type() == ANARI_INSTANCE)) {
+    auto b = bounds();
+    anari_vec::float3 r[2];
+    r[0] = {b.lower.x, b.lower.y, b.lower.z};
+    r[1] = {b.upper.x, b.upper.y, b.upper.z};
+    std::memcpy(ptr, &r[0], anari::sizeOf(type));
     return true;
   }
 
