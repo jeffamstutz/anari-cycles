@@ -342,6 +342,14 @@ void CyclesDevice::initDevice()
   pass_depth->set_name(OIIO::ustring("depth"));
   pass_depth->set_type(ccl::PASS_DEPTH);
 
+  ccl::Pass *pass_normal = state.scene->create_node<ccl::Pass>();
+  pass_normal->set_name(OIIO::ustring("normal"));
+  pass_normal->set_type(ccl::PASS_NORMAL);
+
+  ccl::Pass *pass_albedo = state.scene->create_node<ccl::Pass>();
+  pass_albedo->set_name(OIIO::ustring("diffuse_color"));
+  pass_albedo->set_type(ccl::PASS_DIFFUSE_COLOR);
+
   auto output_driver = std::make_unique<FrameOutputDriver>();
   state.output_driver = output_driver.get();
 
