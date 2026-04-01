@@ -48,6 +48,8 @@ box3 Instance::bounds() const
     return b;
 
   auto gb = m_group->bounds();
+  if (gb.lower.x > gb.upper.x)
+    return b;
 
   auto extendBounds = [&](const helium::mat4 &m) {
     auto xfm = mat4ToCycles(m);

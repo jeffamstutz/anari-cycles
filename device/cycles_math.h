@@ -70,8 +70,8 @@ inline void extend(range_t<T> &t, const T &v)
 template <typename T>
 inline void extend(range_t<T> &t1, const range_t<T> &t2)
 {
-  extend(t1, t2.lower);
-  extend(t1, t2.upper);
+  t1.lower = min(t2.lower, t1.lower);
+  t1.upper = max(t2.upper, t1.upper);
 }
 
 inline float radians(float degrees)
