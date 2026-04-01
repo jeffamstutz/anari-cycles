@@ -350,6 +350,10 @@ void CyclesDevice::initDevice()
   pass_albedo->set_name(OIIO::ustring("diffuse_color"));
   pass_albedo->set_type(ccl::PASS_DIFFUSE_COLOR);
 
+  ccl::Pass *pass_object_id = state.scene->create_node<ccl::Pass>();
+  pass_object_id->set_name(OIIO::ustring("object_id"));
+  pass_object_id->set_type(ccl::PASS_OBJECT_ID);
+
   auto output_driver = std::make_unique<FrameOutputDriver>();
   state.output_driver = output_driver.get();
 

@@ -66,6 +66,7 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
   extractDepthPass(tile);
   extractNormalPass(tile);
   extractAlbedoPass(tile);
+  extractObjectIdPass(tile);
   renderEnd();
 }
 
@@ -167,6 +168,24 @@ void FrameOutputDriver::extractAlbedoPass(const Tile &tile)
           "diffuse_color", 3, m_impl->frame->m_albedoBuffer.data()))
     m_impl->frame->reportMessage(
         ANARI_SEVERITY_ERROR, "Failed to read 'diffuse_color' pass");
+}
+
+void FrameOutputDriver::extractObjectIdPass(const Tile &tile)
+{
+  if (m_impl->frame->m_objectIdType != ANARI_UINT32)
+    return;
+
+  const int numPixels = tile.size.x * tile.size.y;
+  std::vector<float> tmp(numPixels);
+  if (!tile.get_pass_pixels("object_id", 1, tmp.data())) {
+    m_impl->frame->reportMessage(
+        ANARI_SEVERITY_ERROR, "Failed to read 'object_id' pass");
+    return;
+  }
+
+  auto *dst = m_impl->frame->m_objectIdBuffer.data();
+  for (int i = 0; i < numPixels; i++)
+    dst[i] = static_cast<uint32_t>(tmp[i]);
 }
 
 } // namespace anari_cycles

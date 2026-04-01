@@ -41,6 +41,7 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm) const
       auto *o = state.scene->create_node<ccl::Object>();
       o->set_geometry(s->cyclesGeometry());
       o->set_tfm(cxfm);
+      o->set_pass_id(s->id());
     });
   }
 

@@ -36,6 +36,7 @@ void Frame::commitParameters()
   m_depthType = getParam<anari::DataType>("channel.depth", ANARI_UNKNOWN);
   m_normalType = getParam<anari::DataType>("channel.normal", ANARI_UNKNOWN);
   m_albedoType = getParam<anari::DataType>("channel.albedo", ANARI_UNKNOWN);
+  m_objectIdType = getParam<anari::DataType>("channel.objectId", ANARI_UNKNOWN);
   m_frameData.size = getParam<uint2>("size", make_uint2(10, 10));
 }
 
@@ -59,10 +60,9 @@ void Frame::finalize()
   m_pixelBuffer.resize(numPixels * m_perPixelBytes);
   std::fill(m_pixelBuffer.begin(), m_pixelBuffer.end(), ~0);
   m_depthBuffer.resize(m_depthType == ANARI_FLOAT32 ? numPixels : 0);
-  m_normalBuffer.resize(
-      m_normalType == ANARI_FLOAT32_VEC3 ? numPixels * 3 : 0);
-  m_albedoBuffer.resize(
-      m_albedoType == ANARI_FLOAT32_VEC3 ? numPixels * 3 : 0);
+  m_normalBuffer.resize(m_normalType == ANARI_FLOAT32_VEC3 ? numPixels * 3 : 0);
+  m_albedoBuffer.resize(m_albedoType == ANARI_FLOAT32_VEC3 ? numPixels * 3 : 0);
+  m_objectIdBuffer.resize(m_objectIdType == ANARI_UINT32 ? numPixels : 0);
 }
 
 bool Frame::getProperty(const std::string_view &name,
@@ -162,6 +162,9 @@ void *Frame::map(std::string_view channel,
   } else if (channel == "channel.albedo") {
     *pixelType = ANARI_FLOAT32_VEC3;
     return m_albedoBuffer.data();
+  } else if (channel == "channel.objectId") {
+    *pixelType = ANARI_UINT32;
+    return m_objectIdBuffer.data();
   } else {
     *width = 0;
     *height = 0;

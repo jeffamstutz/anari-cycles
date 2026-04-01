@@ -20,6 +20,7 @@ void Surface::commitParameters()
   auto *prevMaterial = m_material.ptr;
   m_geometry = getParamObject<Geometry>("geometry");
   m_material = getParamObject<Material>("material");
+  m_id = getParam<uint32_t>("id", ~0u);
   m_geometryHandleChanged = prevGeometry != m_geometry.get();
   m_materialHandleChanged = prevMaterial != m_material.ptr;
 }
@@ -60,6 +61,11 @@ const Geometry *Surface::geometry() const
 const Material *Surface::material() const
 {
   return m_material.ptr;
+}
+
+uint32_t Surface::id() const
+{
+  return m_id;
 }
 
 ccl::Geometry *Surface::cyclesGeometry() const
