@@ -59,6 +59,13 @@ PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
 )
 
+if(ANARI_CYCLES_USE_OPTIX)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPTIX)
+endif()
+if(ANARI_CYCLES_USE_OIDN)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPENIMAGEDENOISE)
+endif()
+
 target_link_libraries(${PROJECT_NAME}
 PRIVATE
   anari::helium

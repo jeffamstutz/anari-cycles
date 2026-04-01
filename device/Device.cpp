@@ -321,6 +321,15 @@ void CyclesDevice::initDevice()
   state.session_params.use_resolution_divider = false;
   state.session_params.samples = 1;
 
+#if defined(WITH_OPTIX) || defined(WITH_OPENIMAGEDENOISE)
+  if (selectedDevice.type == ccl::DEVICE_OPTIX) {
+    state.session_params.denoise_device = selectedDevice;
+  } else {
+    state.session_params.denoise_device =
+        ccl::Device::available_devices(ccl::DEVICE_MASK_CPU).front();
+  }
+#endif
+
   reportMessage(ANARI_SEVERITY_INFO,
       "Using Cycles Device '%s'",
       ccl::Device::string_from_type(state.session_params.device.type).c_str());
@@ -333,6 +342,20 @@ void CyclesDevice::initDevice()
   // me _must_ know that the next sample will get executed to trigger completion
   // code signaling the frame is complete.
   state.scene->integrator->set_use_adaptive_sampling(false);
+
+#if defined(WITH_OPTIX) || defined(WITH_OPENIMAGEDENOISE)
+  if (selectedDevice.type == ccl::DEVICE_OPTIX) {
+    state.scene->integrator->set_denoiser_type(ccl::DENOISER_OPTIX);
+  } else {
+    state.scene->integrator->set_denoiser_type(ccl::DENOISER_OPENIMAGEDENOISE);
+  }
+  state.scene->integrator->set_use_denoise_pass_albedo(true);
+  state.scene->integrator->set_use_denoise_pass_normal(true);
+  state.scene->integrator->set_denoise_use_gpu(false);
+  state.scene->integrator->set_denoiser_prefilter(ccl::DENOISER_PREFILTER_FAST);
+  state.scene->integrator->set_denoiser_quality(ccl::DENOISER_QUALITY_BALANCED);
+  state.scene->integrator->set_use_denoise(false);
+#endif
 
   ccl::Pass *pass_combined = state.scene->create_node<ccl::Pass>();
   pass_combined->set_name(OIIO::ustring("combined"));

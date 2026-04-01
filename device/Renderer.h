@@ -22,12 +22,14 @@ struct Renderer : public Object
   struct {
     int background : 1;
     int ambientLight : 1;
-  } m_needsUpdateStatus = {true, true};
+    int denoise : 1;
+  } m_needsUpdateStatus = {true, true, true};
 
   math::float4 m_backgroundColor;
   math::float3 m_ambientColor;
   float m_ambientIntensity;
   bool m_runAsync{false};
+  bool m_denoise{false};
 
   void rebuildDefaultLightShader();
   void rebuildDefaultBackgroundShader();

@@ -30,6 +30,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 include(CMakePrintHelpers)
 include(GNUInstallDirs)
 
+option(ANARI_CYCLES_USE_OPTIX "Use NVIDIA OptiX for GPU rendering" OFF)
+option(ANARI_CYCLES_USE_OIDN "Use OpenImageDenoise for CPU denoising" OFF)
+
 ## Dependencies ##
 
 find_package(anari 0.15.0 REQUIRED)
@@ -39,21 +42,21 @@ find_package(OpenImageIO REQUIRED)
 ## Cycles library ##
 
 set(WITH_CYCLES_ALEMBIC               OFF CACHE BOOL "")
-set(WITH_CYCLES_DEVICE_CUDA           OFF CACHE BOOL "")
+set(WITH_CYCLES_DEVICE_CUDA           ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "")
 set(WITH_CYCLES_DEVICE_HIP            OFF CACHE BOOL "")
-set(WITH_CYCLES_DEVICE_OPTIX          OFF CACHE BOOL "")
+set(WITH_CYCLES_DEVICE_OPTIX          ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "")
 set(WITH_CYCLES_EMBREE                OFF CACHE BOOL "")
 set(WITH_CYCLES_HYDRA_RENDER_DELEGATE OFF CACHE BOOL "")
-set(WITH_CYCLES_NANOVDB               OFF CACHE BOOL "")
-set(WITH_CYCLES_OPENCOLORIO           OFF CACHE BOOL "")
-set(WITH_CYCLES_OPENIMAGEDENOISE      OFF CACHE BOOL "")
+set(WITH_CYCLES_NANOVDB               ON CACHE BOOL "")
+set(WITH_CYCLES_OPENCOLORIO           ON CACHE BOOL "")  # required with current cycles
+set(WITH_CYCLES_OPENIMAGEDENOISE      ${ANARI_CYCLES_USE_OIDN} CACHE BOOL "")
 set(WITH_CYCLES_OPENSUBDIV            OFF CACHE BOOL "")
 set(WITH_CYCLES_OPENVDB               OFF CACHE BOOL "")
 set(WITH_CYCLES_OSL                   OFF CACHE BOOL "")
 set(WITH_CYCLES_PUGIXML               ON  CACHE BOOL "")
 set(WITH_CYCLES_USD                   OFF CACHE BOOL "")
 
-add_subdirectory(cycles EXCLUDE_FROM_ALL)
+add_subdirectory(cycles)
 
 ## ANARI device library ##
 
