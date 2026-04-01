@@ -27,6 +27,8 @@ struct FrameOutputDriver : public ccl::OutputDriver {
  private:
   void extractColorPass(const Tile &tile);
   void extractDepthPass(const Tile &tile);
+  void extractNormalPass(const Tile &tile);
+  void extractAlbedoPass(const Tile &tile);
 
   struct Impl;
   std::shared_ptr<Impl> m_impl;

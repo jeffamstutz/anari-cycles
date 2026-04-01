@@ -202,11 +202,14 @@ void PhysicallyBasedMaterial::finalize()
   m_bsdf->input("IOR")->set(m_ior);
 
   if (m_normalSampler) {
-    // Does not work yet, most probably need to figure out tangent space
-    // handling in Cycles
-    //
-    // m_graph->connect(getSamplerOutputs(m_normalSampler.get()).normalOutput,
-    //    m_bsdf->input("Normal"));
+    auto samplerOutputs = getSamplerOutputs(m_normalSampler.get());
+    if (samplerOutputs.colorOutput) {
+      auto *normalMap = m_graph->create_node<ccl::NormalMapNode>();
+      normalMap->set_space(ccl::NODE_NORMAL_MAP_TANGENT);
+      normalMap->set_attribute(ccl::ustring(""));
+      m_graph->connect(samplerOutputs.colorOutput, normalMap->input("Color"));
+      m_graph->connect(normalMap->output("Normal"), m_bsdf->input("Normal"));
+    }
   }
 
   m_shader->tag_update(deviceState()->scene);

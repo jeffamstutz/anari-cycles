@@ -64,6 +64,8 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
 
   extractColorPass(tile);
   extractDepthPass(tile);
+  extractNormalPass(tile);
+  extractAlbedoPass(tile);
   renderEnd();
 }
 
@@ -144,6 +146,27 @@ void FrameOutputDriver::extractDepthPass(const Tile &tile)
   if (!tile.get_pass_pixels("depth", 1, m_impl->frame->m_depthBuffer.data()))
     m_impl->frame->reportMessage(
         ANARI_SEVERITY_ERROR, "Failed to read 'depth' pass");
+}
+
+void FrameOutputDriver::extractNormalPass(const Tile &tile)
+{
+  if (m_impl->frame->m_normalType != ANARI_FLOAT32_VEC3)
+    return;
+
+  if (!tile.get_pass_pixels("normal", 3, m_impl->frame->m_normalBuffer.data()))
+    m_impl->frame->reportMessage(
+        ANARI_SEVERITY_ERROR, "Failed to read 'normal' pass");
+}
+
+void FrameOutputDriver::extractAlbedoPass(const Tile &tile)
+{
+  if (m_impl->frame->m_albedoType != ANARI_FLOAT32_VEC3)
+    return;
+
+  if (!tile.get_pass_pixels(
+          "diffuse_color", 3, m_impl->frame->m_albedoBuffer.data()))
+    m_impl->frame->reportMessage(
+        ANARI_SEVERITY_ERROR, "Failed to read 'diffuse_color' pass");
 }
 
 } // namespace anari_cycles
