@@ -20,6 +20,7 @@ struct Surface : public Object
 
   const Geometry *geometry() const;
   const Material *material() const;
+  uint32_t id() const;
 
   ccl::Geometry *cyclesGeometry() const;
 
@@ -33,6 +34,7 @@ struct Surface : public Object
   helium::IntrusivePtr<Material> m_material;
 
   ccl::Geometry *m_cyclesGeometryNode{nullptr};
+  uint32_t m_id{~0u};
   bool m_geometryHandleChanged{false};
   bool m_materialHandleChanged{false};
 };
