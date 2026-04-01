@@ -94,6 +94,65 @@ void Image2D::finalize()
       state.scene->image_manager->add_image(std::move(loader), params, false);
 }
 
+// Image1D Sampler ////////////////////////////////////////////////////////////
+
+struct Image1D : public Sampler
+{
+  Image1D(CyclesGlobalState *d);
+
+  bool isValid() const override;
+  void commitParameters() override;
+  void finalize() override;
+
+  mat4 getOutTransform() const override
+  {
+    return m_outTransform;
+  }
+  helium::float4 getOutOffset() const override
+  {
+    return m_outOffset;
+  }
+
+ private:
+  helium::IntrusivePtr<Array1D> m_image;
+  bool m_linearFilter{true};
+  mat4 m_outTransform{mat4(linalg::identity)};
+  helium::float4 m_outOffset{0.f, 0.f, 0.f, 0.f};
+};
+
+Image1D::Image1D(CyclesGlobalState *d) : Sampler(d) {}
+
+bool Image1D::isValid() const
+{
+  return m_image;
+}
+
+void Image1D::commitParameters()
+{
+  Sampler::commitParameters();
+  m_image = getParamObject<Array1D>("image");
+  m_linearFilter = getParamString("filter", "linear") != "nearest";
+  m_outTransform = getParam<mat4>("outTransform", mat4(linalg::identity));
+  m_outOffset =
+      getParam<helium::float4>("outOffset", helium::float4(0.f, 0.f, 0.f, 0.f));
+}
+
+void Image1D::finalize()
+{
+  if (!isValid())
+    return;
+
+  auto &state = *deviceState();
+  auto loader = std::make_unique<SamplerImageLoader>(m_image.ptr);
+  ccl::ImageParams params;
+  params.alpha_type = IMAGE_ALPHA_AUTO;
+  params.colorspace = ccl::u_colorspace_raw;
+  params.interpolation =
+      m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
+  m_handle =
+      state.scene->image_manager->add_image(std::move(loader), params, false);
+}
+
 // Sampler definitions ////////////////////////////////////////////////////////
 
 Sampler::Sampler(CyclesGlobalState *s) : Object(ANARI_SAMPLER, s) {}
@@ -315,7 +374,9 @@ Sampler::SamplerOutputs Sampler::createNodeGraph(
 
 Sampler *Sampler::createInstance(std::string_view subtype, CyclesGlobalState *s)
 {
-  if (subtype == "image2D")
+  if (subtype == "image1D")
+    return new Image1D(s);
+  else if (subtype == "image2D")
     return new Image2D(s);
   else
     return (Sampler *)new UnknownObject(ANARI_SAMPLER, subtype, s);
