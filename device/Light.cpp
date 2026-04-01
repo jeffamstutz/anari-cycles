@@ -100,6 +100,37 @@ struct HDRI : public Light
   bool m_visible{true};
 };
 
+struct Point : public Light
+{
+  Point(CyclesGlobalState *s);
+
+  void commitParameters() override;
+  void finalize() override;
+  math::mat4 xfm() const override;
+
+ private:
+  math::float3 m_position{0.f, 0.f, 0.f};
+  float m_intensity{1.f};
+  float m_radius{0.f};
+};
+
+struct Spot : public Light
+{
+  Spot(CyclesGlobalState *s);
+
+  void commitParameters() override;
+  void finalize() override;
+  math::mat4 xfm() const override;
+
+ private:
+  math::float3 m_position{0.f, 0.f, 0.f};
+  math::float3 m_direction{0.f, 0.f, -1.f};
+  float m_intensity{1.f};
+  float m_openingAngle{M_PI_4};
+  float m_falloffAngle{0.1f};
+  float m_radius{0.f};
+};
+
 // Light definitions //////////////////////////////////////////////////////////
 
 Light::Light(CyclesGlobalState *s) : Object(ANARI_LIGHT, s)
@@ -118,6 +149,10 @@ Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
     return new Directional(s);
   else if (type == "hdri")
     return new HDRI(s);
+  else if (type == "point")
+    return new Point(s);
+  else if (type == "spot")
+    return new Spot(s);
   else
     return (Light *)new UnknownObject(ANARI_LIGHT, type, s);
 }
@@ -302,6 +337,71 @@ void HDRI::finalize()
 math::mat4 HDRI::xfm() const
 {
   return math::mat4(1.0f);
+}
+
+// Point definitions //////////////////////////////////////////////////////////
+
+Point::Point(CyclesGlobalState *s) : Light(s) {}
+
+void Point::commitParameters()
+{
+  Light::commitParameters();
+  m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
+  m_intensity = getParam<float>("intensity", 1.f);
+  m_radius = getParam<float>("radius", 0.f);
+}
+
+void Point::finalize()
+{
+  m_cyclesLight->set_light_type(ccl::LIGHT_POINT);
+  m_cyclesLight->set_size(m_radius);
+  m_cyclesLight->set_strength(
+      m_intensity * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
+  m_cyclesLight->tag_update(deviceState()->scene);
+  Light::finalize();
+}
+
+math::mat4 Point::xfm() const
+{
+  auto m = math::mat4(linalg::identity);
+  m[3] = {m_position.x, m_position.y, m_position.z, 1.f};
+  return m;
+}
+
+// Spot definitions ///////////////////////////////////////////////////////////
+
+Spot::Spot(CyclesGlobalState *s) : Light(s) {}
+
+void Spot::commitParameters()
+{
+  Light::commitParameters();
+  m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
+  m_direction =
+      math::normalize(getParam<math::float3>("direction", {0.f, 0.f, -1.f}));
+  m_intensity = getParam<float>("intensity", 1.f);
+  m_openingAngle = getParam<float>("openingAngle", float(M_PI_4));
+  m_falloffAngle = getParam<float>("falloffAngle", 0.1f);
+  m_radius = getParam<float>("radius", 0.f);
+}
+
+void Spot::finalize()
+{
+  m_cyclesLight->set_light_type(ccl::LIGHT_SPOT);
+  m_cyclesLight->set_size(m_radius);
+  m_cyclesLight->set_spot_angle(m_openingAngle * 2.f);
+  m_cyclesLight->set_spot_smooth(
+      m_openingAngle > 0.f ? m_falloffAngle / m_openingAngle : 0.f);
+  m_cyclesLight->set_strength(
+      m_intensity * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
+  m_cyclesLight->tag_update(deviceState()->scene);
+  Light::finalize();
+}
+
+math::mat4 Spot::xfm() const
+{
+  auto rot = math::inverse(rotationFromZNegativeToTarget(m_direction));
+  rot[3] = {m_position.x, m_position.y, m_position.z, 1.f};
+  return rot;
 }
 
 } // namespace anari_cycles
