@@ -4,9 +4,11 @@
 #include "Renderer.h"
 // cycles
 #include "scene/background.h"
+#include "scene/integrator.h"
 #include "scene/light.h"
-#include "scene/shader_nodes.h"
+#include "scene/pass.h"
 #include "scene/shader_graph.h"
+#include "scene/shader_nodes.h"
 
 namespace anari_cycles {
 
@@ -21,27 +23,28 @@ void Renderer::commitParameters()
 {
   auto backgroundColor =
       getParam<math::float4>("background", {0.f, 0.f, 0.f, 1.f});
-  m_needsUpdateStatus.background |=
-      (m_backgroundColor != backgroundColor);
+  m_needsUpdateStatus.background |= (m_backgroundColor != backgroundColor);
   m_backgroundColor = backgroundColor;
 
   auto ambientColor = getParam<math::float3>("ambientColor", {1.f, 1.f, 1.f});
-  m_needsUpdateStatus.ambientLight |=
-      (m_ambientColor != ambientColor);
+  m_needsUpdateStatus.ambientLight |= (m_ambientColor != ambientColor);
   m_ambientColor = ambientColor;
   auto ambientIntensity = 0.1f * getParam<float>("ambientRadiance", 1.f);
-  m_needsUpdateStatus.ambientLight |=
-      (m_ambientIntensity != ambientIntensity);
+  m_needsUpdateStatus.ambientLight |= (m_ambientIntensity != ambientIntensity);
   m_ambientIntensity = ambientIntensity;
 
   m_runAsync = getParam<bool>("runAsync", true);
+
+  auto denoise = getParam<bool>("denoise", false);
+  m_needsUpdateStatus.denoise |= (m_denoise != denoise);
+  m_denoise = denoise;
 }
 
 void Renderer::rebuildDefaultBackgroundShader()
 {
-  // setup background shader. Only keep background color for the background itself
-  // and kill illumination from other rays.
-  // Ambient lighting is handled through the default light shader.
+  // setup background shader. Only keep background color for the background
+  // itself and kill illumination from other rays. Ambient lighting is handled
+  // through the default light shader.
   auto graph = std::make_unique<ccl::ShaderGraph>();
 
   auto *lightPath = graph->create_node<ccl::LightPathNode>();
@@ -80,10 +83,12 @@ void Renderer::rebuildDefaultLightShader()
   auto graph = std::make_unique<ccl::ShaderGraph>();
 
   auto emission = graph->create_node<ccl::EmissionNode>();
-  emission->set_color(ccl::make_float3(m_ambientColor.x, m_ambientColor.y, m_ambientColor.z));
+  emission->set_color(
+      ccl::make_float3(m_ambientColor.x, m_ambientColor.y, m_ambientColor.z));
   emission->set_strength(m_ambientIntensity * 40.0f);
 
-  graph->connect(emission->output("Emission"), graph->output()->input("Surface"));
+  graph->connect(
+      emission->output("Emission"), graph->output()->input("Surface"));
 
   deviceState()->scene->default_light->name = "default_anari_light";
   deviceState()->scene->default_light->set_graph(std::move(graph));
@@ -101,6 +106,35 @@ void Renderer::makeRendererCurrent()
     m_needsUpdateStatus.ambientLight = false;
     rebuildDefaultLightShader();
   }
+#if defined(WITH_OPTIX) || defined(WITH_OPENIMAGEDENOISE)
+  if (m_needsUpdateStatus.denoise) {
+    m_needsUpdateStatus.denoise = false;
+    reportMessage(ANARI_SEVERITY_DEBUG,
+        "renderer -- set_use_denoise(%s)",
+        m_denoise ? "true" : "false");
+    deviceState()->scene->integrator->set_use_denoise(m_denoise);
+    // Cycles' finalize_passes() can only downgrade DENOISED→NOISY (when
+    // denoise is off), never upgrade NOISY→DENOISED. Once a named pass
+    // becomes NOISY it stays NOISY, causing the output driver to always
+    // read the noisy buffer. Fix by restoring DENOISED mode on the named
+    // combined pass before the scene update runs.
+    if (m_denoise) {
+      for (ccl::Pass *pass : deviceState()->scene->passes) {
+        if (pass->get_type() == ccl::PASS_COMBINED && !pass->get_name().empty()
+            && pass->get_mode() != ccl::PassMode::DENOISED) {
+          pass->set_mode(ccl::PassMode::DENOISED);
+        }
+      }
+    }
+  }
+#else
+  (void)m_denoise;
+  if (m_needsUpdateStatus.denoise) {
+    m_needsUpdateStatus.denoise = false;
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "renderer -- denoise requested but no denoiser compiled in");
+  }
+#endif
 }
 
 bool Renderer::runAsync() const
