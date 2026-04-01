@@ -16,6 +16,7 @@ namespace anari_cycles {
 class SamplerImageLoader : public ccl::ImageLoader
 {
  public:
+  SamplerImageLoader(Array1D *array);
   SamplerImageLoader(Array2D *array);
   ~SamplerImageLoader();
 
@@ -31,6 +32,7 @@ class SamplerImageLoader : public ccl::ImageLoader
   virtual bool is_vdb_loader() const override;
 
  private:
+  Array1D *m_array1d{nullptr};
   Array2D *m_array2d{nullptr};
 
   anari::DataType m_dataType{ANARI_UNKNOWN};
