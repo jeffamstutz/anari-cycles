@@ -62,9 +62,13 @@ struct Frame : public helium::BaseFrame
 
   anari::DataType m_colorType{ANARI_UNKNOWN};
   anari::DataType m_depthType{ANARI_UNKNOWN};
+  anari::DataType m_normalType{ANARI_UNKNOWN};
+  anari::DataType m_albedoType{ANARI_UNKNOWN};
 
   std::vector<uint8_t> m_pixelBuffer;
   std::vector<float> m_depthBuffer;
+  std::vector<float> m_normalBuffer;
+  std::vector<float> m_albedoBuffer;
 
   helium::IntrusivePtr<Renderer> m_renderer;
   helium::IntrusivePtr<Camera> m_camera;
