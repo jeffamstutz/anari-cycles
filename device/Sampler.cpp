@@ -153,6 +153,51 @@ void Image1D::finalize()
       state.scene->image_manager->add_image(std::move(loader), params, false);
 }
 
+// Image3D Sampler ////////////////////////////////////////////////////////////
+
+struct Image3D : public Sampler
+{
+  Image3D(CyclesGlobalState *d);
+
+  bool isValid() const override;
+  void commitParameters() override;
+  void finalize() override;
+
+ private:
+  helium::IntrusivePtr<Array3D> m_image;
+  bool m_linearFilter{true};
+};
+
+Image3D::Image3D(CyclesGlobalState *d) : Sampler(d) {}
+
+bool Image3D::isValid() const
+{
+  return m_image;
+}
+
+void Image3D::commitParameters()
+{
+  Sampler::commitParameters();
+  m_image = getParamObject<Array3D>("image");
+  m_linearFilter = getParamString("filter", "linear") != "nearest";
+}
+
+void Image3D::finalize()
+{
+  if (!isValid())
+    return;
+
+  auto &state = *deviceState();
+  auto loader = std::make_unique<SamplerImageLoader>(m_image.ptr);
+  ccl::ImageParams params;
+  params.alpha_type = IMAGE_ALPHA_AUTO;
+  params.colorspace = ccl::u_colorspace_raw;
+  params.interpolation =
+      m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
+  m_handle =
+      state.scene->image_manager->add_image(std::move(loader), params, false);
+}
+
 // Sampler definitions ////////////////////////////////////////////////////////
 
 Sampler::Sampler(CyclesGlobalState *s) : Object(ANARI_SAMPLER, s) {}
@@ -378,6 +423,8 @@ Sampler *Sampler::createInstance(std::string_view subtype, CyclesGlobalState *s)
     return new Image1D(s);
   else if (subtype == "image2D")
     return new Image2D(s);
+  else if (subtype == "image3D")
+    return new Image3D(s);
   else
     return (Sampler *)new UnknownObject(ANARI_SAMPLER, subtype, s);
 }

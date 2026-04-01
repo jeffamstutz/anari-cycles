@@ -24,22 +24,37 @@ SamplerImageLoader::SamplerImageLoader(Array2D *array) : m_array2d(array)
   m_pixels = array->data();
 }
 
+SamplerImageLoader::SamplerImageLoader(Array3D *array) : m_array3d(array)
+{
+  m_dataType = array->elementType();
+  m_dims[0] = uint32_t(array->size(0));
+  m_dims[1] = uint32_t(array->size(1));
+  m_dims[2] = uint32_t(array->size(2));
+  m_pixels = array->data();
+}
+
 SamplerImageLoader::~SamplerImageLoader() = default;
 
 bool SamplerImageLoader::load_metadata(
     const ccl::ImageDeviceFeatures &features, ccl::ImageMetaData &metadata)
 {
-  if (!m_array1d && !m_array2d)
+  if (!m_array1d && !m_array2d && !m_array3d)
     return false;
 
   metadata.byte_size =
       m_dims[0] * m_dims[1] * m_dims[2] * anari::sizeOf(m_dataType);
   metadata.channels = anariComponentsOf(m_dataType);
-  metadata.use_transform_3d = false;
-
   metadata.width = m_dims[0];
   metadata.height = m_dims[1];
   metadata.colorspace = ccl::u_colorspace_raw;
+
+  if (m_array3d) {
+    metadata.use_transform_3d = true;
+    metadata.transform_3d = ccl::transform_scale(
+        ccl::make_float3(1.f / m_dims[0], 1.f / m_dims[1], 1.f / m_dims[2]));
+  } else {
+    metadata.use_transform_3d = false;
+  }
 
   switch (m_dataType) {
   case (ANARI_UFIXED8):
@@ -80,7 +95,7 @@ bool SamplerImageLoader::load_metadata(
 bool SamplerImageLoader::load_pixels(
     const ccl::ImageMetaData &, void *pixels, const size_t, const bool)
 {
-  if (!m_array1d && !m_array2d)
+  if (!m_array1d && !m_array2d && !m_array3d)
     return false;
   auto bytes = m_dims[0] * m_dims[1] * m_dims[2] * anari::sizeOf(m_dataType);
   std::memcpy(pixels, m_pixels, bytes);
@@ -97,7 +112,8 @@ bool SamplerImageLoader::equals(const ccl::ImageLoader &_other) const
   const auto *other = dynamic_cast<const SamplerImageLoader *>(&_other);
   if (!other)
     return false;
-  return m_array1d == other->m_array1d && m_array2d == other->m_array2d;
+  return m_array1d == other->m_array1d && m_array2d == other->m_array2d
+      && m_array3d == other->m_array3d;
 }
 
 void SamplerImageLoader::cleanup()
