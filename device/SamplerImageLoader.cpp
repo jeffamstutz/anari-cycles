@@ -8,6 +8,14 @@
 
 namespace anari_cycles {
 
+SamplerImageLoader::SamplerImageLoader(Array1D *array) : m_array1d(array)
+{
+  m_dataType = array->elementType();
+  m_dims[0] = uint32_t(array->totalSize());
+  m_dims[1] = 1;
+  m_pixels = array->data();
+}
+
 SamplerImageLoader::SamplerImageLoader(Array2D *array) : m_array2d(array)
 {
   m_dataType = array->elementType();
@@ -21,7 +29,7 @@ SamplerImageLoader::~SamplerImageLoader() = default;
 bool SamplerImageLoader::load_metadata(
     const ccl::ImageDeviceFeatures &features, ccl::ImageMetaData &metadata)
 {
-  if (!m_array2d)
+  if (!m_array1d && !m_array2d)
     return false;
 
   metadata.byte_size =
@@ -72,7 +80,7 @@ bool SamplerImageLoader::load_metadata(
 bool SamplerImageLoader::load_pixels(
     const ccl::ImageMetaData &, void *pixels, const size_t, const bool)
 {
-  if (!m_array2d)
+  if (!m_array1d && !m_array2d)
     return false;
   auto bytes = m_dims[0] * m_dims[1] * m_dims[2] * anari::sizeOf(m_dataType);
   std::memcpy(pixels, m_pixels, bytes);
@@ -89,7 +97,7 @@ bool SamplerImageLoader::equals(const ccl::ImageLoader &_other) const
   const auto *other = dynamic_cast<const SamplerImageLoader *>(&_other);
   if (!other)
     return false;
-  return m_array2d == other->m_array2d;
+  return m_array1d == other->m_array1d && m_array2d == other->m_array2d;
 }
 
 void SamplerImageLoader::cleanup()
