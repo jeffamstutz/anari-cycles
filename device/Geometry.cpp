@@ -25,6 +25,68 @@ struct convert_toFloat4
   }
 };
 
+// Shared mesh attribute helpers ///////////////////////////////////////////////
+
+static void setMeshVertexNormal(
+    ccl::Mesh *mesh, const helium::IntrusivePtr<Array1D> &array)
+{
+  if (!array)
+    return;
+
+  ustring name = ustring("vertex.normal");
+  Attribute *attr = mesh->attributes.add(ATTR_STD_VERTEX_NORMAL, name);
+  float3 *dst = attr->data_float3();
+  std::transform(array->beginAs<anari_vec::float3>(),
+      array->endAs<anari_vec::float3>(),
+      dst,
+      [](const anari_vec::float3 &v) {
+        return make_float3(v[0], v[1], v[2]);
+      });
+}
+
+static void setMeshVertexColor(
+    ccl::Mesh *mesh, const helium::IntrusivePtr<Array1D> &array)
+{
+  if (!array)
+    return;
+
+  const void *src = array->data();
+  anari::DataType type = array->elementType();
+
+  Attribute *attr = mesh->attributes.add(
+      ustring("vertex.color"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
+  attr->std = ATTR_STD_VERTEX_COLOR;
+  float3 *dst = attr->data_float3();
+  for (uint32_t i = 0; i < array->size(); i++) {
+    auto c = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
+        type, src, i);
+    dst[i] = make_float3(c[0], c[1], c[2]);
+  }
+}
+
+static void setMeshVertexAttribute(ccl::Mesh *mesh,
+    const helium::IntrusivePtr<Array1D> &array,
+    const char *name)
+{
+  if (!array)
+    return;
+
+  anari::DataType type = array->elementType();
+  const void *src = array->data();
+
+  Attribute *attr =
+      mesh->attributes.add(ustring(name), ccl::TypeFloat4, ATTR_ELEMENT_VERTEX);
+  float4 *dst = attr->data_float4();
+  for (size_t i = 0; i < array->size(); i++) {
+    auto r = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
+        type, src, i);
+    dst[i].x = r[0];
+    dst[i].y = r[1];
+    dst[i].z = r[2];
+    dst[i].w = r[3];
+  }
+}
+
 // Triangle definitions ///////////////////////////////////////////////////////
 
 struct Triangle : public Geometry
@@ -43,11 +105,6 @@ struct Triangle : public Geometry
  private:
   void setVertexPosition(ccl::Mesh *mesh) const;
   void setPrimitiveIndex(ccl::Mesh *mesh) const;
-  void setVertexNormal(ccl::Mesh *mesh) const;
-  void setVertexColor(ccl::Mesh *mesh) const;
-  void setVertexAttribute(ccl::Mesh *mesh,
-      const helium::IntrusivePtr<Array1D> &array,
-      const char *name) const;
 
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
@@ -105,12 +162,12 @@ void Triangle::syncCyclesNode(ccl::Geometry *node) const
 
   setVertexPosition(mesh);
   setPrimitiveIndex(mesh);
-  setVertexNormal(mesh);
-  setVertexColor(mesh);
-  setVertexAttribute(mesh, m_vertexAttribute0, "vertex.attribute0");
-  setVertexAttribute(mesh, m_vertexAttribute1, "vertex.attribute1");
-  setVertexAttribute(mesh, m_vertexAttribute2, "vertex.attribute2");
-  setVertexAttribute(mesh, m_vertexAttribute3, "vertex.attribute3");
+  setMeshVertexNormal(mesh, m_vertexNormal);
+  setMeshVertexColor(mesh, m_vertexColor);
+  setMeshVertexAttribute(mesh, m_vertexAttribute0, "vertex.attribute0");
+  setMeshVertexAttribute(mesh, m_vertexAttribute1, "vertex.attribute1");
+  setMeshVertexAttribute(mesh, m_vertexAttribute2, "vertex.attribute2");
+  setMeshVertexAttribute(mesh, m_vertexAttribute3, "vertex.attribute3");
 }
 
 box3 Triangle::bounds() const
@@ -154,60 +211,137 @@ void Triangle::setPrimitiveIndex(ccl::Mesh *mesh) const
   }
 }
 
-void Triangle::setVertexNormal(ccl::Mesh *mesh) const
-{
-  if (!m_vertexNormal)
-    return;
+// Quad definitions ///////////////////////////////////////////////////////////
 
-  ustring name = ustring("vertex.normal");
-  Attribute *attr = mesh->attributes.add(ATTR_STD_VERTEX_NORMAL, name);
-  float3 *dst = attr->data_float3();
-  std::transform(m_vertexNormal->beginAs<anari_vec::float3>(),
-      m_vertexNormal->endAs<anari_vec::float3>(),
-      dst,
-      [](const anari_vec::float3 &v) { return make_float3(v[0], v[1], v[2]); });
+struct Quad : public Geometry
+{
+  Quad(CyclesGlobalState *s);
+  ~Quad() override;
+
+  void commitParameters() override;
+  void finalize() override;
+
+  ccl::Geometry *createCyclesGeometryNode() override;
+  void syncCyclesNode(ccl::Geometry *node) const override;
+
+  box3 bounds() const override;
+
+ private:
+  void setVertexPosition(ccl::Mesh *mesh) const;
+  void setPrimitiveIndex(ccl::Mesh *mesh) const;
+
+  helium::ChangeObserverPtr<Array1D> m_index;
+  helium::ChangeObserverPtr<Array1D> m_vertexPosition;
+  helium::IntrusivePtr<Array1D> m_vertexNormal;
+  helium::IntrusivePtr<Array1D> m_vertexColor;
+  helium::IntrusivePtr<Array1D> m_vertexAttribute0;
+  helium::IntrusivePtr<Array1D> m_vertexAttribute1;
+  helium::IntrusivePtr<Array1D> m_vertexAttribute2;
+  helium::IntrusivePtr<Array1D> m_vertexAttribute3;
+};
+
+Quad::Quad(CyclesGlobalState *s)
+    : Geometry(s), m_index(this), m_vertexPosition(this)
+{}
+
+Quad::~Quad() = default;
+
+void Quad::commitParameters()
+{
+  Geometry::commitParameters();
+
+  m_index = getParamObject<Array1D>("primitive.index");
+  m_vertexPosition = getParamObject<Array1D>("vertex.position");
+  m_vertexNormal = getParamObject<Array1D>("vertex.normal");
+  m_vertexColor = getParamObject<Array1D>("vertex.color");
+  m_vertexAttribute0 = getParamObject<Array1D>("vertex.attribute0");
+  m_vertexAttribute1 = getParamObject<Array1D>("vertex.attribute1");
+  m_vertexAttribute2 = getParamObject<Array1D>("vertex.attribute2");
+  m_vertexAttribute3 = getParamObject<Array1D>("vertex.attribute3");
 }
 
-void Triangle::setVertexColor(ccl::Mesh *mesh) const
+void Quad::finalize()
 {
-  auto &array = m_vertexColor;
-  if (!array)
-    return;
-
-  const void *src = array->data();
-  anari::DataType type = array->elementType();
-
-  Attribute *attr = mesh->attributes.add(
-      ustring("vertex.color"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
-  attr->std = ATTR_STD_VERTEX_COLOR;
-  float3 *dst = attr->data_float3();
-  for (uint32_t i = 0; i < array->size(); i++) {
-    auto c = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
-        type, src, i);
-    dst[i] = make_float3(c[0], c[1], c[2]);
+  if (!m_vertexPosition) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "missing required parameter 'vertex.position' on quad geometry");
   }
+
+  Geometry::finalize();
 }
 
-void Triangle::setVertexAttribute(ccl::Mesh *mesh,
-    const helium::IntrusivePtr<Array1D> &array,
-    const char *name) const
+ccl::Geometry *Quad::createCyclesGeometryNode()
 {
-  if (!array)
-    return;
+  return deviceState()->scene->create_node<ccl::Mesh>();
+}
 
-  anari::DataType type = array->elementType();
-  const void *src = array->data();
+void Quad::syncCyclesNode(ccl::Geometry *node) const
+{
+  auto *mesh = (ccl::Mesh *)node;
 
-  Attribute *attr =
-      mesh->attributes.add(ustring(name), ccl::TypeFloat4, ATTR_ELEMENT_VERTEX);
-  float4 *dst = attr->data_float4();
-  for (size_t i = 0; i < array->size(); i++) {
-    auto r = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
-        type, src, i);
-    dst[i].x = r[0];
-    dst[i].y = r[1];
-    dst[i].z = r[2];
-    dst[i].w = r[3];
+  if (!m_vertexPosition) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "Quad::syncCyclesNode() detected incomplete geometry");
+  }
+
+  setVertexPosition(mesh);
+  setPrimitiveIndex(mesh);
+  setMeshVertexNormal(mesh, m_vertexNormal);
+  setMeshVertexColor(mesh, m_vertexColor);
+  setMeshVertexAttribute(mesh, m_vertexAttribute0, "vertex.attribute0");
+  setMeshVertexAttribute(mesh, m_vertexAttribute1, "vertex.attribute1");
+  setMeshVertexAttribute(mesh, m_vertexAttribute2, "vertex.attribute2");
+  setMeshVertexAttribute(mesh, m_vertexAttribute3, "vertex.attribute3");
+}
+
+box3 Quad::bounds() const
+{
+  box3 b = empty_box3();
+  if (!m_vertexPosition)
+    return b;
+  std::for_each(m_vertexPosition->beginAs<anari_vec::float3>(),
+      m_vertexPosition->endAs<anari_vec::float3>(),
+      [&](const anari_vec::float3 &v) {
+        extend(b, make_float3(v[0], v[1], v[2]));
+      });
+  return b;
+}
+
+void Quad::setVertexPosition(ccl::Mesh *mesh) const
+{
+  ccl::array<ccl::float3> P;
+  auto *dst = P.resize(m_vertexPosition->size());
+  std::transform(m_vertexPosition->beginAs<anari_vec::float3>(),
+      m_vertexPosition->endAs<anari_vec::float3>(),
+      dst,
+      [](const anari_vec::float3 &v) {
+        return make_float3(v[0], v[1], v[2]);
+      });
+  mesh->set_verts(P);
+}
+
+void Quad::setPrimitiveIndex(ccl::Mesh *mesh) const
+{
+  const uint32_t numQuads =
+      m_index ? m_index->size() : m_vertexPosition->size() / 4;
+  const uint32_t numTriangles = numQuads * 2;
+  mesh->reserve_mesh(m_vertexPosition->size(), numTriangles);
+  for (uint32_t i = 0; i < numQuads; i++) {
+    uint32_t v0, v1, v2, v3;
+    if (m_index) {
+      auto *idxs = m_index->beginAs<anari_vec::uint4>();
+      v0 = idxs[i][0];
+      v1 = idxs[i][1];
+      v2 = idxs[i][2];
+      v3 = idxs[i][3];
+    } else {
+      v0 = 4 * i + 0;
+      v1 = 4 * i + 1;
+      v2 = 4 * i + 2;
+      v3 = 4 * i + 3;
+    }
+    mesh->add_triangle(v0, v1, v2, 0, true);
+    mesh->add_triangle(v0, v2, v3, 0, true);
   }
 }
 
@@ -452,6 +586,8 @@ Geometry *Geometry::createInstance(std::string_view type, CyclesGlobalState *s)
 {
   if (type == "triangle")
     return new Triangle(s);
+  else if (type == "quad")
+    return new Quad(s);
   else if (type == "sphere")
     return new Sphere(s);
   else
