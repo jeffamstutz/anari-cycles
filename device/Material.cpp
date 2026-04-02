@@ -53,11 +53,8 @@ void MatteMaterial::finalize()
 
   makeGraph();
 
-  connectAttributes(m_bsdf,
-      m_colorAttr,
-      "Base Color",
-      m_color,
-      m_colorSampler.get());
+  connectAttributes(
+      m_bsdf, m_colorAttr, "Base Color", m_color, m_colorSampler.get());
 
   const bool isOpaque = m_mode == helium::AlphaMode::OPAQUE;
   connectAttributes(m_bsdf,
@@ -96,7 +93,7 @@ struct PhysicallyBasedMaterial : public Material
 
   ccl::PrincipledBsdfNode *m_bsdf{nullptr};
   std::string m_colorAttr;
-  float3 m_color{make_float3(0.8f, 0.8f, 0.8f)};
+  float3 m_color{make_float3(1.f, 1.f, 1.f)};
   helium::ChangeObserverPtr<Sampler> m_colorSampler;
 
   std::string m_opacityAttr;
@@ -138,7 +135,7 @@ PhysicallyBasedMaterial::PhysicallyBasedMaterial(CyclesGlobalState *s)
 void PhysicallyBasedMaterial::commitParameters()
 {
   m_colorAttr = getParamString("baseColor", "");
-  m_color = getParam<float3>("baseColor", make_float3(0.8f, 0.8f, 0.8f));
+  m_color = getParam<float3>("baseColor", make_float3(1.f, 1.f, 1.f));
   m_colorSampler = getParamObject<Sampler>("baseColor");
 
   m_opacityAttr = getParamString("opacity", "");
@@ -177,11 +174,8 @@ void PhysicallyBasedMaterial::finalize()
 
   makeGraph();
 
-  connectAttributes(m_bsdf,
-      m_colorAttr,
-      "Base Color",
-      m_color,
-      m_colorSampler.get());
+  connectAttributes(
+      m_bsdf, m_colorAttr, "Base Color", m_color, m_colorSampler.get());
 
   const bool isOpaque = m_mode == helium::AlphaMode::OPAQUE;
   connectAttributes(m_bsdf,
@@ -196,11 +190,8 @@ void PhysicallyBasedMaterial::finalize()
       m_roughness,
       m_roughnessSampler.get());
 
-  connectAttributes(m_bsdf,
-      m_metallicAttr,
-      "Metallic",
-      m_metallic,
-      m_metallicSampler.get());
+  connectAttributes(
+      m_bsdf, m_metallicAttr, "Metallic", m_metallic, m_metallicSampler.get());
 
   connectAttributes(m_bsdf, m_clearcoatAttr, "Coat Weight", m_clearcoat);
   connectAttributes(
@@ -211,7 +202,8 @@ void PhysicallyBasedMaterial::finalize()
   m_bsdf->input("IOR")->set(m_ior);
 
   if (m_normalSampler) {
-    // Does not work yet, most probably need to figure out tangent space handling in Cycles
+    // Does not work yet, most probably need to figure out tangent space
+    // handling in Cycles
     //
     // m_graph->connect(getSamplerOutputs(m_normalSampler.get()).normalOutput,
     //    m_bsdf->input("Normal"));
@@ -290,7 +282,8 @@ void Material::makeGraph()
   attr3->set_attribute(ccl::ustring("vertex.attribute3"));
 
   auto *vertexColor_sc = m_graph->create_node<ccl::SeparateColorNode>();
-  m_graph->connect(vertexColor->output("Color"), vertexColor_sc->input("Color"));
+  m_graph->connect(
+      vertexColor->output("Color"), vertexColor_sc->input("Color"));
 
   auto *attr0_sc = m_graph->create_node<ccl::SeparateColorNode>();
   m_graph->connect(attr0->output("Color"), attr0_sc->input("Color"));
@@ -324,12 +317,8 @@ void Material::connectAttributes(ccl::ShaderNode *bsdf,
     float v,
     Sampler *sampler)
 {
-  connectAttributesImpl(bsdf,
-      attributeSource,
-      sampler,
-      input,
-      make_float3(v),
-      true);
+  connectAttributesImpl(
+      bsdf, attributeSource, sampler, input, make_float3(v), true);
 }
 
 void Material::connectAttributes(ccl::ShaderNode *bsdf,
@@ -338,8 +327,7 @@ void Material::connectAttributes(ccl::ShaderNode *bsdf,
     const float3 &v,
     Sampler *sampler)
 {
-  connectAttributesImpl(
-      bsdf, attributeSource, sampler, input, v, false);
+  connectAttributesImpl(bsdf, attributeSource, sampler, input, v, false);
 }
 
 Sampler::SamplerOutputs Material::getSamplerOutputs(Sampler *sampler)
@@ -347,18 +335,18 @@ Sampler::SamplerOutputs Material::getSamplerOutputs(Sampler *sampler)
   if (!sampler) {
     return Sampler::SamplerOutputs{};
   }
-  
+
   auto it = m_samplerOutputs.find(sampler);
   if (it != m_samplerOutputs.end() && it->second.isValid) {
     return it->second.outputs;
   }
-  
+
   // Create new outputs using the sampler's node graph
   auto outputs = sampler->createNodeGraph(m_graph, m_attributeNodes.attr0);
-  
+
   // Cache the outputs
   m_samplerOutputs[sampler] = {outputs, true};
-  
+
   return outputs;
 }
 
@@ -376,7 +364,7 @@ void Material::connectAttributesImpl(ccl::ShaderNode *bsdf,
   if (sampler) {
     // Get or create sampler outputs
     auto samplerOutputs = getSamplerOutputs(sampler);
-    
+
     // Choose the appropriate output based on what we need
     ccl::ShaderOutput *outputToConnect = nullptr;
     if (singleComponent && samplerOutputs.scalarOutput) {
@@ -387,13 +375,13 @@ void Material::connectAttributesImpl(ccl::ShaderNode *bsdf,
       // Fallback to color output if scalar not available
       outputToConnect = samplerOutputs.colorOutput;
     }
-    
+
     if (outputToConnect) {
       m_graph->connect(outputToConnect, shaderInput);
       return;
     }
   }
-  
+
   // Handle attribute connections
   if (attributeSource == "color") {
     m_graph->connect(
