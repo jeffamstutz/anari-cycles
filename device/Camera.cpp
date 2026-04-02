@@ -52,7 +52,7 @@ Camera *Camera::createInstance(std::string_view type, CyclesGlobalState *s)
 void Camera::commitParameters()
 {
   m_pos = getParam<anari_vec::float3>("position", {0.f, 0.f, 0.f});
-  m_dir = getParam<anari_vec::float3>("direction", {0.f, 0.f, 1.f});
+  m_dir = getParam<anari_vec::float3>("direction", {0.f, 0.f, -1.f});
   m_up = getParam<anari_vec::float3>("up", {0.f, 1.f, 0.f});
 }
 
