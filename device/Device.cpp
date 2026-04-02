@@ -277,7 +277,7 @@ int CyclesDevice::deviceGetProperty(const char *name,
     uint32_t mask)
 {
   std::string_view prop = name;
-  if (prop == "feature" && type == ANARI_STRING_LIST) {
+  if (prop == "extension" && type == ANARI_STRING_LIST) {
     helium::writeToVoidP(mem, query_extensions());
     return 1;
   } else if (prop == "cycles" && type == ANARI_BOOL) {
