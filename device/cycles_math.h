@@ -29,6 +29,7 @@ using float2 = vec2;
 using float3 = vec3;
 using float4 = vec4;
 using uint3 = uvec3;
+using uint4 = uvec4;
 
 } // namespace anari_vec
 
