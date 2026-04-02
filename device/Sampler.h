@@ -24,31 +24,55 @@ struct Sampler : public Object
   void commitParameters() override;
 
   virtual ccl::ImageHandle getCyclesImageHandle();
-  mat4 getInTransform() const { return m_inTransform; }
-  helium::float4 getInOffset() const { return m_inOffset; }
-  virtual mat4 getOutTransform() const { return mat4(linalg::identity); }
-  virtual helium::float4 getOutOffset() const { return helium::float4(0.f, 0.f, 0.f, 0.f); }
-  
+  mat4 getInTransform() const
+  {
+    return m_inTransform;
+  }
+  helium::float4 getInOffset() const
+  {
+    return m_inOffset;
+  }
+  virtual mat4 getOutTransform() const
+  {
+    return mat4(linalg::identity);
+  }
+  virtual helium::float4 getOutOffset() const
+  {
+    return helium::float4(0.f, 0.f, 0.f, 0.f);
+  }
+
   // Apply input coordinate transformation to UV coordinates
-  virtual ccl::ShaderOutput *applyInputTransform(ccl::ShaderGraph *graph, 
-                                                  ccl::ShaderOutput *uvInput);
+  virtual ccl::ShaderOutput *applyInputTransform(
+      ccl::ShaderGraph *graph, ccl::ShaderOutput *uvInput);
 
   // New interface for sampler-designed node graphs
-  struct SamplerOutputs {
+  struct SamplerOutputs
+  {
     ccl::ShaderOutput *colorOutput{nullptr};
     ccl::ShaderOutput *scalarOutput{nullptr};
     ccl::ShaderOutput *normalOutput{nullptr};
   };
-  
+
   // Create and configure the sampler's node graph, returning outputs
-  virtual SamplerOutputs createNodeGraph(ccl::ShaderGraph *graph, 
-                                         ccl::ShaderOutput *uvInput);
-  
+  virtual SamplerOutputs createNodeGraph(
+      ccl::ShaderGraph *graph, ccl::ShaderOutput *uvInput);
+
   // Check if this sampler provides a color output
-  virtual bool hasColorOutput() const { return true; }
-  
-  // Check if this sampler provides a scalar output  
-  virtual bool hasScalarOutput() const { return true; }
+  virtual bool hasColorOutput() const
+  {
+    return true;
+  }
+
+  // Check if this sampler provides a scalar output
+  virtual bool hasScalarOutput() const
+  {
+    return true;
+  }
+
+  virtual ExtensionType cyclesExtensionType() const
+  {
+    return EXTENSION_EXTEND;
+  }
 
  protected:
   ccl::ImageHandle m_handle{};
