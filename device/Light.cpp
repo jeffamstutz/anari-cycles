@@ -10,12 +10,12 @@
 // cycles
 #include "SamplerImageLoader.h"
 #include "kernel/svm/types.h"
+#include "scene/background.h"
 #include "scene/camera.h"
 #include "scene/colorspace.h"
 #include "scene/shader.h"
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
-#include "scene/background.h"
 #include "util/math_base.h"
 #include "util/transform.h"
 #include "util/types_float3.h"
@@ -93,8 +93,8 @@ struct HDRI : public Light
 
  private:
   helium::IntrusivePtr<Array2D> m_radiance{};
-  math::float3 m_up{0.f, 1.f, 0.f};
-  math::float3 m_direction{0.f, 0.f, -1.f};
+  math::float3 m_up{0.f, 0.f, 1.f};
+  math::float3 m_direction{1.f, 0.f, 0.f};
 
   float m_scale{1.f};
   bool m_visible{true};
@@ -193,8 +193,8 @@ void HDRI::commitParameters()
   m_scale = getParam<float>("scale", 1.f);
   m_visible = getParam<bool>("visible", true);
 
-  m_up = getParam<math::float3>("up", {0.f, 1.f, 0.f});
-  m_direction = getParam<math::float3>("direction", {0.f, 0.f, 1.f});
+  m_up = getParam<math::float3>("up", {0.f, 0.f, 1.f});
+  m_direction = getParam<math::float3>("direction", {1.f, 0.f, 0.f});
 }
 
 // Transform vector from ANARI coordinate system to Cycles coordinate system
@@ -224,7 +224,8 @@ void HDRI::finalize()
     auto graph = std::make_unique<ccl::ShaderGraph>();
 
     // Build orthonormal basis from direction and up vectors
-    // We should ensure that up is not parallel to forward, let save that for later.
+    // We should ensure that up is not parallel to forward, let save that for
+    // later.
     auto forward = math::normalize(m_direction);
     auto up = math::normalize(m_up);
     auto right = math::normalize(math::cross(forward, up));
@@ -234,12 +235,10 @@ void HDRI::finalize()
     // Transform from standard basis to our custom orientation
     // math::mat3 rotationMat = {
     //     {forward.x, right.x, up.x},  // First column
-    //     {forward.y, right.y, up.y},  // Second column  
+    //     {forward.y, right.y, up.y},  // Second column
     //     {forward.z, right.z, up.z}   // Third column
     // };
-    math::mat3 rotationMat = {
-      forward, right, up
-    };
+    math::mat3 rotationMat = {forward, right, up};
 
     // Extract axis-angle representation for Cycles vector rotation node
     // math::float3 axis;
@@ -256,8 +255,9 @@ void HDRI::finalize()
     vectorRotate->set_rotate_type(ccl::NODE_VECTOR_ROTATE_TYPE_AXIS);
     vectorRotate->set_angle(angle);
     vectorRotate->set_axis(ccl::make_float3(axis.x, axis.y, axis.z));
-    graph->connect(tex_coords->output("Generated"), vectorRotate->input("Vector"));
-    
+    graph->connect(
+        tex_coords->output("Generated"), vectorRotate->input("Vector"));
+
     // Create environment texture node
     auto *env_tex = graph->create_node<ccl::EnvironmentTextureNode>();
     env_tex->set_projection(ccl::NODE_ENVIRONMENT_EQUIRECTANGULAR);
@@ -276,16 +276,18 @@ void HDRI::finalize()
     params.alpha_type = IMAGE_ALPHA_AUTO;
     params.interpolation = INTERPOLATION_LINEAR;
 
-    env_tex->handle =
-      deviceState()->scene->image_manager->add_image(std::move(loader), params, false);
+    env_tex->handle = deviceState()->scene->image_manager->add_image(
+        std::move(loader), params, false);
 
     // Create output node
     auto *background = graph->create_node<ccl::BackgroundNode>();
-    
+    background->set_strength(m_scale);
+
     // Connect environment texture to background
     graph->connect(env_tex->output("Color"), background->input("Color"));
 
-    graph->connect(background->output("Background"), graph->output()->input("Surface"));
+    graph->connect(
+        background->output("Background"), graph->output()->input("Surface"));
 
     // Create shader and assign graph
     m_cyclesShader = deviceState()->scene->create_node<ccl::Shader>();
@@ -300,7 +302,6 @@ void HDRI::finalize()
 math::mat4 HDRI::xfm() const
 {
   return math::mat4(1.0f);
-
 }
 
 } // namespace anari_cycles
