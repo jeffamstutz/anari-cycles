@@ -5,6 +5,7 @@
 #include <anari/anari_cpp/ext/linalg.h>
 #include <cmath>
 #include <cstdio>
+#include <string>
 #include "Sampler.h"
 
 // cycles
@@ -131,6 +132,34 @@ struct Spot : public Light
   float m_radius{0.f};
 };
 
+struct QuadLight : public Light
+{
+  QuadLight(CyclesGlobalState *s);
+
+  void commitParameters() override;
+  void finalize() override;
+  math::mat4 xfm() const override;
+
+ private:
+  math::float3 m_position{0.f, 0.f, 0.f};
+  math::float3 m_edge1{1.f, 0.f, 0.f};
+  math::float3 m_edge2{0.f, 1.f, 0.f};
+  float m_radiance{1.f};
+  std::string m_side{"front"};
+};
+
+struct UnknownLight : public Light
+{
+  UnknownLight(std::string_view subtype, CyclesGlobalState *s);
+
+  bool isValid() const override;
+  void warnIfUnknownObject() const override;
+  math::mat4 xfm() const override;
+
+ private:
+  std::string m_subtype;
+};
+
 // Light definitions //////////////////////////////////////////////////////////
 
 Light::Light(CyclesGlobalState *s) : Object(ANARI_LIGHT, s)
@@ -153,8 +182,10 @@ Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
     return new Point(s);
   else if (type == "spot")
     return new Spot(s);
+  else if (type == "quad")
+    return new QuadLight(s);
   else
-    return (Light *)new UnknownObject(ANARI_LIGHT, type, s);
+    return new UnknownLight(type, s);
 }
 
 void Light::commitParameters()
@@ -402,6 +433,102 @@ math::mat4 Spot::xfm() const
   auto rot = math::inverse(rotationFromZNegativeToTarget(m_direction));
   rot[3] = {m_position.x, m_position.y, m_position.z, 1.f};
   return rot;
+}
+
+// Quad definitions ///////////////////////////////////////////////////////////
+
+QuadLight::QuadLight(CyclesGlobalState *s) : Light(s) {}
+
+void QuadLight::commitParameters()
+{
+  Light::commitParameters();
+  m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
+  m_edge1 = getParam<math::float3>("edge1", {1.f, 0.f, 0.f});
+  m_edge2 = getParam<math::float3>("edge2", {0.f, 1.f, 0.f});
+  const float area = math::length(math::cross(m_edge1, m_edge2));
+  if (hasParam("radiance", ANARI_FLOAT32)) {
+    m_radiance = getParam<float>("radiance", 1.f);
+  } else if (hasParam("intensity", ANARI_FLOAT32) && area > 0.f) {
+    m_radiance = getParam<float>("intensity", 1.f) / area;
+  } else if (hasParam("power", ANARI_FLOAT32) && area > 0.f) {
+    m_radiance = getParam<float>("power", 1.f) / (float(M_PI) * area);
+  } else {
+    m_radiance = 1.f;
+  }
+  m_radiance = std::clamp(m_radiance, 0.f, std::numeric_limits<float>::max());
+  m_side = getParamString("side", "front");
+}
+
+void QuadLight::finalize()
+{
+  if (m_side == "both") {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "quad light side='both' is not supported; using side='front'");
+  } else if (m_side != "front" && m_side != "back") {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "invalid quad light side '%s'; using side='front'",
+        m_side.c_str());
+    m_side = "front";
+  }
+
+  m_cyclesLight->set_light_type(ccl::LIGHT_AREA);
+  m_cyclesLight->set_size(1.f);
+  m_cyclesLight->set_sizeu(1.f);
+  m_cyclesLight->set_sizev(1.f);
+  m_cyclesLight->set_ellipse(false);
+  m_cyclesLight->set_spread(float(M_PI));
+  m_cyclesLight->set_strength(
+      m_radiance * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
+  m_cyclesLight->tag_update(deviceState()->scene);
+  Light::finalize();
+}
+
+math::mat4 QuadLight::xfm() const
+{
+  const auto center = m_position + 0.5f * (m_edge1 + m_edge2);
+
+  auto normal = math::cross(m_edge1, m_edge2);
+  if (math::length(normal) > 0.f)
+    normal = math::normalize(normal);
+  else
+    normal = {0.f, 0.f, 1.f};
+
+  if (m_side == "back")
+    normal = -normal;
+
+  return math::mat4{{m_edge1.x, m_edge1.y, m_edge1.z, 0.f},
+      {m_edge2.x, m_edge2.y, m_edge2.z, 0.f},
+      {-normal.x, -normal.y, -normal.z, 0.f},
+      {center.x, center.y, center.z, 1.f}};
+}
+
+// UnknownLight definitions ///////////////////////////////////////////////////
+
+UnknownLight::UnknownLight(std::string_view subtype, CyclesGlobalState *s)
+    : Light(s), m_subtype(subtype)
+{
+  reportMessage(ANARI_SEVERITY_WARNING,
+      "created unknown %s object of subtype '%s'",
+      anari::toString(ANARI_LIGHT),
+      m_subtype.c_str());
+}
+
+bool UnknownLight::isValid() const
+{
+  return false;
+}
+
+void UnknownLight::warnIfUnknownObject() const
+{
+  reportMessage(ANARI_SEVERITY_WARNING,
+      "encountered unknown %s object of subtype '%s'",
+      anari::toString(ANARI_LIGHT),
+      m_subtype.c_str());
+}
+
+math::mat4 UnknownLight::xfm() const
+{
+  return math::mat4(1.f);
 }
 
 } // namespace anari_cycles
