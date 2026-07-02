@@ -4,7 +4,7 @@
 #include "Sampler.h"
 #include "Array.h"
 #include "cycles_math.h"
-#include "scene/colorspace.h"
+#include "util/colorspace.h"
 
 namespace anari_cycles {
 
@@ -86,7 +86,7 @@ void Image2D::finalize()
       || m_image->elementType() == ANARI_UFIXED8_RGB_SRGB) {
     params.colorspace = ccl::u_colorspace_srgb;
   } else {
-    params.colorspace = ccl::u_colorspace_raw;
+    params.colorspace = ccl::u_colorspace_data;
   }
   params.interpolation =
       m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
@@ -146,7 +146,7 @@ void Image1D::finalize()
   auto loader = std::make_unique<SamplerImageLoader>(m_image.ptr);
   ccl::ImageParams params;
   params.alpha_type = IMAGE_ALPHA_AUTO;
-  params.colorspace = ccl::u_colorspace_raw;
+  params.colorspace = ccl::u_colorspace_data;
   params.interpolation =
       m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
   m_handle =
@@ -191,7 +191,7 @@ void Image3D::finalize()
   auto loader = std::make_unique<SamplerImageLoader>(m_image.ptr);
   ccl::ImageParams params;
   params.alpha_type = IMAGE_ALPHA_AUTO;
-  params.colorspace = ccl::u_colorspace_raw;
+  params.colorspace = ccl::u_colorspace_data;
   params.interpolation =
       m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
   m_handle =

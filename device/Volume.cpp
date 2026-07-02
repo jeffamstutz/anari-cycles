@@ -5,7 +5,6 @@
 // std
 #include <numeric>
 // cycles
-#include "graph/node_xml.h"
 #include "scene/shader_nodes.h"
 #include "scene/volume.h"
 #include "util/path.h"

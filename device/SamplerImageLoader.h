@@ -21,12 +21,11 @@ class SamplerImageLoader : public ccl::ImageLoader
   SamplerImageLoader(Array3D *array);
   ~SamplerImageLoader();
 
-  virtual bool load_metadata(const ccl::ImageDeviceFeatures &features,
-      ccl::ImageMetaData &metadata) override;
-  virtual bool load_pixels(const ccl::ImageMetaData &metadata,
-      void *pixels,
-      const size_t pixels_size,
-      const bool associate_alpha) override;
+  virtual bool load_metadata(ccl::ImageMetaData &metadata,
+      const ccl::ImageLoaderParams &params,
+      ccl::Progress &progress) override;
+  virtual bool load_pixels(
+      const ccl::ImageMetaData &metadata, void *pixels) override;
   virtual ccl::string name() const override;
   virtual bool equals(const ccl::ImageLoader &other) const override;
   virtual void cleanup() override;

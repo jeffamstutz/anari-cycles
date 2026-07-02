@@ -15,10 +15,8 @@ VolumeImageLoader::VolumeImageLoader(const StructuredRegularField *field_ptr)
 VolumeImageLoader::~VolumeImageLoader() = default;
 
 bool VolumeImageLoader::load_metadata(
-    const ImageDeviceFeatures &features, ImageMetaData &metadata)
+    ImageMetaData &metadata, const ImageLoaderParams &, Progress &)
 {
-  metadata.byte_size = p_field->m_data->totalSize()
-      * anari::sizeOf(p_field->m_data->elementType());
   metadata.channels = 1;
   metadata.transform_3d =
       ccl::transform_scale(ccl::make_float3(1.f / p_field->m_dims[0],
@@ -50,8 +48,7 @@ bool VolumeImageLoader::load_metadata(
   return true;
 }
 
-bool VolumeImageLoader::load_pixels(
-    const ImageMetaData &, void *pixels, const size_t, const bool)
+bool VolumeImageLoader::load_pixels(const ImageMetaData &, void *pixels)
 {
   auto size = p_field->m_data->totalSize()
       * anari::sizeOf(p_field->m_data->elementType());

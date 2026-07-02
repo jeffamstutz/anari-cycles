@@ -35,18 +35,17 @@ SamplerImageLoader::SamplerImageLoader(Array3D *array) : m_array3d(array)
 
 SamplerImageLoader::~SamplerImageLoader() = default;
 
-bool SamplerImageLoader::load_metadata(
-    const ccl::ImageDeviceFeatures &features, ccl::ImageMetaData &metadata)
+bool SamplerImageLoader::load_metadata(ccl::ImageMetaData &metadata,
+    const ccl::ImageLoaderParams &,
+    ccl::Progress &)
 {
   if (!m_array1d && !m_array2d && !m_array3d)
     return false;
 
-  metadata.byte_size =
-      m_dims[0] * m_dims[1] * m_dims[2] * anari::sizeOf(m_dataType);
   metadata.channels = anariComponentsOf(m_dataType);
   metadata.width = m_dims[0];
   metadata.height = m_dims[1];
-  metadata.colorspace = ccl::u_colorspace_raw;
+  metadata.colorspace = ccl::u_colorspace_data;
 
   if (m_array3d) {
     metadata.use_transform_3d = true;
@@ -93,12 +92,13 @@ bool SamplerImageLoader::load_metadata(
 }
 
 bool SamplerImageLoader::load_pixels(
-    const ccl::ImageMetaData &, void *pixels, const size_t, const bool)
+    const ccl::ImageMetaData &metadata, void *pixels)
 {
   if (!m_array1d && !m_array2d && !m_array3d)
     return false;
   auto bytes = m_dims[0] * m_dims[1] * m_dims[2] * anari::sizeOf(m_dataType);
   std::memcpy(pixels, m_pixels, bytes);
+  metadata.conform_pixels(pixels);
   return true;
 }
 
