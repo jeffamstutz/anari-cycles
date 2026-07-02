@@ -43,7 +43,16 @@ find_package(OpenColorIO 2.2 CONFIG QUIET)
 if(NOT TARGET OpenColorIO::OpenColorIO)
   if(NOT OpenColorIO_INCLUDE_DIR OR NOT OpenColorIO_LIBRARY)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(OpenColorIO REQUIRED IMPORTED_TARGET "OpenColorIO>=2.2")
+    pkg_check_modules(OpenColorIO IMPORTED_TARGET "OpenColorIO>=2.2")
+    if(NOT OpenColorIO_FOUND)
+      message(FATAL_ERROR
+        "OpenColorIO >= 2.2 was not found (via CMake config or pkg-config). "
+        "Cycles requires it even with all optional features disabled. "
+        "Install OpenColorIO 2.2+ and add its install prefix to "
+        "CMAKE_PREFIX_PATH, or set OpenColorIO_INCLUDE_DIR and "
+        "OpenColorIO_LIBRARY manually."
+      )
+    endif()
     set(OpenColorIO_DEPENDENCY PkgConfig::OpenColorIO)
   endif()
 
@@ -63,22 +72,45 @@ set(USD_OVERRIDE_OPENCOLORIO ON)
 
 ## Cycles library ##
 
-set(WITH_LIBS_PRECOMPILED             OFF CACHE BOOL "")
-set(WITH_CYCLES_ALEMBIC               OFF CACHE BOOL "")
-set(WITH_CYCLES_DEVICE_CUDA           ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "")
-set(WITH_CYCLES_DEVICE_HIP            OFF CACHE BOOL "")
-set(WITH_CYCLES_DEVICE_OPTIX          ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "")
-set(WITH_CYCLES_EMBREE                OFF CACHE BOOL "")
-set(WITH_CYCLES_HYDRA_RENDER_DELEGATE OFF CACHE BOOL "")
-set(WITH_CYCLES_NANOVDB               OFF CACHE BOOL "")
-set(WITH_CYCLES_OPENIMAGEDENOISE      ${ANARI_CYCLES_USE_OIDN} CACHE BOOL "")
-set(WITH_CYCLES_OPENSUBDIV            OFF CACHE BOOL "")
-set(WITH_CYCLES_OPENVDB               OFF CACHE BOOL "")
-set(WITH_CYCLES_OSL                   OFF CACHE BOOL "")
-set(WITH_CYCLES_PUGIXML               ON  CACHE BOOL "")
-set(WITH_CYCLES_USD                   OFF CACHE BOOL "")
+# Cycles feature toggles. Everything defaults to OFF for a dependency-free
+# first configure; enable features individually with -DWITH_CYCLES_<X>=ON
+# (each one pulls in the corresponding external dependency).
+set(WITH_LIBS_PRECOMPILED             OFF CACHE BOOL "Use Blender's precompiled library dependencies")
+set(WITH_CYCLES_ALEMBIC               OFF CACHE BOOL "Alembic procedural support (requires Alembic)")
+set(WITH_CYCLES_DEVICE_HIP            OFF CACHE BOOL "AMD HIP device support")
+set(WITH_CYCLES_EMBREE                OFF CACHE BOOL "Embree CPU ray tracing (requires Embree >= 3.8)")
+set(WITH_CYCLES_HYDRA_RENDER_DELEGATE OFF CACHE BOOL "Hydra render delegate (requires USD)")
+set(WITH_CYCLES_NANOVDB               OFF CACHE BOOL "NanoVDB volume support (requires NanoVDB)")
+set(WITH_CYCLES_OPENSUBDIV            OFF CACHE BOOL "Subdivision surfaces (requires OpenSubdiv)")
+set(WITH_CYCLES_OPENVDB               OFF CACHE BOOL "OpenVDB volume support (requires OpenVDB)")
+set(WITH_CYCLES_OSL                   OFF CACHE BOOL "Open Shading Language support (requires OSL)")
+set(WITH_CYCLES_PUGIXML               ON  CACHE BOOL "XML support (requires pugixml)")
+set(WITH_CYCLES_USD                   OFF CACHE BOOL "USD scene support (requires USD)")
+
+# These are derived from the ANARI_CYCLES_USE_* options above, so keep them in
+# sync on reconfigure (FORCE); without it a pre-existing cache entry wins and
+# toggling the ANARI_CYCLES_USE_* option silently does nothing.
+set(WITH_CYCLES_DEVICE_CUDA      ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "" FORCE)
+set(WITH_CYCLES_DEVICE_OPTIX     ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "" FORCE)
+set(WITH_CYCLES_OPENIMAGEDENOISE ${ANARI_CYCLES_USE_OIDN}  CACHE BOOL "" FORCE)
 
 add_subdirectory(cycles)
+
+# Cycles finds TBB headers and library independently, so a CMAKE_PREFIX_PATH
+# holding several TBB copies can pair legacy (2020) headers with a oneTBB
+# (2021+) library. That configures fine but leaves unresolvable legacy task
+# symbols in every Cycles binary, so fail loudly here instead.
+if(TBB_INCLUDE_DIR AND TBB_LIBRARY AND EXISTS "${TBB_INCLUDE_DIR}/tbb/tbb_stddef.h")
+  file(REAL_PATH "${TBB_LIBRARY}" _anari_cycles_tbb_library)
+  if(_anari_cycles_tbb_library MATCHES "libtbb\\.so\\.12")
+    message(FATAL_ERROR
+      "Mismatched TBB: legacy (<= 2020) headers at ${TBB_INCLUDE_DIR} but "
+      "oneTBB library ${TBB_LIBRARY}. Point both at one install, e.g. "
+      "-DTBB_ROOT=/usr for the system oneTBB."
+    )
+  endif()
+  unset(_anari_cycles_tbb_library)
+endif()
 
 ## ANARI device library ##
 
