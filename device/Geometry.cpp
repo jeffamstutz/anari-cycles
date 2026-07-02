@@ -35,11 +35,13 @@ static void setMeshVertexNormal(
 
   ustring name = ustring("vertex.normal");
   Attribute *attr = mesh->attributes.add(ATTR_STD_VERTEX_NORMAL, name);
-  float3 *dst = attr->data_float3_for_write();
+  packed_normal *dst = attr->data_normal_for_write();
   std::transform(array->beginAs<anari_vec::float3>(),
       array->endAs<anari_vec::float3>(),
       dst,
-      [](const anari_vec::float3 &v) { return make_float3(v[0], v[1], v[2]); });
+      [](const anari_vec::float3 &v) {
+        return packed_normal(make_float3(v[0], v[1], v[2]));
+      });
 }
 
 static void setMeshVertexColor(
@@ -599,6 +601,39 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
 // Geometry definitions ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+struct UnknownGeometry : public Geometry
+{
+  UnknownGeometry(std::string_view subtype, CyclesGlobalState *s)
+      : Geometry(s), m_subtype(subtype)
+  {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "created unknown ANARI_GEOMETRY object of subtype '%s'",
+        m_subtype.c_str());
+  }
+
+  bool isValid() const override
+  {
+    return false;
+  }
+
+  void warnIfUnknownObject() const override
+  {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "encountered unknown ANARI_GEOMETRY object of subtype '%s'",
+        m_subtype.c_str());
+  }
+
+  ccl::Geometry *createCyclesGeometryNode() override
+  {
+    return nullptr;
+  }
+
+  void syncCyclesNode(ccl::Geometry *) const override {}
+
+ private:
+  std::string m_subtype;
+};
+
 Geometry::Geometry(CyclesGlobalState *s) : Object(ANARI_GEOMETRY, s) {}
 
 Geometry::~Geometry() = default;
@@ -612,7 +647,7 @@ Geometry *Geometry::createInstance(std::string_view type, CyclesGlobalState *s)
   else if (type == "sphere")
     return new Sphere(s);
   else
-    return (Geometry *)new UnknownObject(ANARI_GEOMETRY, type, s);
+    return new UnknownGeometry(type, s);
 }
 
 void Geometry::finalize()

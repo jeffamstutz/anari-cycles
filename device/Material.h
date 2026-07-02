@@ -23,6 +23,8 @@ struct Material : public Object
 
   virtual void finalize() override;
 
+  bool isValid() const override;
+
   ccl::Shader *cyclesShader();
 
  protected:
@@ -37,13 +39,14 @@ struct Material : public Object
       const char *input,
       const float3 &v,
       Sampler *sampler = nullptr);
-  
+
   // Store sampler outputs for reuse
-  struct SamplerOutputCache {
+  struct SamplerOutputCache
+  {
     Sampler::SamplerOutputs outputs;
     bool isValid{false};
   };
-  std::map<Sampler*, SamplerOutputCache> m_samplerOutputs;
+  std::map<Sampler *, SamplerOutputCache> m_samplerOutputs;
 
   ccl::Shader *m_shader{nullptr};
   ccl::ShaderGraph *m_graph{nullptr};

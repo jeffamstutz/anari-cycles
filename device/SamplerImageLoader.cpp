@@ -8,6 +8,53 @@
 
 namespace anari_cycles {
 
+namespace {
+
+bool getCyclesImageType(ANARIDataType dataType, ccl::ImageDataType &cyclesType)
+{
+  switch (dataType) {
+  case ANARI_UFIXED8:
+  case ANARI_UFIXED8_R_SRGB:
+    cyclesType = IMAGE_DATA_TYPE_BYTE;
+    return true;
+  case ANARI_UFIXED8_VEC2:
+  case ANARI_UFIXED8_VEC3:
+  case ANARI_UFIXED8_VEC4:
+  case ANARI_UFIXED8_RA_SRGB:
+  case ANARI_UFIXED8_RGB_SRGB:
+  case ANARI_UFIXED8_RGBA_SRGB:
+    cyclesType = IMAGE_DATA_TYPE_BYTE4;
+    return true;
+  case ANARI_UFIXED16:
+    cyclesType = IMAGE_DATA_TYPE_USHORT;
+    return true;
+  case ANARI_UFIXED16_VEC2:
+  case ANARI_UFIXED16_VEC3:
+  case ANARI_UFIXED16_VEC4:
+    cyclesType = IMAGE_DATA_TYPE_USHORT4;
+    return true;
+  case ANARI_FLOAT32:
+    cyclesType = IMAGE_DATA_TYPE_FLOAT;
+    return true;
+  case ANARI_FLOAT32_VEC2:
+  case ANARI_FLOAT32_VEC3:
+  case ANARI_FLOAT32_VEC4:
+    cyclesType = IMAGE_DATA_TYPE_FLOAT4;
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool isSRGB(ANARIDataType dataType)
+{
+  return dataType == ANARI_UFIXED8_R_SRGB || dataType == ANARI_UFIXED8_RA_SRGB
+      || dataType == ANARI_UFIXED8_RGB_SRGB
+      || dataType == ANARI_UFIXED8_RGBA_SRGB;
+}
+
+} // namespace
+
 SamplerImageLoader::SamplerImageLoader(Array1D *array) : m_array1d(array)
 {
   m_dataType = array->elementType();
@@ -24,69 +71,30 @@ SamplerImageLoader::SamplerImageLoader(Array2D *array) : m_array2d(array)
   m_pixels = array->data();
 }
 
-SamplerImageLoader::SamplerImageLoader(Array3D *array) : m_array3d(array)
-{
-  m_dataType = array->elementType();
-  m_dims[0] = uint32_t(array->size(0));
-  m_dims[1] = uint32_t(array->size(1));
-  m_dims[2] = uint32_t(array->size(2));
-  m_pixels = array->data();
-}
-
 SamplerImageLoader::~SamplerImageLoader() = default;
 
 bool SamplerImageLoader::load_metadata(ccl::ImageMetaData &metadata,
     const ccl::ImageLoaderParams &,
     ccl::Progress &)
 {
-  if (!m_array1d && !m_array2d && !m_array3d)
+  if (!m_array1d && !m_array2d)
     return false;
+
+  if (!getCyclesImageType(m_dataType, metadata.type)) {
+    std::cerr << "Unsupported voxel data type " << anari::toString(m_dataType)
+              << " for ANARI SamplerImageLoader" << std::endl;
+    return false;
+  }
 
   metadata.channels = anariComponentsOf(m_dataType);
   metadata.width = m_dims[0];
   metadata.height = m_dims[1];
   metadata.colorspace = ccl::u_colorspace_data;
 
-  if (m_array3d) {
-    metadata.use_transform_3d = true;
-    metadata.transform_3d = ccl::transform_scale(
-        ccl::make_float3(1.f / m_dims[0], 1.f / m_dims[1], 1.f / m_dims[2]));
-  } else {
-    metadata.use_transform_3d = false;
-  }
+  metadata.use_transform_3d = false;
 
-  switch (m_dataType) {
-  case (ANARI_UFIXED8):
-    metadata.type = IMAGE_DATA_TYPE_BYTE;
-    break;
-  case (ANARI_UFIXED8_VEC4):
-    metadata.type = IMAGE_DATA_TYPE_BYTE4;
-    break;
-  case (ANARI_UFIXED8_RGBA_SRGB):
-    metadata.type = IMAGE_DATA_TYPE_BYTE4;
+  if (isSRGB(m_dataType))
     metadata.colorspace = ccl::u_colorspace_srgb;
-    break;
-  case (ANARI_UFIXED16):
-    metadata.type = IMAGE_DATA_TYPE_USHORT;
-    break;
-  case (ANARI_UFIXED16_VEC4):
-    metadata.type = IMAGE_DATA_TYPE_USHORT4;
-    break;
-  case (ANARI_FLOAT32):
-    metadata.type = IMAGE_DATA_TYPE_FLOAT;
-    break;
-  case (ANARI_FLOAT32_VEC3):
-  case (ANARI_FLOAT32_VEC4):
-    metadata.type = IMAGE_DATA_TYPE_FLOAT4;
-    break;
-  case (ANARI_FIXED16):
-  case (ANARI_FLOAT64):
-  case (ANARI_UNKNOWN):
-  default:
-    std::cerr << "Unsupported voxel data type " << anari::toString(m_dataType)
-              << " for ANARI SamplerImageLoader" << std::endl;
-    return false;
-  }
 
   return true;
 }
@@ -94,8 +102,13 @@ bool SamplerImageLoader::load_metadata(ccl::ImageMetaData &metadata,
 bool SamplerImageLoader::load_pixels(
     const ccl::ImageMetaData &metadata, void *pixels)
 {
-  if (!m_array1d && !m_array2d && !m_array3d)
+  if (!m_array1d && !m_array2d)
     return false;
+
+  ccl::ImageDataType cyclesType;
+  if (!getCyclesImageType(m_dataType, cyclesType))
+    return false;
+
   auto bytes = m_dims[0] * m_dims[1] * m_dims[2] * anari::sizeOf(m_dataType);
   std::memcpy(pixels, m_pixels, bytes);
   metadata.conform_pixels(pixels);
@@ -112,8 +125,7 @@ bool SamplerImageLoader::equals(const ccl::ImageLoader &_other) const
   const auto *other = dynamic_cast<const SamplerImageLoader *>(&_other);
   if (!other)
     return false;
-  return m_array1d == other->m_array1d && m_array2d == other->m_array2d
-      && m_array3d == other->m_array3d;
+  return m_array1d == other->m_array1d && m_array2d == other->m_array2d;
 }
 
 void SamplerImageLoader::cleanup()

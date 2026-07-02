@@ -12,7 +12,8 @@ CyclesGlobalState::CyclesGlobalState(ANARIDevice d)
 
 void CyclesGlobalState::waitOnCurrentFrame() const
 {
-  output_driver->wait();
+  if (output_driver)
+    output_driver->wait();
 }
 
 } // namespace anari_cycles
