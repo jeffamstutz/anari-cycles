@@ -13,10 +13,10 @@
 #include "kernel/svm/types.h"
 #include "scene/background.h"
 #include "scene/camera.h"
-#include "scene/colorspace.h"
 #include "scene/shader.h"
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
+#include "util/colorspace.h"
 #include "util/math_base.h"
 #include "util/transform.h"
 #include "util/types_float3.h"
@@ -162,14 +162,14 @@ struct UnknownLight : public Light
 
 // Light definitions //////////////////////////////////////////////////////////
 
-Light::Light(CyclesGlobalState *s) : Object(ANARI_LIGHT, s)
-{
-  m_cyclesLight = s->scene->create_node<ccl::Light>();
-}
+Light::Light(CyclesGlobalState *s, ccl::Light *light)
+    : Object(ANARI_LIGHT, s), m_cyclesLight(light)
+{}
 
 Light::~Light()
 {
-  deviceState()->scene->delete_node(m_cyclesLight);
+  if (m_cyclesLight)
+    deviceState()->scene->delete_node(m_cyclesLight);
 }
 
 Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
@@ -210,7 +210,9 @@ ccl::Shader *Light::cyclesShader() const
 
 // Directional definitions ////////////////////////////////////////////////////
 
-Directional::Directional(CyclesGlobalState *s) : Light(s) {}
+Directional::Directional(CyclesGlobalState *s)
+    : Light(s, s->scene->create_node<ccl::SunLight>())
+{}
 
 void Directional::commitParameters()
 {
@@ -224,8 +226,6 @@ void Directional::commitParameters()
 
 void Directional::finalize()
 {
-  m_cyclesLight->set_light_type(LIGHT_DISTANT);
-
   if (m_prevDirection != m_direction) {
     reportMessage(ANARI_SEVERITY_PERFORMANCE_WARNING,
         "make light updates more efficient!");
@@ -247,7 +247,9 @@ math::mat4 Directional::xfm() const
 
 // HDRI definitions ///////////////////////////////////////////////////////////
 
-HDRI::HDRI(CyclesGlobalState *s) : Light(s) {}
+HDRI::HDRI(CyclesGlobalState *s)
+    : Light(s, s->scene->create_node<ccl::BackgroundLight>())
+{}
 
 HDRI::~HDRI() = default;
 
@@ -275,8 +277,6 @@ void HDRI::finalize()
 {
   Light::finalize();
 
-  // Set light type for identification purposes
-  m_cyclesLight->set_light_type(ccl::LIGHT_BACKGROUND);
   m_cyclesLight->tag_update(deviceState()->scene);
 
   if (m_cyclesShader) {
@@ -327,7 +327,7 @@ void HDRI::finalize()
     // Create environment texture node
     auto *env_tex = graph->create_node<ccl::EnvironmentTextureNode>();
     env_tex->set_projection(ccl::NODE_ENVIRONMENT_EQUIRECTANGULAR);
-    env_tex->set_colorspace(ccl::u_colorspace_raw);
+    env_tex->set_colorspace(ccl::u_colorspace_data);
     env_tex->set_tex_mapping_type(ccl::TextureMapping::VECTOR);
     env_tex->set_tex_mapping_x_mapping(ccl::TextureMapping::X);
     env_tex->set_tex_mapping_y_mapping(ccl::TextureMapping::Y);
@@ -372,7 +372,9 @@ math::mat4 HDRI::xfm() const
 
 // Point definitions //////////////////////////////////////////////////////////
 
-Point::Point(CyclesGlobalState *s) : Light(s) {}
+Point::Point(CyclesGlobalState *s)
+    : Light(s, s->scene->create_node<ccl::PointLight>())
+{}
 
 void Point::commitParameters()
 {
@@ -384,8 +386,7 @@ void Point::commitParameters()
 
 void Point::finalize()
 {
-  m_cyclesLight->set_light_type(ccl::LIGHT_POINT);
-  m_cyclesLight->set_size(m_radius);
+  static_cast<ccl::PointLight *>(m_cyclesLight)->set_radius(m_radius);
   m_cyclesLight->set_strength(
       m_intensity * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
   m_cyclesLight->tag_update(deviceState()->scene);
@@ -401,7 +402,9 @@ math::mat4 Point::xfm() const
 
 // Spot definitions ///////////////////////////////////////////////////////////
 
-Spot::Spot(CyclesGlobalState *s) : Light(s) {}
+Spot::Spot(CyclesGlobalState *s)
+    : Light(s, s->scene->create_node<ccl::SpotLight>())
+{}
 
 void Spot::commitParameters()
 {
@@ -417,10 +420,10 @@ void Spot::commitParameters()
 
 void Spot::finalize()
 {
-  m_cyclesLight->set_light_type(ccl::LIGHT_SPOT);
-  m_cyclesLight->set_size(m_radius);
-  m_cyclesLight->set_spot_angle(m_openingAngle * 2.f);
-  m_cyclesLight->set_spot_smooth(
+  auto *light = static_cast<ccl::SpotLight *>(m_cyclesLight);
+  light->set_radius(m_radius);
+  light->set_angle(m_openingAngle * 2.f);
+  light->set_smooth(
       m_openingAngle > 0.f ? m_falloffAngle / m_openingAngle : 0.f);
   m_cyclesLight->set_strength(
       m_intensity * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
@@ -437,7 +440,9 @@ math::mat4 Spot::xfm() const
 
 // Quad definitions ///////////////////////////////////////////////////////////
 
-QuadLight::QuadLight(CyclesGlobalState *s) : Light(s) {}
+QuadLight::QuadLight(CyclesGlobalState *s)
+    : Light(s, s->scene->create_node<ccl::AreaLight>())
+{}
 
 void QuadLight::commitParameters()
 {
@@ -471,12 +476,11 @@ void QuadLight::finalize()
     m_side = "front";
   }
 
-  m_cyclesLight->set_light_type(ccl::LIGHT_AREA);
-  m_cyclesLight->set_size(1.f);
-  m_cyclesLight->set_sizeu(1.f);
-  m_cyclesLight->set_sizev(1.f);
-  m_cyclesLight->set_ellipse(false);
-  m_cyclesLight->set_spread(float(M_PI));
+  auto *light = static_cast<ccl::AreaLight *>(m_cyclesLight);
+  light->set_sizeu(1.f);
+  light->set_sizev(1.f);
+  light->set_ellipse(false);
+  light->set_spread(float(M_PI));
   m_cyclesLight->set_strength(
       m_radiance * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
   m_cyclesLight->tag_update(deviceState()->scene);
@@ -505,7 +509,7 @@ math::mat4 QuadLight::xfm() const
 // UnknownLight definitions ///////////////////////////////////////////////////
 
 UnknownLight::UnknownLight(std::string_view subtype, CyclesGlobalState *s)
-    : Light(s), m_subtype(subtype)
+    : Light(s, nullptr), m_subtype(subtype)
 {
   reportMessage(ANARI_SEVERITY_WARNING,
       "created unknown %s object of subtype '%s'",

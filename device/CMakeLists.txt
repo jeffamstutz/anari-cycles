@@ -59,6 +59,12 @@ PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
 )
 
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-msse4.2" ANARI_CYCLES_HAS_SSE42)
+if(ANARI_CYCLES_HAS_SSE42)
+  target_compile_options(${PROJECT_NAME} PRIVATE -msse4.2)
+endif()
+
 if(ANARI_CYCLES_USE_OPTIX)
   target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPTIX)
 endif()

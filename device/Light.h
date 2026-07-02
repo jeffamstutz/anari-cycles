@@ -14,7 +14,7 @@ namespace anari_cycles {
 
 struct Light : public Object
 {
-  Light(CyclesGlobalState *s);
+  Light(CyclesGlobalState *s, ccl::Light *light);
   ~Light() override;
 
   static Light *createInstance(std::string_view type, CyclesGlobalState *state);

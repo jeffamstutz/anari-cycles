@@ -115,7 +115,7 @@ struct PhysicallyBasedMaterial : public Material
   std::string m_clearcoatRoughnessAttr;
   float m_clearcoatRoughness{0.f};
   std::string m_emissiveAttr;
-  float3 m_emissive{0.f};
+  float3 m_emissive{make_float3(0.f)};
   std::string m_transmissionAttr;
   float m_transmission{0.f};
   float m_ior{1.5f};

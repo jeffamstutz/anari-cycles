@@ -83,42 +83,53 @@ std::unique_ptr<ccl::Geometry> StructuredRegularField::makeCyclesGeometry()
   auto loader = std::make_unique<VolumeImageLoader>(this);
   ImageParams params;
   auto &state = *deviceState();
-  attr->data_voxel() =
+  attr->data_voxel_for_write() =
       state.scene->image_manager->add_image(std::move(loader), params, false);
 
   auto v_min = make_float3(0.5, 0.5f, 0.5f);
   auto v_max =
       make_float3(m_dims[0] - 0.5f, m_dims[1] - 0.5f, m_dims[2] - 0.5f);
-  auto vertices = std::vector<float3>{{v_min.x, v_min.y, v_max.z},
-      {v_max.x, v_min.y, v_max.z},
-      {v_min.x, v_max.y, v_max.z},
-      {v_max.x, v_max.y, v_max.z},
-      {v_min.x, v_min.y, v_min.z},
-      {v_max.x, v_min.y, v_min.z},
-      {v_min.x, v_max.y, v_min.z},
-      {v_max.x, v_max.y, v_min.z}};
+  auto vertices = std::vector<float3>{make_float3(v_min.x, v_min.y, v_max.z),
+      make_float3(v_max.x, v_min.y, v_max.z),
+      make_float3(v_min.x, v_max.y, v_max.z),
+      make_float3(v_max.x, v_max.y, v_max.z),
+      make_float3(v_min.x, v_min.y, v_min.z),
+      make_float3(v_max.x, v_min.y, v_min.z),
+      make_float3(v_min.x, v_max.y, v_min.z),
+      make_float3(v_max.x, v_max.y, v_min.z)};
   ccl::array<ccl::float3> P;
   P.resize(8);
-  std::copy(cbegin(vertices), cend(vertices), P.begin());
+  std::copy(vertices.cbegin(), vertices.cend(), P.begin());
   volume->set_verts(P);
 
-  auto faces = std::vector<int3>{{0, 1, 2},
-      {2, 1, 3},
-      {1, 5, 3},
-      {3, 5, 7},
-      {5, 4, 7},
-      {7, 4, 6},
-      {4, 0, 6},
-      {6, 0, 2},
-      {2, 3, 6},
-      {6, 3, 7},
-      {5, 4, 1},
-      {1, 4, 0}};
+  auto faces = std::vector<int3>{make_int3(0, 1, 2),
+      make_int3(2, 1, 3),
+      make_int3(1, 5, 3),
+      make_int3(3, 5, 7),
+      make_int3(5, 4, 7),
+      make_int3(7, 4, 6),
+      make_int3(4, 0, 6),
+      make_int3(6, 0, 2),
+      make_int3(2, 3, 6),
+      make_int3(6, 3, 7),
+      make_int3(5, 4, 1),
+      make_int3(1, 4, 0)};
   auto numTriangles = faces.size();
-  volume->reserve_mesh(numTriangles * 3, numTriangles);
-  for (const auto &f : faces) {
-    volume->add_triangle(f.x, f.y, f.z, 0, true);
+  volume->resize_mesh(vertices.size(), numTriangles);
+  auto *triangles = volume->get_triangles().data();
+  auto *shader = volume->get_shader().data();
+  auto *smooth = volume->get_smooth().data();
+  for (size_t i = 0; i < numTriangles; ++i) {
+    const auto &f = faces[i];
+    triangles[3 * i + 0] = f.x;
+    triangles[3 * i + 1] = f.y;
+    triangles[3 * i + 2] = f.z;
+    shader[i] = 0;
+    smooth[i] = true;
   }
+  volume->tag_triangles_modified();
+  volume->tag_shader_modified();
+  volume->tag_smooth_modified();
 
   std::vector<float3> face_normals;
   for (const auto &f : faces) {

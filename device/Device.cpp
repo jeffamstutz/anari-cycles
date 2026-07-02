@@ -349,8 +349,8 @@ void CyclesDevice::initDevice()
   } else {
     state.scene->integrator->set_denoiser_type(ccl::DENOISER_OPENIMAGEDENOISE);
   }
-  state.scene->integrator->set_use_denoise_pass_albedo(true);
-  state.scene->integrator->set_use_denoise_pass_normal(true);
+  state.scene->integrator->set_denoiser_passes(
+      ccl::DENOISER_PASS_ALBEDO | ccl::DENOISER_PASS_NORMAL);
   state.scene->integrator->set_denoise_use_gpu(false);
   state.scene->integrator->set_denoiser_prefilter(ccl::DENOISER_PREFILTER_FAST);
   state.scene->integrator->set_denoiser_quality(ccl::DENOISER_QUALITY_BALANCED);

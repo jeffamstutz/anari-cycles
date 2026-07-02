@@ -16,13 +16,12 @@ class VolumeImageLoader : public ccl::ImageLoader
   VolumeImageLoader(const StructuredRegularField *field_ptr);
   ~VolumeImageLoader();
 
-  virtual bool load_metadata(const ccl::ImageDeviceFeatures &features,
-      ccl::ImageMetaData &metadata) override;
+  virtual bool load_metadata(ccl::ImageMetaData &metadata,
+      const ccl::ImageLoaderParams &params,
+      ccl::Progress &progress) override;
 
-  virtual bool load_pixels(const ccl::ImageMetaData &metadata,
-      void *pixels,
-      const size_t pixels_size,
-      const bool associate_alpha) override;
+  virtual bool load_pixels(
+      const ccl::ImageMetaData &metadata, void *pixels) override;
 
   virtual string name() const override;
 

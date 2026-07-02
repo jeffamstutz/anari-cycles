@@ -35,13 +35,11 @@ static void setMeshVertexNormal(
 
   ustring name = ustring("vertex.normal");
   Attribute *attr = mesh->attributes.add(ATTR_STD_VERTEX_NORMAL, name);
-  float3 *dst = attr->data_float3();
+  float3 *dst = attr->data_float3_for_write();
   std::transform(array->beginAs<anari_vec::float3>(),
       array->endAs<anari_vec::float3>(),
       dst,
-      [](const anari_vec::float3 &v) {
-        return make_float3(v[0], v[1], v[2]);
-      });
+      [](const anari_vec::float3 &v) { return make_float3(v[0], v[1], v[2]); });
 }
 
 static void setMeshVertexColor(
@@ -56,7 +54,7 @@ static void setMeshVertexColor(
   Attribute *attr = mesh->attributes.add(
       ustring("vertex.color"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
   attr->std = ATTR_STD_VERTEX_COLOR;
-  float3 *dst = attr->data_float3();
+  float3 *dst = attr->data_float3_for_write();
   for (uint32_t i = 0; i < array->size(); i++) {
     auto c = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
         type, src, i);
@@ -76,7 +74,7 @@ static void setMeshVertexAttribute(ccl::Mesh *mesh,
 
   Attribute *attr =
       mesh->attributes.add(ustring(name), ccl::TypeFloat4, ATTR_ELEMENT_VERTEX);
-  float4 *dst = attr->data_float4();
+  float4 *dst = attr->data_float4_for_write();
   for (size_t i = 0; i < array->size(); i++) {
     auto r = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
         type, src, i);
@@ -198,17 +196,27 @@ void Triangle::setPrimitiveIndex(ccl::Mesh *mesh) const
 {
   const uint32_t numTriangles =
       m_index ? m_index->size() : m_vertexPosition->size() / 3;
-  mesh->reserve_mesh(numTriangles * 3, numTriangles);
+  mesh->resize_mesh(m_vertexPosition->size(), numTriangles);
+  auto *triangles = mesh->get_triangles().data();
+  auto *shader = mesh->get_shader().data();
+  auto *smooth = mesh->get_smooth().data();
   for (uint32_t i = 0; i < numTriangles; i++) {
     if (m_index) {
       auto *idxs = m_index->beginAs<anari_vec::uint3>();
-      mesh->add_triangle(
-          idxs[i][0], idxs[i][1], idxs[i][2], 0 /* local shaderID */, true);
+      triangles[3 * i + 0] = idxs[i][0];
+      triangles[3 * i + 1] = idxs[i][1];
+      triangles[3 * i + 2] = idxs[i][2];
     } else {
-      mesh->add_triangle(
-          3 * i + 0, 3 * i + 1, 3 * i + 2, 0 /* local shaderID */, true);
+      triangles[3 * i + 0] = 3 * i + 0;
+      triangles[3 * i + 1] = 3 * i + 1;
+      triangles[3 * i + 2] = 3 * i + 2;
     }
+    shader[i] = 0;
+    smooth[i] = true;
   }
+  mesh->tag_triangles_modified();
+  mesh->tag_shader_modified();
+  mesh->tag_smooth_modified();
 }
 
 // Quad definitions ///////////////////////////////////////////////////////////
@@ -314,9 +322,7 @@ void Quad::setVertexPosition(ccl::Mesh *mesh) const
   std::transform(m_vertexPosition->beginAs<anari_vec::float3>(),
       m_vertexPosition->endAs<anari_vec::float3>(),
       dst,
-      [](const anari_vec::float3 &v) {
-        return make_float3(v[0], v[1], v[2]);
-      });
+      [](const anari_vec::float3 &v) { return make_float3(v[0], v[1], v[2]); });
   mesh->set_verts(P);
 }
 
@@ -325,7 +331,10 @@ void Quad::setPrimitiveIndex(ccl::Mesh *mesh) const
   const uint32_t numQuads =
       m_index ? m_index->size() : m_vertexPosition->size() / 4;
   const uint32_t numTriangles = numQuads * 2;
-  mesh->reserve_mesh(m_vertexPosition->size(), numTriangles);
+  mesh->resize_mesh(m_vertexPosition->size(), numTriangles);
+  auto *triangles = mesh->get_triangles().data();
+  auto *shader = mesh->get_shader().data();
+  auto *smooth = mesh->get_smooth().data();
   for (uint32_t i = 0; i < numQuads; i++) {
     uint32_t v0, v1, v2, v3;
     if (m_index) {
@@ -340,9 +349,21 @@ void Quad::setPrimitiveIndex(ccl::Mesh *mesh) const
       v2 = 4 * i + 2;
       v3 = 4 * i + 3;
     }
-    mesh->add_triangle(v0, v1, v2, 0, true);
-    mesh->add_triangle(v0, v2, v3, 0, true);
+    const uint32_t triangle = 2 * i;
+    triangles[3 * triangle + 0] = v0;
+    triangles[3 * triangle + 1] = v1;
+    triangles[3 * triangle + 2] = v2;
+    triangles[3 * triangle + 3] = v0;
+    triangles[3 * triangle + 4] = v2;
+    triangles[3 * triangle + 5] = v3;
+    shader[triangle + 0] = 0;
+    shader[triangle + 1] = 0;
+    smooth[triangle + 0] = true;
+    smooth[triangle + 1] = true;
   }
+  mesh->tag_triangles_modified();
+  mesh->tag_shader_modified();
+  mesh->tag_smooth_modified();
 }
 
 // Sphere definitions /////////////////////////////////////////////////////////
@@ -496,7 +517,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
     Attribute *attr = pc->attributes.add(
         ustring("vertex.color"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
-    dstC = attr->data_float3();
+    dstC = attr->data_float3_for_write();
     srcC = m_vertexColor->data();
     srcTC = m_vertexColor->elementType();
   }
@@ -505,7 +526,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
     Attribute *attr = pc->attributes.add(
         ustring("vertex.attribute0"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
-    dst0 = attr->data_float3();
+    dst0 = attr->data_float3_for_write();
     src0 = m_vertexAttribute0->data();
     srcT0 = m_vertexAttribute0->elementType();
   }
@@ -514,7 +535,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
     Attribute *attr = pc->attributes.add(
         ustring("vertex.attribute1"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
-    dst1 = attr->data_float3();
+    dst1 = attr->data_float3_for_write();
     src1 = m_vertexAttribute1->data();
     srcT1 = m_vertexAttribute1->elementType();
   }
@@ -523,7 +544,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
     Attribute *attr = pc->attributes.add(
         ustring("vertex.attribute2"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
-    dst2 = attr->data_float3();
+    dst2 = attr->data_float3_for_write();
     src2 = m_vertexAttribute2->data();
     srcT2 = m_vertexAttribute2->elementType();
   }
@@ -532,7 +553,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
     Attribute *attr = pc->attributes.add(
         ustring("vertex.attribute3"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
     attr->std = ATTR_STD_VERTEX_COLOR;
-    dst3 = attr->data_float3();
+    dst3 = attr->data_float3_for_write();
     src3 = m_vertexAttribute3->data();
     srcT3 = m_vertexAttribute3->elementType();
   }
