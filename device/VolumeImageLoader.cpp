@@ -15,45 +15,16 @@ VolumeImageLoader::VolumeImageLoader(const StructuredRegularField *field_ptr)
 VolumeImageLoader::~VolumeImageLoader() = default;
 
 bool VolumeImageLoader::load_metadata(
-    ImageMetaData &metadata, const ImageLoaderParams &, Progress &)
+    ImageMetaData &, const ImageLoaderParams &, Progress &)
 {
-  metadata.channels = 1;
-  metadata.transform_3d =
-      ccl::transform_scale(ccl::make_float3(1.f / p_field->m_dims[0],
-          1.f / p_field->m_dims[1],
-          1.f / p_field->m_dims[2]));
-  metadata.use_transform_3d = true;
-
-  metadata.width = p_field->m_dims[0];
-  metadata.height = p_field->m_dims[1];
-
-  switch (p_field->m_data->elementType()) {
-  case (ANARI_UFIXED8):
-    metadata.type = IMAGE_DATA_TYPE_BYTE;
-    break;
-  case (ANARI_UFIXED16):
-    metadata.type = IMAGE_DATA_TYPE_USHORT;
-    break;
-  case (ANARI_FLOAT32):
-    metadata.type = IMAGE_DATA_TYPE_FLOAT;
-    break;
-  case (ANARI_FIXED16):
-  case (ANARI_FLOAT64):
-  case (ANARI_UNKNOWN):
-    // TODO throw error
-    std::cerr << "Unsupported voxel data type\n";
-    return false;
-  }
-
-  return true;
+  // Cycles removed dense 3D image textures. Structured volumes need a
+  // NanoVDB-backed loader rather than copying voxels into a 2D image buffer.
+  return false;
 }
 
-bool VolumeImageLoader::load_pixels(const ImageMetaData &, void *pixels)
+bool VolumeImageLoader::load_pixels(const ImageMetaData &, void *)
 {
-  auto size = p_field->m_data->totalSize()
-      * anari::sizeOf(p_field->m_data->elementType());
-  memcpy(pixels, p_field->m_data->data(), size);
-  return true;
+  return false;
 }
 
 string VolumeImageLoader::name() const

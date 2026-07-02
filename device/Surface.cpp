@@ -31,7 +31,7 @@ void Surface::finalize()
 
   if (m_geometryHandleChanged) {
     cleanupCyclesNode();
-    if (m_geometry)
+    if (m_geometry && m_geometry->isValid())
       m_cyclesGeometryNode = m_geometry->createCyclesGeometryNode();
   }
 

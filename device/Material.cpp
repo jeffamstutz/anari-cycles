@@ -227,14 +227,12 @@ void PhysicallyBasedMaterial::makeGraph()
 
 // Material definitions ///////////////////////////////////////////////////////
 
-Material::Material(CyclesGlobalState *s) : Object(ANARI_MATERIAL, s)
-{
-  m_shader = s->scene->create_node<ccl::Shader>();
-}
+Material::Material(CyclesGlobalState *s) : Object(ANARI_MATERIAL, s) {}
 
 Material::~Material()
 {
-  deviceState()->scene->delete_node(cyclesShader());
+  if (m_shader)
+    deviceState()->scene->delete_node(m_shader);
 }
 
 Material *Material::createInstance(std::string_view type, CyclesGlobalState *s)
@@ -252,6 +250,11 @@ void Material::finalize()
   Object::finalize();
 }
 
+bool Material::isValid() const
+{
+  return m_shader && m_graph;
+}
+
 ccl::Shader *Material::cyclesShader()
 {
   return m_shader;
@@ -260,6 +263,9 @@ ccl::Shader *Material::cyclesShader()
 void Material::makeGraph()
 {
   m_samplerOutputs.clear();
+
+  if (!m_shader)
+    m_shader = deviceState()->scene->create_node<ccl::Shader>();
 
   auto graph = std::make_unique<ccl::ShaderGraph>();
   m_graph = graph.get();
