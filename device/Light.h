@@ -34,6 +34,10 @@ struct Light : public Object
   // which Cycles multiplies on top of the shader's emission.
   void attachUnitEmissionShader();
 
+  // The light color scaled by a photometric factor, in the form Cycles
+  // expects for ccl::Light::strength.
+  ccl::float3 scaledColor(float scale) const;
+
   ccl::Light *m_cyclesLight{nullptr};
   ccl::Shader *m_cyclesShader{nullptr};
 
