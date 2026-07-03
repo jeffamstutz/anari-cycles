@@ -5,10 +5,9 @@
 
 #include "Array.h"
 #include "Object.h"
-
-#include "Material.h"
-// ours
-#include "scene/geometry.h"
+// cycles
+#include "scene/image.h"
+#include "scene/shader_graph.h"
 
 namespace anari_cycles {
 
@@ -22,8 +21,16 @@ struct SpatialField : public Object
 
   void finalize() override;
 
-  virtual std::unique_ptr<ccl::Geometry> makeCyclesGeometry() = 0;
+  // Add shader nodes to 'graph' that sample this field at the current
+  // (object space) shading position. Returns the scalar field value output,
+  // or nullptr if sampling nodes cannot be created.
+  virtual ccl::ShaderOutput *createCyclesSamplingNodes(
+      ccl::ShaderGraph *graph) = 0;
+
   virtual box3 bounds() const = 0;
+
+  // Suggested object-space ray marching step size.
+  virtual float stepSize() const = 0;
 };
 
 // Subtypes ///////////////////////////////////////////////////////////////////
@@ -31,27 +38,29 @@ struct SpatialField : public Object
 struct StructuredRegularField : public SpatialField
 {
   StructuredRegularField(CyclesGlobalState *s);
+  ~StructuredRegularField() override;
 
   void commitParameters() override;
   void finalize() override;
 
-  std::unique_ptr<ccl::Geometry> makeCyclesGeometry() override;
+  ccl::ShaderOutput *createCyclesSamplingNodes(ccl::ShaderGraph *graph) override;
 
   box3 bounds() const override;
+  float stepSize() const override;
   bool isValid() const override;
 
+ private:
   anari_vec::uint3 m_dims{0u};
-  anari_vec::float3 m_origin;
-  anari_vec::float3 m_spacing;
-  anari_vec::float3 m_coordUpperBound;
+  anari_vec::float3 m_origin{0.f, 0.f, 0.f};
+  anari_vec::float3 m_spacing{1.f, 1.f, 1.f};
+  bool m_linearFilter{true};
 
-  std::vector<float> m_generatedCellWidths;
-  std::vector<int> m_generatedBlockBounds;
-  std::vector<int> m_generatedBlockLevels;
-  std::vector<int> m_generatedBlockOffsets;
-  std::vector<float> m_generatedBlockScalars;
+  // Z slices tiled into a 2D image atlas (see VolumeImageLoader)
+  uint32_t m_tilesX{1};
+  uint32_t m_tilesY{1};
+  ccl::ImageHandle m_atlas;
 
-  helium::IntrusivePtr<Array3D> m_data;
+  helium::ChangeObserverPtr<Array3D> m_data;
 };
 
 } // namespace anari_cycles
