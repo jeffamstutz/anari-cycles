@@ -5,7 +5,6 @@
 // cycles
 #include "scene/background.h"
 #include "scene/integrator.h"
-#include "scene/light.h"
 #include "scene/pass.h"
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
@@ -29,9 +28,9 @@ void Renderer::commitParameters()
   auto ambientColor = getParam<math::float3>("ambientColor", {1.f, 1.f, 1.f});
   m_needsUpdateStatus.ambientLight |= (m_ambientColor != ambientColor);
   m_ambientColor = ambientColor;
-  auto ambientIntensity = 0.1f * getParam<float>("ambientRadiance", 1.f);
-  m_needsUpdateStatus.ambientLight |= (m_ambientIntensity != ambientIntensity);
-  m_ambientIntensity = ambientIntensity;
+  auto ambientRadiance = getParam<float>("ambientRadiance", 1.f);
+  m_needsUpdateStatus.ambientLight |= (m_ambientRadiance != ambientRadiance);
+  m_ambientRadiance = ambientRadiance;
 
   m_runAsync = getParam<bool>("runAsync", true);
 
@@ -42,34 +41,23 @@ void Renderer::commitParameters()
 
 void Renderer::rebuildDefaultBackgroundShader()
 {
-  // setup background shader. Only keep background color for the background
-  // itself and kill illumination from other rays. Ambient lighting is handled
-  // through the default light shader.
+  // Setup the background shader. Camera rays see the 'background' color,
+  // while all other rays see 'ambientColor * ambientRadiance' — a uniform
+  // dome implementing KHR_RENDERER_AMBIENT_LIGHT.
   auto graph = std::make_unique<ccl::ShaderGraph>();
 
   auto *lightPath = graph->create_node<ccl::LightPathNode>();
+
+  auto *mix = graph->create_node<ccl::MixNode>();
+  mix->set_mix_type(ccl::NODE_MIX_BLEND);
+  mix->set_color1(m_ambientRadiance
+      * ccl::make_float3(m_ambientColor.x, m_ambientColor.y, m_ambientColor.z));
+  mix->set_color2(ccl::make_float3(
+      m_backgroundColor.x, m_backgroundColor.y, m_backgroundColor.z));
+  graph->connect(lightPath->output("Is Camera Ray"), mix->input("Fac"));
+
   auto *bg = graph->create_node<ccl::BackgroundNode>();
-
-  auto *mathR = graph->create_node<ccl::MathNode>();
-  mathR->set_math_type(ccl::NODE_MATH_MULTIPLY);
-  mathR->set_value1(m_backgroundColor.x);
-  graph->connect(lightPath->output("Is Camera Ray"), mathR->input("Value2"));
-
-  auto *mathG = graph->create_node<ccl::MathNode>();
-  mathG->set_math_type(ccl::NODE_MATH_MULTIPLY);
-  mathG->set_value1(m_backgroundColor.y);
-  graph->connect(lightPath->output("Is Camera Ray"), mathG->input("Value2"));
-
-  auto *mathB = graph->create_node<ccl::MathNode>();
-  mathB->set_math_type(ccl::NODE_MATH_MULTIPLY);
-  mathB->set_value1(m_backgroundColor.z);
-  graph->connect(lightPath->output("Is Camera Ray"), mathB->input("Value2"));
-
-  auto *combineColor = graph->create_node<ccl::CombineColorNode>();
-  graph->connect(mathR->output("Value"), combineColor->input("Red"));
-  graph->connect(mathG->output("Value"), combineColor->input("Green"));
-  graph->connect(mathB->output("Value"), combineColor->input("Blue"));
-  graph->connect(combineColor->output("Color"), bg->input("Color"));
+  graph->connect(mix->output("Color"), bg->input("Color"));
 
   graph->connect(bg->output("Background"), graph->output()->input("Surface"));
 
@@ -78,33 +66,12 @@ void Renderer::rebuildDefaultBackgroundShader()
   deviceState()->scene->default_background->tag_update(deviceState()->scene);
 }
 
-void Renderer::rebuildDefaultLightShader()
-{
-  auto graph = std::make_unique<ccl::ShaderGraph>();
-
-  auto emission = graph->create_node<ccl::EmissionNode>();
-  emission->set_color(
-      ccl::make_float3(m_ambientColor.x, m_ambientColor.y, m_ambientColor.z));
-  emission->set_strength(m_ambientIntensity * 40.0f);
-
-  graph->connect(
-      emission->output("Emission"), graph->output()->input("Surface"));
-
-  deviceState()->scene->default_light->name = "default_anari_light";
-  deviceState()->scene->default_light->set_graph(std::move(graph));
-
-  deviceState()->scene->default_light->tag_update(deviceState()->scene);
-}
-
 void Renderer::makeRendererCurrent()
 {
-  if (m_needsUpdateStatus.background) {
+  if (m_needsUpdateStatus.background || m_needsUpdateStatus.ambientLight) {
     m_needsUpdateStatus.background = false;
-    rebuildDefaultBackgroundShader();
-  }
-  if (m_needsUpdateStatus.ambientLight) {
     m_needsUpdateStatus.ambientLight = false;
-    rebuildDefaultLightShader();
+    rebuildDefaultBackgroundShader();
   }
 #if defined(WITH_OPTIX) || defined(WITH_OPENIMAGEDENOISE)
   if (m_needsUpdateStatus.denoise) {

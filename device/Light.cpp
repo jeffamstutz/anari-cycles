@@ -170,6 +170,31 @@ Light::~Light()
 {
   if (m_cyclesLight)
     deviceState()->scene->delete_node(m_cyclesLight);
+  if (m_cyclesShader) {
+    m_cyclesShader->dereference();
+    deviceState()->scene->delete_node(m_cyclesShader);
+  }
+}
+
+void Light::attachUnitEmissionShader()
+{
+  auto graph = std::make_unique<ccl::ShaderGraph>();
+
+  auto *emission = graph->create_node<ccl::EmissionNode>();
+  emission->set_color(ccl::one_float3());
+  emission->set_strength(1.f);
+  graph->connect(
+      emission->output("Emission"), graph->output()->input("Surface"));
+
+  m_cyclesShader = deviceState()->scene->create_node<ccl::Shader>();
+  m_cyclesShader->name = "anari_light_emission";
+  m_cyclesShader->set_graph(std::move(graph));
+  m_cyclesShader->reference();
+  m_cyclesShader->tag_update(deviceState()->scene);
+
+  ccl::array<ccl::Node *> usedShaders;
+  usedShaders.push_back_slow(m_cyclesShader);
+  m_cyclesLight->set_used_shaders(usedShaders);
 }
 
 Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
@@ -212,7 +237,9 @@ ccl::Shader *Light::cyclesShader() const
 
 Directional::Directional(CyclesGlobalState *s)
     : Light(s, s->scene->create_node<ccl::SunLight>())
-{}
+{
+  attachUnitEmissionShader();
+}
 
 void Directional::commitParameters()
 {
@@ -374,7 +401,9 @@ math::mat4 HDRI::xfm() const
 
 Point::Point(CyclesGlobalState *s)
     : Light(s, s->scene->create_node<ccl::PointLight>())
-{}
+{
+  attachUnitEmissionShader();
+}
 
 void Point::commitParameters()
 {
@@ -404,7 +433,9 @@ math::mat4 Point::xfm() const
 
 Spot::Spot(CyclesGlobalState *s)
     : Light(s, s->scene->create_node<ccl::SpotLight>())
-{}
+{
+  attachUnitEmissionShader();
+}
 
 void Spot::commitParameters()
 {
@@ -442,7 +473,9 @@ math::mat4 Spot::xfm() const
 
 QuadLight::QuadLight(CyclesGlobalState *s)
     : Light(s, s->scene->create_node<ccl::AreaLight>())
-{}
+{
+  attachUnitEmissionShader();
+}
 
 void QuadLight::commitParameters()
 {

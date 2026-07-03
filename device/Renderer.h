@@ -27,11 +27,10 @@ struct Renderer : public Object
 
   math::float4 m_backgroundColor;
   math::float3 m_ambientColor;
-  float m_ambientIntensity;
+  float m_ambientRadiance;
   bool m_runAsync{false};
   bool m_denoise{false};
 
-  void rebuildDefaultLightShader();
   void rebuildDefaultBackgroundShader();
 };
 
