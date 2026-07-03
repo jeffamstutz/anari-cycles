@@ -8,6 +8,8 @@
 #include "scene/pass.h"
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
+// std
+#include <algorithm>
 
 namespace anari_cycles {
 
@@ -33,6 +35,8 @@ void Renderer::commitParameters()
   m_ambientRadiance = ambientRadiance;
 
   m_runAsync = getParam<bool>("runAsync", true);
+
+  m_pixelSamples = std::max(1, getParam<int>("pixelSamples", 1));
 
   auto denoise = getParam<bool>("denoise", false);
   m_needsUpdateStatus.denoise |= (m_denoise != denoise);
@@ -107,6 +111,11 @@ void Renderer::makeRendererCurrent()
 bool Renderer::runAsync() const
 {
   return m_runAsync;
+}
+
+int Renderer::pixelSamples() const
+{
+  return m_pixelSamples;
 }
 
 } // namespace anari_cycles

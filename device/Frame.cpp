@@ -124,11 +124,16 @@ void Frame::renderFrame()
     state.buffer_params.full_width = m_frameData.size.x;
     state.buffer_params.full_height = m_frameData.size.y;
 
+    // The sample target must be in the (delayed) reset params -- a later
+    // set_samples() would be clobbered when the reset is applied on the
+    // render thread (Session::delayed_reset_buffer_params()).
+    state.session_params.samples = m_renderer->pixelSamples();
     state.session->reset(state.session_params, state.buffer_params);
     state.sessionSamples = 0;
   }
 
-  state.session->set_samples(++state.sessionSamples);
+  state.sessionSamples += m_renderer->pixelSamples();
+  state.session->set_samples(state.sessionSamples);
   state.session->start();
 
   // NOTE(jda): Everything is still implemented as asynchronous, but on some

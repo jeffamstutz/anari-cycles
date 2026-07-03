@@ -69,6 +69,17 @@
           "description": "ambient light intensity"
         },
         {
+          "name": "pixelSamples",
+          "types": [
+            "ANARI_INT32"
+          ],
+          "tags": [],
+          "default": [
+            1
+          ],
+          "description": "samples accumulated per anariRenderFrame() call"
+        },
+        {
           "name": "runAsync",
           "types": [
             "ANARI_BOOL"

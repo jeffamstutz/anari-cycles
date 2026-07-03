@@ -527,7 +527,6 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
   if (m_vertexAttribute0) {
     Attribute *attr = pc->attributes.add(
         ustring("vertex.attribute0"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
-    attr->std = ATTR_STD_VERTEX_COLOR;
     dst0 = attr->data_float3_for_write();
     src0 = m_vertexAttribute0->data();
     srcT0 = m_vertexAttribute0->elementType();
@@ -536,7 +535,6 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
   if (m_vertexAttribute1) {
     Attribute *attr = pc->attributes.add(
         ustring("vertex.attribute1"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
-    attr->std = ATTR_STD_VERTEX_COLOR;
     dst1 = attr->data_float3_for_write();
     src1 = m_vertexAttribute1->data();
     srcT1 = m_vertexAttribute1->elementType();
@@ -545,7 +543,6 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
   if (m_vertexAttribute2) {
     Attribute *attr = pc->attributes.add(
         ustring("vertex.attribute2"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
-    attr->std = ATTR_STD_VERTEX_COLOR;
     dst2 = attr->data_float3_for_write();
     src2 = m_vertexAttribute2->data();
     srcT2 = m_vertexAttribute2->elementType();
@@ -554,7 +551,6 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
   if (m_vertexAttribute3) {
     Attribute *attr = pc->attributes.add(
         ustring("vertex.attribute3"), ccl::TypeColor, ATTR_ELEMENT_VERTEX);
-    attr->std = ATTR_STD_VERTEX_COLOR;
     dst3 = attr->data_float3_for_write();
     src3 = m_vertexAttribute3->data();
     srcT3 = m_vertexAttribute3->elementType();

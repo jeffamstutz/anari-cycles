@@ -17,6 +17,7 @@ struct Renderer : public Object
   void makeRendererCurrent();
 
   bool runAsync() const;
+  int pixelSamples() const;
 
  private:
   struct {
@@ -30,6 +31,7 @@ struct Renderer : public Object
   float m_ambientRadiance;
   bool m_runAsync{false};
   bool m_denoise{false};
+  int m_pixelSamples{1};
 
   void rebuildDefaultBackgroundShader();
 };
