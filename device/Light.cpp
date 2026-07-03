@@ -127,7 +127,7 @@ struct Spot : public Light
   math::float3 m_position{0.f, 0.f, 0.f};
   math::float3 m_direction{0.f, 0.f, -1.f};
   float m_intensity{1.f};
-  float m_openingAngle{M_PI_4};
+  float m_openingAngle{M_PI};
   float m_falloffAngle{0.1f};
   float m_radius{0.f};
 };
@@ -197,6 +197,11 @@ void Light::attachUnitEmissionShader()
   m_cyclesLight->set_used_shaders(usedShaders);
 }
 
+ccl::float3 Light::scaledColor(float scale) const
+{
+  return scale * ccl::make_float3(m_color[0], m_color[1], m_color[2]);
+}
+
 Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
 {
   if (type == "directional")
@@ -260,8 +265,7 @@ void Directional::finalize()
     m_prevDirection = m_direction;
   }
 
-  m_cyclesLight->set_strength(
-      m_irradiance * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
+  m_cyclesLight->set_strength(scaledColor(m_irradiance));
   m_cyclesLight->tag_update(deviceState()->scene);
 
   Light::finalize();
@@ -409,15 +413,19 @@ void Point::commitParameters()
 {
   Light::commitParameters();
   m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
-  m_intensity = getParam<float>("intensity", 1.f);
+  m_intensity = std::clamp(getParam<float>("intensity", 1.f),
+      0.f,
+      std::numeric_limits<float>::max());
   m_radius = getParam<float>("radius", 0.f);
 }
 
 void Point::finalize()
 {
   static_cast<ccl::PointLight *>(m_cyclesLight)->set_radius(m_radius);
-  m_cyclesLight->set_strength(
-      m_intensity * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
+  // ANARI 'intensity' is radiant intensity (W/sr); Cycles interprets strength
+  // as total radiant flux (W) when 'normalize' is on (the default), so the
+  // isotropic conversion is flux = 4*pi * intensity.
+  m_cyclesLight->set_strength(scaledColor(4.f * float(M_PI) * m_intensity));
   m_cyclesLight->tag_update(deviceState()->scene);
   Light::finalize();
 }
@@ -443,8 +451,13 @@ void Spot::commitParameters()
   m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
   m_direction =
       math::normalize(getParam<math::float3>("direction", {0.f, 0.f, -1.f}));
-  m_intensity = getParam<float>("intensity", 1.f);
-  m_openingAngle = getParam<float>("openingAngle", float(M_PI_4));
+  m_intensity = std::clamp(getParam<float>("intensity", 1.f),
+      0.f,
+      std::numeric_limits<float>::max());
+  // ANARI 'openingAngle' is the full apex angle of the cone (default pi),
+  // matching the Cycles spot 'angle' socket.
+  m_openingAngle =
+      std::clamp(getParam<float>("openingAngle", float(M_PI)), 0.f, float(M_PI));
   m_falloffAngle = getParam<float>("falloffAngle", 0.1f);
   m_radius = getParam<float>("radius", 0.f);
 }
@@ -453,11 +466,16 @@ void Spot::finalize()
 {
   auto *light = static_cast<ccl::SpotLight *>(m_cyclesLight);
   light->set_radius(m_radius);
-  light->set_angle(m_openingAngle * 2.f);
+  light->set_angle(m_openingAngle);
+  // Cycles 'smooth' is the fraction of the cone half-angle over which
+  // intensity falls off toward the rim; ANARI 'falloffAngle' is that
+  // region's angular size.
+  const float halfAngle = 0.5f * m_openingAngle;
   light->set_smooth(
-      m_openingAngle > 0.f ? m_falloffAngle / m_openingAngle : 0.f);
-  m_cyclesLight->set_strength(
-      m_intensity * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
+      halfAngle > 0.f ? std::clamp(m_falloffAngle / halfAngle, 0.f, 1.f) : 0.f);
+  // Same W/sr -> W conversion as point lights (the cone only masks emission;
+  // Cycles does not renormalize flux into the cone).
+  m_cyclesLight->set_strength(scaledColor(4.f * float(M_PI) * m_intensity));
   m_cyclesLight->tag_update(deviceState()->scene);
   Light::finalize();
 }
@@ -514,8 +532,12 @@ void QuadLight::finalize()
   light->set_sizev(1.f);
   light->set_ellipse(false);
   light->set_spread(float(M_PI));
-  m_cyclesLight->set_strength(
-      m_radiance * ccl::make_float3(m_color[0], m_color[1], m_color[2]));
+  // With normalize off, the emitted radiance is strength/pi independent of
+  // the light's area (kernel eval_fac = invarea/pi with invarea = 1), so
+  // ANARI 'radiance' maps to strength = pi * radiance. This also keeps the
+  // radiance invariant under instance scaling.
+  light->set_normalize(false);
+  m_cyclesLight->set_strength(scaledColor(float(M_PI) * m_radiance));
   m_cyclesLight->tag_update(deviceState()->scene);
   Light::finalize();
 }
