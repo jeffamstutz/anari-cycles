@@ -28,6 +28,12 @@ struct Light : public Object
   virtual math::mat4 xfm() const = 0;
 
  protected:
+  // Give the underlying Cycles light its own unit-emission shader so it is
+  // decoupled from scene->default_light (whose stock emission strength is 0).
+  // The light's actual color/intensity is applied via ccl::Light::strength,
+  // which Cycles multiplies on top of the shader's emission.
+  void attachUnitEmissionShader();
+
   ccl::Light *m_cyclesLight{nullptr};
   ccl::Shader *m_cyclesShader{nullptr};
 
