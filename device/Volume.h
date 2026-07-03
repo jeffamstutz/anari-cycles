@@ -3,7 +3,6 @@
 
 #pragma once
 
-// #include "Array.h"
 #include "Object.h"
 #include "SpatialField.h"
 
@@ -16,7 +15,9 @@ struct Volume : public Object
 
   static Volume *createInstance(std::string_view subtype, CyclesGlobalState *s);
 
-  virtual std::unique_ptr<ccl::Geometry> makeCyclesGeometry() = 0;
+  // Scene-owned geometry node rendered for this volume (may be null when the
+  // volume is invalid).
+  virtual ccl::Geometry *cyclesGeometry() const = 0;
   virtual box3 bounds() const = 0;
 };
 
@@ -25,40 +26,32 @@ struct Volume : public Object
 struct TransferFunction1D : public Volume
 {
   TransferFunction1D(CyclesGlobalState *s);
-  virtual ~TransferFunction1D() override;
+  ~TransferFunction1D() override;
 
   void commitParameters() override;
+  void finalize() override;
   bool isValid() const override;
 
-  std::unique_ptr<ccl::Geometry> makeCyclesGeometry() override;
+  ccl::Geometry *cyclesGeometry() const override;
 
   box3 bounds() const override;
 
  private:
-  helium::IntrusivePtr<SpatialField> m_field;
+  void syncCyclesMesh();
+  void rebuildCyclesShaderGraph();
+
+  helium::ChangeObserverPtr<SpatialField> m_field;
 
   box3 m_bounds;
 
   helium::box1 m_valueRange{0.f, 1.f};
-  float m_densityScale{1.f};
+  float m_unitDistance{1.f};
 
-  helium::IntrusivePtr<Array1D> m_colorData;
-  helium::IntrusivePtr<Array1D> m_opacityData;
-
-  std::vector<anari_vec::float4> m_rgbaMap;
+  helium::ChangeObserverPtr<Array1D> m_colorData;
+  helium::ChangeObserverPtr<Array1D> m_opacityData;
 
   ccl::Shader *m_shader{nullptr};
-  ccl::ShaderGraph *m_graph{nullptr};
-
-  // Nodes
-  ccl::AttributeNode *m_attributeNode{nullptr};
-  ccl::MapRangeNode *m_mapRangeNode{nullptr};
-  ccl::RGBRampNode *m_rgbRampNode{nullptr};
-  ccl::MathNode *m_mathNode{nullptr};
-
-  ccl::PrincipledVolumeNode *m_volumeNode{nullptr};
-
-  ccl::Shader *cyclesShader();
+  ccl::Mesh *m_mesh{nullptr};
 };
 
 } // namespace anari_cycles

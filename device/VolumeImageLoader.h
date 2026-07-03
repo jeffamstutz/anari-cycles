@@ -1,38 +1,49 @@
-/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
- *
- * SPDX-License-Identifier: Apache-2.0 */
+// Copyright 2025 Jefferson Amstutz
+// SPDX-License-Identifier: Apache-2.0
 
 #pragma once
 
-#include "SpatialField.h"
+#include "Array.h"
 // cycles
 #include "scene/image.h"
 
 namespace anari_cycles {
 
+// Loads the voxels of a structuredRegular spatial field as a tiled 2D float
+// atlas (one Z slice per tile). Cycles removed dense 3D image textures and
+// this build has no NanoVDB/OpenVDB support, so the shader graph built by
+// StructuredRegularField reconstructs trilinear 3D sampling from two bilinear
+// atlas lookups.
 class VolumeImageLoader : public ccl::ImageLoader
 {
  public:
-  VolumeImageLoader(const StructuredRegularField *field_ptr);
-  ~VolumeImageLoader();
+  VolumeImageLoader(Array3D *data, uint32_t tilesX, uint32_t tilesY);
+  ~VolumeImageLoader() override;
 
-  virtual bool load_metadata(ccl::ImageMetaData &metadata,
+  bool load_metadata(ccl::ImageMetaData &metadata,
       const ccl::ImageLoaderParams &params,
       ccl::Progress &progress) override;
 
-  virtual bool load_pixels(
-      const ccl::ImageMetaData &metadata, void *pixels) override;
+  bool load_pixels(const ccl::ImageMetaData &metadata, void *pixels) override;
 
-  virtual string name() const override;
+  ccl::string name() const override;
 
-  virtual bool equals(const ccl::ImageLoader &other) const override;
+  bool equals(const ccl::ImageLoader &other) const override;
 
-  virtual void cleanup() override;
+  void cleanup() override;
 
-  virtual bool is_vdb_loader() const override;
+  bool is_vdb_loader() const override;
 
- protected:
-  const StructuredRegularField *p_field;
+ private:
+  // Raw pointer (not IntrusivePtr): the StructuredRegularField that created
+  // this loader owns both the array reference and the image handle, so the
+  // array outlives any load done through this loader. Holding a reference
+  // here would keep the array alive past device release and trip helium's
+  // leak detection (same pattern as SamplerImageLoader).
+  Array3D *m_data{nullptr};
+  uint32_t m_dims[3]{0, 0, 0};
+  uint32_t m_tilesX{1};
+  uint32_t m_tilesY{1};
 };
 
 } // namespace anari_cycles
