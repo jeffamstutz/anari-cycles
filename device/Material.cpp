@@ -15,7 +15,7 @@ static bool isAttributeSource(const std::string &attributeSource)
 {
   return attributeSource == "color" || attributeSource == "attribute0"
       || attributeSource == "attribute1" || attributeSource == "attribute2"
-      || attributeSource == "attribute3";
+      || attributeSource == "attribute3" || attributeSource == "primitiveId";
 }
 
 // MatteMaterial definitions //////////////////////////////////////////////////
@@ -396,11 +396,18 @@ void PhysicallyBasedMaterial::finalize()
     }
   }
 
+  // Both normal maps use the standard Cycles UV tangent + sign attributes
+  // that the geometry uploads from ANARI 'vertex.tangent'/'faceVarying.tangent'
+  // (see Geometry.cpp). base=displaced makes the node request exactly those
+  // (the default 'original' base requests *_UNDISPLACED variants meant for
+  // displacement, which nothing provides here); without displacement both
+  // bases are equivalent.
   if (m_normalSampler) {
     auto samplerOutputs = getSamplerOutputs(m_normalSampler.get());
     if (samplerOutputs.colorOutput) {
       auto *normalMap = m_graph->create_node<ccl::NormalMapNode>();
       normalMap->set_space(ccl::NODE_NORMAL_MAP_TANGENT);
+      normalMap->set_base(ccl::NODE_NORMAL_MAP_BASE_DISPLACED);
       normalMap->set_attribute(ccl::ustring(""));
       m_graph->connect(samplerOutputs.colorOutput, normalMap->input("Color"));
       m_graph->connect(normalMap->output("Normal"), m_bsdf->input("Normal"));
@@ -412,6 +419,7 @@ void PhysicallyBasedMaterial::finalize()
     if (samplerOutputs.colorOutput) {
       auto *normalMap = m_graph->create_node<ccl::NormalMapNode>();
       normalMap->set_space(ccl::NODE_NORMAL_MAP_TANGENT);
+      normalMap->set_base(ccl::NODE_NORMAL_MAP_BASE_DISPLACED);
       normalMap->set_attribute(ccl::ustring(""));
       m_graph->connect(samplerOutputs.colorOutput, normalMap->input("Color"));
       m_graph->connect(
@@ -504,6 +512,12 @@ void Material::makeGraph()
   attr3->name = "attr3";
   attr3->set_attribute(ccl::ustring("vertex.attribute3"));
 
+  // 'primitiveId' is uploaded by every geometry as a per-primitive float
+  // attribute (see writePrimitiveId() in Geometry.cpp).
+  auto *attrPid = m_graph->create_node<ccl::AttributeNode>();
+  attrPid->name = "attrPid";
+  attrPid->set_attribute(ccl::ustring("primitiveId"));
+
   auto *vertexColor_sc = m_graph->create_node<ccl::SeparateColorNode>();
   m_graph->connect(
       vertexColor->output("Color"), vertexColor_sc->input("Color"));
@@ -525,11 +539,13 @@ void Material::makeGraph()
   m_attributeNodes.attr1 = attr1->output("Color");
   m_attributeNodes.attr2 = attr2->output("Color");
   m_attributeNodes.attr3 = attr3->output("Color");
+  m_attributeNodes.attrPid = attrPid->output("Color");
   m_attributeNodes.attrC_sc = vertexColor_sc->output("Red");
   m_attributeNodes.attr0_sc = attr0_sc->output("Red");
   m_attributeNodes.attr1_sc = attr1_sc->output("Red");
   m_attributeNodes.attr2_sc = attr2_sc->output("Red");
   m_attributeNodes.attr3_sc = attr3_sc->output("Red");
+  m_attributeNodes.attrPid_sc = attrPid->output("Fac");
 }
 
 void Material::connectAttributes(ccl::ShaderNode *bsdf,
@@ -659,6 +675,10 @@ void Material::connectAttributesImpl(ccl::ShaderNode *bsdf,
   } else if (attributeSource == "attribute3") {
     m_graph->connect(
         singleComponent ? m_attributeNodes.attr3_sc : m_attributeNodes.attr3,
+        shaderInput);
+  } else if (attributeSource == "primitiveId") {
+    m_graph->connect(singleComponent ? m_attributeNodes.attrPid_sc
+                                     : m_attributeNodes.attrPid,
         shaderInput);
   } else {
     // Use constant value

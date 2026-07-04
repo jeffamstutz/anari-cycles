@@ -71,11 +71,13 @@ struct Material : public Object
     ccl::ShaderOutput *attr1{nullptr};
     ccl::ShaderOutput *attr2{nullptr};
     ccl::ShaderOutput *attr3{nullptr};
+    ccl::ShaderOutput *attrPid{nullptr};
     ccl::ShaderOutput *attrC_sc{nullptr};
     ccl::ShaderOutput *attr0_sc{nullptr};
     ccl::ShaderOutput *attr1_sc{nullptr};
     ccl::ShaderOutput *attr2_sc{nullptr};
     ccl::ShaderOutput *attr3_sc{nullptr};
+    ccl::ShaderOutput *attrPid_sc{nullptr};
   } m_attributeNodes;
 
   // Get or create sampler outputs for a given sampler

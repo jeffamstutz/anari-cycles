@@ -3,7 +3,7 @@
   "name": "KHR_GEOMETRY_CONE",
   "type": "extension",
   "dependencies": [],
-  "comment": "Local copy of the ANARI registry extension, trimmed to the parameters anari-cycles actually reads. Parameters removed here are unimplemented; they will be restored when the corresponding feature tasks land. Keep info.name equal to the official extension name so introspection still advertises it. 'radius' is a device addition (not in the KHR_GEOMETRY_CONE registry): the fallback radius used when 'vertex.radius' is absent, matching the helide reference device."
+  "comment": "Local copy of the ANARI registry extension. All parameters of this extension are implemented by anari-cycles as of the geometry-attribute-completion task. Caveats: 'primitive.id' values are stored as float32 Cycles attributes (exact below 2^24); on 'curve', the implicit primitiveId of chained segments merged into one Cycles curve reports the run's first segment (merging is disabled whenever any primitive.* array or primitive.id is set, making values exact). Keep info.name equal to the official extension name so introspection advertises it."
  },
  "objects": [
   {
@@ -18,6 +18,144 @@
      ],
      "tags": [],
      "description": "optional object name"
+    },
+    {
+     "name": "color",
+     "types": [
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "uniform color"
+    },
+    {
+     "name": "attribute0",
+     "types": [
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "uniform attribute0"
+    },
+    {
+     "name": "attribute1",
+     "types": [
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "uniform attribute1"
+    },
+    {
+     "name": "attribute2",
+     "types": [
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "uniform attribute2"
+    },
+    {
+     "name": "attribute3",
+     "types": [
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "uniform attribute3"
+    },
+    {
+     "name": "primitive.color",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_UFIXED8",
+      "ANARI_UFIXED8_VEC2",
+      "ANARI_UFIXED8_VEC3",
+      "ANARI_UFIXED8_VEC4",
+      "ANARI_UFIXED8_R_SRGB",
+      "ANARI_UFIXED8_RA_SRGB",
+      "ANARI_UFIXED8_RGB_SRGB",
+      "ANARI_UFIXED8_RGBA_SRGB",
+      "ANARI_UFIXED16",
+      "ANARI_UFIXED16_VEC2",
+      "ANARI_UFIXED16_VEC3",
+      "ANARI_UFIXED16_VEC4",
+      "ANARI_UFIXED32",
+      "ANARI_UFIXED32_VEC2",
+      "ANARI_UFIXED32_VEC3",
+      "ANARI_UFIXED32_VEC4",
+      "ANARI_FLOAT32",
+      "ANARI_FLOAT32_VEC2",
+      "ANARI_FLOAT32_VEC3",
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "per primitive color"
+    },
+    {
+     "name": "primitive.attribute0",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32",
+      "ANARI_FLOAT32_VEC2",
+      "ANARI_FLOAT32_VEC3",
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "per primitive attribute0"
+    },
+    {
+     "name": "primitive.attribute1",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32",
+      "ANARI_FLOAT32_VEC2",
+      "ANARI_FLOAT32_VEC3",
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "per primitive attribute1"
+    },
+    {
+     "name": "primitive.attribute2",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32",
+      "ANARI_FLOAT32_VEC2",
+      "ANARI_FLOAT32_VEC3",
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "per primitive attribute2"
+    },
+    {
+     "name": "primitive.attribute3",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32",
+      "ANARI_FLOAT32_VEC2",
+      "ANARI_FLOAT32_VEC3",
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [],
+     "description": "per primitive attribute3"
+    },
+    {
+     "name": "primitive.id",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_UINT32",
+      "ANARI_UINT64"
+     ],
+     "tags": [],
+     "description": "primitive id"
     },
     {
      "name": "vertex.position",
