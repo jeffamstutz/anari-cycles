@@ -33,7 +33,7 @@
       "khr_light_spot",
       "cycles_khr_renderer_ambient_light",
       "khr_material_matte",
-      "khr_material_physically_based",
+      "cycles_khr_material_physically_based",
       "khr_renderer_background_color",
       "khr_renderer_denoise",
       "khr_sampler_image2d",

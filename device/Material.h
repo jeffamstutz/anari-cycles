@@ -39,6 +39,14 @@ struct Material : public Object
       const char *input,
       const float3 &v,
       Sampler *sampler = nullptr);
+  // Wire the "Alpha" input of 'bsdf' honoring alphaMode/alphaCutoff semantics
+  // (opaque: force 1, blend: pass through, mask: threshold against cutoff).
+  void connectAlpha(ccl::ShaderNode *bsdf,
+      const std::string &attributeSource,
+      float opacity,
+      Sampler *sampler,
+      helium::AlphaMode mode,
+      float cutoff);
 
   // Store sampler outputs for reuse
   struct SamplerOutputCache
@@ -49,6 +57,12 @@ struct Material : public Object
   std::map<Sampler *, SamplerOutputCache> m_samplerOutputs;
 
   ccl::Shader *m_shader{nullptr};
+  // Owned between makeGraph() and Material::finalize(), which hands the
+  // completed graph to m_shader. Building the whole graph before
+  // Shader::set_graph() matters: set_graph() snapshots e.g.
+  // has_volume_connected (which gates KERNEL_FEATURE_VOLUME), so nodes
+  // connected after it would not be accounted for.
+  std::unique_ptr<ccl::ShaderGraph> m_graphOwned;
   ccl::ShaderGraph *m_graph{nullptr};
   struct AttributeNodes
   {
