@@ -6,6 +6,7 @@
 #include "anari/anari_cpp.hpp"
 // cycles
 #include "scene/background.h"
+#include "scene/film.h"
 #include "scene/integrator.h"
 #include "scene/shader_nodes.h"
 
@@ -273,6 +274,10 @@ CyclesDevice::~CyclesDevice()
 {
   if (m_initialized) {
     auto &state = *deviceState();
+    // Stop the completion-callback thread first, while the device, session
+    // and scene are all still fully alive: a queued callback must never be
+    // invoked with (or release its frame against) a half-destructed device.
+    state.output_driver->shutdownCallbackThread();
     state.session->cancel(true);
     state.session->wait();
     state.commitBuffer.clear();
@@ -296,6 +301,19 @@ int CyclesDevice::deviceGetProperty(const char *name,
     return 1;
   }
   return 0;
+}
+
+int CyclesDevice::frameReady(ANARIFrame f, ANARIWaitMask m)
+{
+  // Deliberately bypasses helium::BaseDevice::frameReady(), which holds the
+  // frame's per-object mutex for the duration of the call. With
+  // KHR_FRAME_COMPLETION_CALLBACK, frameReady(ANARI_WAIT) must block until
+  // the frame's completion callback has returned, and the spec explicitly
+  // permits the callback to make ANARI calls (including on this very frame)
+  // -- those calls acquire the same per-object mutex, so holding it while
+  // blocked here would deadlock them. Frame::frameReady() only touches the
+  // FrameOutputDriver, which has its own internal synchronization.
+  return helium::referenceFromHandle<helium::BaseFrame>(f).frameReady(m);
 }
 
 void CyclesDevice::initDevice()
@@ -387,6 +405,29 @@ void CyclesDevice::initDevice()
   ccl::Pass *pass_object_id = state.scene->create_node<ccl::Pass>();
   pass_object_id->set_name(OIIO::ustring("object_id"));
   pass_object_id->set_type(ccl::PASS_OBJECT_ID);
+
+  // Value-AOV passes backing the 'primitiveId' and 'instanceId' frame
+  // channels. Cycles has no built-in passes for these, so every surface
+  // material graph carries OutputAOV nodes writing them (see
+  // Material::makeGraph()); the pass names here must match the AOV node
+  // names (Film::get_aov_offset() pairs them up by name).
+  ccl::Pass *pass_primitive_id = state.scene->create_node<ccl::Pass>();
+  pass_primitive_id->set_name(OIIO::ustring("primitiveId"));
+  pass_primitive_id->set_type(ccl::PASS_AOV_VALUE);
+
+  ccl::Pass *pass_instance_id = state.scene->create_node<ccl::Pass>();
+  pass_instance_id->set_name(OIIO::ustring("instanceId"));
+  pass_instance_id->set_type(ccl::PASS_AOV_VALUE);
+
+  // AOVs are written on every hit that still has PATH_RAY_TRANSPARENT_
+  // BACKGROUND set and PATH_RAY_SINGLE_PASS_DONE unset. With the Cycles
+  // default pass_alpha_threshold (0.5), a hit on a transparent surface
+  // (alphaMode 'mask'/'blend') does not set SINGLE_PASS_DONE, so the next
+  // surface would write the id AOVs *again* and the accumulated pass would
+  // hold the sum of two ids. Threshold 0 makes the very first hit final for
+  // all single-write passes, matching the first-hit semantics of the
+  // depth/objectId channels.
+  state.scene->film->set_pass_alpha_threshold(0.f);
 
   auto output_driver = std::make_unique<FrameOutputDriver>();
   state.output_driver = output_driver.get();

@@ -21,6 +21,7 @@ Instance *Instance::createInstance(
 Instance::Instance(CyclesGlobalState *s, std::string_view subtype)
     : Object(ANARI_INSTANCE, s),
       m_xfmArray(this),
+      m_idArray(this),
       m_motionTransform(this),
       m_motionScale(this),
       m_motionRotation(this),
@@ -44,6 +45,26 @@ void Instance::commitParameters()
       ? getParamObject<Array1D>("transform")
       : nullptr;
   m_xfm = getParam<helium::mat4>("transform", linalg::identity);
+
+  // KHR_FRAME_CHANNEL_INSTANCE_ID: uniform 'id', or (for 'transform' arrays)
+  // one id per transform.
+  m_id = getParam<uint32_t>("id", ~0u);
+  m_idArray =
+      m_subtype == Subtype::TRANSFORM ? getParamObject<Array1D>("id") : nullptr;
+  if (m_idArray && m_idArray->elementType() != ANARI_UINT32) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'id' array on transform instance ignored -- unsupported element "
+        "type %s (must be ANARI_UINT32)",
+        anari::toString(m_idArray->elementType()));
+    m_idArray = nullptr;
+  }
+  if (m_idArray && m_xfmArray && m_idArray->size() != m_xfmArray->size()) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'id' array size (%zu) does not match 'transform' array size (%zu) "
+        "-- transforms without an id entry use the uniform 'id'",
+        m_idArray->size(),
+        m_xfmArray->size());
+  }
 
   m_motionTransform = nullptr;
   m_motionScale = nullptr;
@@ -114,13 +135,19 @@ bool Instance::addInstanceObjectsToCyclesScene(const helium::box1 &shutter)
 
   if (!isMotionSubtype()) {
     if (!m_xfmArray)
-      m_group->addGroupToCurrentCyclesScene(m_xfm);
+      m_group->addGroupToCurrentCyclesScene(m_xfm, nullptr, m_id);
     else {
       auto *begin = m_xfmArray->beginAs<helium::mat4>();
       auto *end = m_xfmArray->endAs<helium::mat4>();
-      std::for_each(begin, end, [&](const helium::mat4 &m) {
-        m_group->addGroupToCurrentCyclesScene(m);
-      });
+      const uint32_t *ids =
+          m_idArray ? m_idArray->beginAs<uint32_t>() : nullptr;
+      const size_t numIds = m_idArray ? m_idArray->size() : 0;
+      for (auto *m = begin; m != end; ++m) {
+        const size_t i = size_t(m - begin);
+        // Per-transform id when provided, else the uniform 'id' fallback.
+        const uint32_t id = (ids && i < numIds) ? ids[i] : m_id;
+        m_group->addGroupToCurrentCyclesScene(*m, nullptr, id);
+      }
     }
     return false;
   }
@@ -132,13 +159,15 @@ bool Instance::addInstanceObjectsToCyclesScene(const helium::box1 &shutter)
   // start so no motion-blur machinery gets enabled.
   const auto steps = bakeMotionOnShutter(m_motion, shutter);
   if (steps.empty()) {
-    m_group->addGroupToCurrentCyclesScene(motionPoseAt(shutter.lower));
+    m_group->addGroupToCurrentCyclesScene(
+        motionPoseAt(shutter.lower), nullptr, m_id);
     return false;
   }
 
   // MOTION_POSITION_START contract: the object's base transform is the pose
   // at the shutter start (== motion step 0).
-  m_group->addGroupToCurrentCyclesScene(motionPoseAt(shutter.lower), &steps);
+  m_group->addGroupToCurrentCyclesScene(
+      motionPoseAt(shutter.lower), &steps, m_id);
   return true;
 }
 

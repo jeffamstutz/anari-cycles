@@ -37,6 +37,10 @@ struct CyclesGlobalState : public helium::BaseGlobalDeviceState
 
   FrameOutputDriver *output_driver{nullptr};
 
+  // Public handle of _this_ device instance -- passed to frame completion
+  // callbacks (KHR_FRAME_COMPLETION_CALLBACK).
+  ANARIDevice anariDevice{nullptr};
+
   ccl::ColorNode *backgroundColor{nullptr};
   ccl::ColorNode *ambientColor{nullptr};
   ccl::ValueNode *ambientIntensity{nullptr};

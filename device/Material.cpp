@@ -538,6 +538,33 @@ void Material::makeGraph()
   auto *attr3_sc = m_graph->create_node<ccl::SeparateColorNode>();
   m_graph->connect(attr3->output("Color"), attr3_sc->input("Color"));
 
+  // Frame channels 'primitiveId'/'instanceId' (KHR_FRAME_CHANNEL_*): every
+  // surface material writes two value AOVs that back the equally named
+  // PASS_AOV_VALUE passes created at device init. Both ids are stored
+  // biased by +1 so untouched pixels (background, volumes -- Cycles does
+  // not run AOV nodes in volume shading) read back 0, which the frame
+  // extraction maps to ~0u ("no id"); see
+  // FrameOutputDriver::extractAovIdPass().
+  auto *pidBias = m_graph->create_node<ccl::MathNode>();
+  pidBias->name = "pidBias";
+  pidBias->set_math_type(ccl::NODE_MATH_ADD);
+  m_graph->connect(attrPid->output("Fac"), pidBias->input("Value1"));
+  pidBias->input("Value2")->set(1.f);
+
+  auto *aovPid = m_graph->create_node<ccl::OutputAOVNode>();
+  aovPid->set_name(ccl::ustring("primitiveId"));
+  m_graph->connect(pidBias->output("Value"), aovPid->input("Value"));
+
+  // 'instanceId' is a per-object (not per-geometry) float attribute set in
+  // Group::addGroupToCurrentCyclesScene(), already stored biased by +1.
+  auto *attrIid = m_graph->create_node<ccl::AttributeNode>();
+  attrIid->name = "attrIid";
+  attrIid->set_attribute(ccl::ustring("instanceId"));
+
+  auto *aovIid = m_graph->create_node<ccl::OutputAOVNode>();
+  aovIid->set_name(ccl::ustring("instanceId"));
+  m_graph->connect(attrIid->output("Fac"), aovIid->input("Value"));
+
   m_attributeNodes.attrC = vertexColor->output("Color");
   m_attributeNodes.attr0 = attr0->output("Color");
   m_attributeNodes.attr1 = attr1->output("Color");
