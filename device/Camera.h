@@ -20,7 +20,7 @@ struct Camera : public Object {
   virtual void setCameraCurrent(int width, int height);
 
  protected:
-  ccl::Transform getMatrix() const;
+  virtual ccl::Transform getMatrix() const;
 
   anari_vec::float3 m_pos;
   anari_vec::float3 m_dir;
