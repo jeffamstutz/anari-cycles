@@ -84,6 +84,16 @@ inline float degrees(float radians)
   return radians * 180.f / float(M_PI);
 }
 
+inline math::mat4 cyclesToMat4(const ccl::Transform &t)
+{
+  math::mat4 m;
+  m[0] = math::float4(t.x.x, t.y.x, t.z.x, 0.f);
+  m[1] = math::float4(t.x.y, t.y.y, t.z.y, 0.f);
+  m[2] = math::float4(t.x.z, t.y.z, t.z.z, 0.f);
+  m[3] = math::float4(t.x.w, t.y.w, t.z.w, 1.f);
+  return m;
+}
+
 inline ccl::Transform mat4ToCycles(const math::mat4 &m)
 {
   ccl::Transform xfm;

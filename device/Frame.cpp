@@ -120,9 +120,14 @@ void Frame::renderFrame()
       return;
     }
 
-    if (m_worldLastChanged < state.objectUpdates.lastSceneChange) {
+    // Motion instances bake their motion keys against the camera shutter
+    // interval, so a shutter change invalidates the baked scene objects even
+    // when the world itself did not change.
+    const helium::box1 shutter = m_camera->shutter();
+    if (m_worldLastChanged < state.objectUpdates.lastSceneChange
+        || m_world->motionRequiresRebake(shutter)) {
       reportMessage(ANARI_SEVERITY_DEBUG, "frame -- updating world");
-      m_world->setCyclesWorldObjects();
+      m_world->setCyclesWorldObjects(shutter);
       // scene->objects no longer references retired nodes -- safe to delete
       state.purgeRetiredGeometry();
       m_worldLastChanged = helium::newTimeStamp();

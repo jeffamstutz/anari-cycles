@@ -70,7 +70,7 @@ void World::finalize()
   Object::finalize();
 }
 
-void World::setCyclesWorldObjects()
+void World::setCyclesWorldObjects(const helium::box1 &shutter)
 {
   auto &state = *deviceState();
   auto *scene = state.scene;
@@ -90,15 +90,25 @@ void World::setCyclesWorldObjects()
     scene->delete_nodes(oldObjects);
   }
 
-  m_zeroInstance->addInstanceObjectsToCyclesScene();
+  bool objectsHaveMotion = false;
+
+  objectsHaveMotion |= m_zeroInstance->addInstanceObjectsToCyclesScene(shutter);
 
   if (m_instanceData) {
     auto **instancesBegin = (Instance **)m_instanceData->handlesBegin();
     auto **instancesEnd = (Instance **)m_instanceData->handlesEnd();
-    std::for_each(instancesBegin, instancesEnd, [](Instance *i) {
-      i->addInstanceObjectsToCyclesScene();
+    std::for_each(instancesBegin, instancesEnd, [&](Instance *i) {
+      if (!i->isValid()) {
+        i->warnIfUnknownObject();
+        return;
+      }
+      objectsHaveMotion |= i->addInstanceObjectsToCyclesScene(shutter);
     });
   }
+
+  state.objectsHaveMotion = objectsHaveMotion;
+  state.syncIntegratorMotionBlur();
+  m_bakedShutter = shutter;
 
   // Handle HDRI light management after objects are set up
   setupHDRIBackground();
@@ -107,6 +117,34 @@ void World::setCyclesWorldObjects()
   scene->geometry_manager->tag_update(scene, GeometryManager::UPDATE_ALL);
   scene->light_manager->tag_update(scene, ccl::LightManager::UPDATE_ALL);
   scene->shader_manager->tag_update(scene, ShaderManager::UPDATE_ALL);
+}
+
+bool World::motionRequiresRebake(const helium::box1 &shutter)
+{
+  const bool shutterChanged = shutter.lower != m_bakedShutter.lower
+      || shutter.upper != m_bakedShutter.upper;
+  if (!shutterChanged)
+    return false;
+  if (hasMotionInstances())
+    return true;
+  // Without motion instances the baked objects do not depend on the shutter;
+  // record it so static worlds don't rescan their instances every frame.
+  // NOTE: multiple frames rendering this world with cameras whose shutters
+  // differ will rebake on every alternation when motion instances exist --
+  // correct, but pathological for multi-view apps.
+  m_bakedShutter = shutter;
+  return false;
+}
+
+bool World::hasMotionInstances() const
+{
+  if (!m_instanceData)
+    return false;
+  auto **instancesBegin = (Instance **)m_instanceData->handlesBegin();
+  auto **instancesEnd = (Instance **)m_instanceData->handlesEnd();
+  return std::any_of(instancesBegin, instancesEnd, [](const Instance *i) {
+    return i->isValid() && i->hasMotion();
+  });
 }
 
 Light *World::findFirstHDRILight() const
@@ -134,7 +172,7 @@ Light *World::findFirstHDRILight() const
 
     for (auto **instPtr = instancesBegin; instPtr != instancesEnd; ++instPtr) {
       Instance *instance = *instPtr;
-      if (instance && instance->group()) {
+      if (instance && instance->isValid() && instance->group()) {
         auto *group = instance->group();
         if (group->lightData()) {
           auto **lightsBegin = (Light **)group->lightData()->handlesBegin();

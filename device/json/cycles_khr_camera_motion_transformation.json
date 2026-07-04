@@ -1,0 +1,196 @@
+{
+ "info": {
+  "name": "KHR_CAMERA_MOTION_TRANSFORMATION",
+  "type": "extension",
+  "dependencies": [],
+  "comment": "Local copy of the ANARI registry extension. The registry file attaches the parameters to an ANARI_CAMERA named 'default', which the query codegen would append as a bogus 'default' camera subtype; instead they are declared here on the camera subtypes this device actually exposes. Keep info.name equal to the official extension name so introspection still advertises it."
+ },
+ "objects": [
+  {
+   "type": "ANARI_CAMERA",
+   "name": "perspective",
+   "parameters": [
+    {
+     "name": "motion.transform",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_MAT4"
+     ],
+     "tags": [],
+     "description": "world space transforms uniformly distributed in time"
+    },
+    {
+     "name": "motion.scale",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [],
+     "description": "scaling uniformly distributed in time"
+    },
+    {
+     "name": "motion.rotation",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_QUAT_IJKW"
+     ],
+     "tags": [],
+     "description": "rotations uniformly distributed in time"
+    },
+    {
+     "name": "motion.translation",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [],
+     "description": "translations uniformly distributed in time"
+    },
+    {
+     "name": "time",
+     "types": [
+      "ANARI_FLOAT32_BOX1"
+     ],
+     "tags": [],
+     "default": [
+      0.0,
+      1.0
+     ],
+     "description": "time associated with the first and last entry in the motion key arrays"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_CAMERA",
+   "name": "orthographic",
+   "parameters": [
+    {
+     "name": "motion.transform",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_MAT4"
+     ],
+     "tags": [],
+     "description": "world space transforms uniformly distributed in time"
+    },
+    {
+     "name": "motion.scale",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [],
+     "description": "scaling uniformly distributed in time"
+    },
+    {
+     "name": "motion.rotation",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_QUAT_IJKW"
+     ],
+     "tags": [],
+     "description": "rotations uniformly distributed in time"
+    },
+    {
+     "name": "motion.translation",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [],
+     "description": "translations uniformly distributed in time"
+    },
+    {
+     "name": "time",
+     "types": [
+      "ANARI_FLOAT32_BOX1"
+     ],
+     "tags": [],
+     "default": [
+      0.0,
+      1.0
+     ],
+     "description": "time associated with the first and last entry in the motion key arrays"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_CAMERA",
+   "name": "omnidirectional",
+   "parameters": [
+    {
+     "name": "motion.transform",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_MAT4"
+     ],
+     "tags": [],
+     "description": "world space transforms uniformly distributed in time"
+    },
+    {
+     "name": "motion.scale",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [],
+     "description": "scaling uniformly distributed in time"
+    },
+    {
+     "name": "motion.rotation",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_QUAT_IJKW"
+     ],
+     "tags": [],
+     "description": "rotations uniformly distributed in time"
+    },
+    {
+     "name": "motion.translation",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [],
+     "description": "translations uniformly distributed in time"
+    },
+    {
+     "name": "time",
+     "types": [
+      "ANARI_FLOAT32_BOX1"
+     ],
+     "tags": [],
+     "default": [
+      0.0,
+      1.0
+     ],
+     "description": "time associated with the first and last entry in the motion key arrays"
+    }
+   ]
+  }
+ ]
+}

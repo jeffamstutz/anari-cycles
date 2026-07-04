@@ -6,6 +6,8 @@
 #include "Light.h"
 #include "Surface.h"
 #include "Volume.h"
+// std
+#include <vector>
 
 namespace anari_cycles {
 
@@ -16,7 +18,13 @@ struct Group : public Object
 
   void commitParameters() override;
 
-  void addGroupToCurrentCyclesScene(const math::mat4 &xfm) const;
+  // Instantiate the group's contents as Cycles scene objects under 'xfm'.
+  // 'motion', when given (size >= 2), is a per-object motion-transform array
+  // uniformly spanning the camera shutter interval (Cycles kernel ray-time
+  // [0,1]); it applies to surfaces and volumes -- Cycles has no motion blur
+  // for lights, which use 'xfm' (the shutter-start pose) only.
+  void addGroupToCurrentCyclesScene(const math::mat4 &xfm,
+      const std::vector<ccl::Transform> *motion = nullptr) const;
 
   box3 bounds() const override;
 

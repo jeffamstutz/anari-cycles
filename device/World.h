@@ -15,7 +15,20 @@ struct World : public Object
   void commitParameters() override;
   void finalize() override;
 
-  void setCyclesWorldObjects();
+  // (Re)build scene->objects. 'shutter' is the camera shutter interval that
+  // motion instances bake their motion keys onto (see MotionTrack.h); it is
+  // ignored by static instances, so worlds without motion instances need no
+  // rebuild when the shutter changes (see hasMotionInstances()).
+  void setCyclesWorldObjects(const helium::box1 &shutter);
+
+  // 'true' when any committed instance carries motion keys -- i.e. the baked
+  // scene objects depend on the camera shutter interval.
+  bool hasMotionInstances() const;
+
+  // 'true' when rendering with 'shutter' requires rebuilding the scene
+  // objects because motion instances were baked against a different shutter
+  // interval.
+  bool motionRequiresRebake(const helium::box1 &shutter);
 
   Light *findFirstHDRILight() const;
 
@@ -30,6 +43,11 @@ struct World : public Object
   helium::IntrusivePtr<Instance> m_zeroInstance;
 
   helium::IntrusivePtr<ObjectArray> m_instanceData;
+
+  // Camera shutter interval the motion instances were last baked against
+  // (kept on the world -- not per frame -- so multiple frames/cameras
+  // sharing this world detect a mismatch and trigger a rebake).
+  helium::box1 m_bakedShutter{0.f, 0.f};
 };
 
 } // namespace anari_cycles

@@ -5,7 +5,9 @@
 #include "Frame.h"
 // cycles
 #include "scene/geometry.h"
+#include "scene/integrator.h"
 #include "scene/light.h"
+#include "scene/object.h"
 #include "scene/scene.h"
 
 namespace anari_cycles {
@@ -46,6 +48,21 @@ CyclesGlobalState::SceneLock::~SceneLock()
     m_state.sceneLockOwner.store(std::thread::id(), std::memory_order_release);
     m_state.scene->mutex.unlock();
   }
+}
+
+void CyclesGlobalState::syncIntegratorMotionBlur()
+{
+  const bool motionBlur = objectsHaveMotion || cameraHasMotion;
+  if (scene->integrator->get_motion_blur() == motionBlur)
+    return;
+
+  scene->integrator->set_motion_blur(motionBlur);
+  // Flipping motion_blur changes Scene::need_motion(), which alters how
+  // objects (motion decomposition, BVH time steps) and geometry sync to the
+  // device -- retag them so a toggle without a world rebuild (e.g. camera
+  // motion added to an untouched world) still resyncs everything.
+  scene->object_manager->tag_update(scene, ccl::ObjectManager::UPDATE_ALL);
+  scene->geometry_manager->tag_update(scene, ccl::GeometryManager::UPDATE_ALL);
 }
 
 void CyclesGlobalState::retireGeometry(ccl::Geometry *g)
