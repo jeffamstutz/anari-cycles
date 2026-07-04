@@ -25,6 +25,9 @@ namespace anari_cycles {
 
 // Helper functions ///////////////////////////////////////////////////////////
 
+// Stand-in radius for degenerate (zero-radius) ring lights.
+static constexpr float g_minRingRadius = 1e-3f;
+
 inline math::mat4 rotationFromZNegativeToTarget(const math::float3 &targetDir)
 {
   const math::float3 from = {0.0f, 0.0f, -1.0f};
@@ -65,6 +68,16 @@ inline math::mat4 rotationFromZNegativeToTarget(const math::float3 &targetDir)
       {result[1].x, result[1].y, result[1].z, 0.0f},
       {result[2].x, result[2].y, result[2].z, 0.0f},
       {0.0f, 0.0f, 0.0f, 1.0f}};
+}
+
+// Transform for a light positioned at 'position' emitting along 'direction'
+// (the Cycles light-local -Z axis).
+inline math::mat4 positionDirectionXfm(
+    const math::float3 &position, const math::float3 &direction)
+{
+  auto rot = math::inverse(rotationFromZNegativeToTarget(direction));
+  rot[3] = {position.x, position.y, position.z, 1.f};
+  return rot;
 }
 
 // Subtype declarations ///////////////////////////////////////////////////////
@@ -130,6 +143,25 @@ struct Spot : public Light
   float m_openingAngle{M_PI};
   float m_falloffAngle{0.1f};
   float m_radius{0.f};
+};
+
+struct Ring : public Light
+{
+  Ring(CyclesGlobalState *s);
+
+  void commitParameters() override;
+  void finalize() override;
+  math::mat4 xfm() const override;
+
+ private:
+  math::float3 m_position{0.f, 0.f, 0.f};
+  math::float3 m_direction{0.f, 0.f, -1.f};
+  float m_openingAngle{M_PI};
+  float m_radius{0.f};
+  float m_effectiveRadius{0.f};
+  float m_innerRadius{0.f};
+  float m_radiance{1.f};
+  bool m_falloffAngleSet{false};
 };
 
 struct QuadLight : public Light
@@ -206,6 +238,22 @@ ccl::float3 Light::scaledColor(float scale) const
   return scale * ccl::make_float3(m_color[0], m_color[1], m_color[2]);
 }
 
+float Light::photometricRadiance(float area)
+{
+  // ANARI area-light photometric precedence: 'radiance' wins over
+  // 'intensity' (W/sr, divided by the emitting area) over 'power' (W,
+  // divided by pi times the area for a Lambertian emitter).
+  float radiance = 1.f;
+  if (hasParam("radiance", ANARI_FLOAT32)) {
+    radiance = getParam<float>("radiance", 1.f);
+  } else if (hasParam("intensity", ANARI_FLOAT32) && area > 0.f) {
+    radiance = getParam<float>("intensity", 1.f) / area;
+  } else if (hasParam("power", ANARI_FLOAT32) && area > 0.f) {
+    radiance = getParam<float>("power", 1.f) / (float(M_PI) * area);
+  }
+  return std::clamp(radiance, 0.f, std::numeric_limits<float>::max());
+}
+
 Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
 {
   if (type == "directional")
@@ -218,6 +266,8 @@ Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
     return new Spot(s);
   else if (type == "quad")
     return new QuadLight(s);
+  else if (type == "ring")
+    return new Ring(s);
   else
     return new UnknownLight(type, s);
 }
@@ -486,9 +536,98 @@ void Spot::finalize()
 
 math::mat4 Spot::xfm() const
 {
-  auto rot = math::inverse(rotationFromZNegativeToTarget(m_direction));
-  rot[3] = {m_position.x, m_position.y, m_position.z, 1.f};
-  return rot;
+  return positionDirectionXfm(m_position, m_direction);
+}
+
+// Ring definitions ///////////////////////////////////////////////////////////
+
+Ring::Ring(CyclesGlobalState *s)
+    : Light(s, s->scene->create_node<ccl::AreaLight>())
+{
+  attachUnitEmissionShader();
+}
+
+void Ring::commitParameters()
+{
+  Light::commitParameters();
+  m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
+  m_direction =
+      math::normalize(getParam<math::float3>("direction", {0.f, 0.f, -1.f}));
+  // ANARI 'openingAngle' is the full cone angle of emission (default pi =
+  // full hemisphere), matching the Cycles area-light 'spread' socket (also
+  // a full angle with default pi).
+  m_openingAngle =
+      std::clamp(getParam<float>("openingAngle", float(M_PI)), 0.f, float(M_PI));
+  m_falloffAngleSet = hasParam("falloffAngle", ANARI_FLOAT32);
+  m_radius = std::max(getParam<float>("radius", 0.f), 0.f);
+  m_innerRadius = std::max(getParam<float>("innerRadius", 0.f), 0.f);
+
+  // The registry default radius is 0, a degenerate disc Cycles cannot
+  // sample; substitute a tiny disc so the light still emits and the
+  // intensity/power conversions stay well defined. Any positive radius is
+  // used as-is.
+  m_effectiveRadius = m_radius > 0.f ? m_radius : g_minRingRadius;
+  m_radiance =
+      photometricRadiance(float(M_PI) * m_effectiveRadius * m_effectiveRadius);
+}
+
+void Ring::finalize()
+{
+  if (m_radius <= 0.f) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "ring light radius is 0; using a tiny disc (radius %g) instead",
+        double(g_minRingRadius));
+  }
+  if (m_innerRadius > 0.f) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "ring light innerRadius is not supported (no Cycles analog); "
+        "treating the ring as a full disc");
+  }
+  if (m_falloffAngleSet) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "ring light falloffAngle is not supported; Cycles applies its own "
+        "fixed soft edge to the emission cone");
+  }
+
+  auto *light = static_cast<ccl::AreaLight *>(m_cyclesLight);
+  light->set_sizeu(2.f * m_effectiveRadius);
+  light->set_sizev(2.f * m_effectiveRadius);
+  light->set_ellipse(true);
+  // Cycles 'spread' models a soft-box grid: emission is limited to the
+  // spread cone with a soft (linear-in-tangent) rim, renormalized so total
+  // flux is independent of the spread angle. ANARI 'openingAngle' instead
+  // masks emission (like the spot light) without renormalizing, so divide
+  // out the kernel's on-axis renormalization boost: a point on the light
+  // then emits the requested radiance along the axis, falling off linearly
+  // in tangent toward the cone edge (soft-edge approximation of the cone;
+  // ANARI 'falloffAngle' is not otherwise representable).
+  light->set_spread(m_openingAngle);
+  float spreadCompensation = 1.f;
+  const float halfSpread = 0.5f * m_openingAngle;
+  if (m_openingAngle <= 0.f) {
+    // Kernel emits a delta beam scaled by pi when the spread is zero.
+    spreadCompensation = 1.f / float(M_PI);
+  } else if (m_openingAngle < float(M_PI)) {
+    // Inverse of the kernel's on-axis attenuation tan(half)*normalize_spread
+    // (scene/light.cpp AreaLight::copy_to_kernel + kernel/light/area.h
+    // area_light_spread_attenuation), including its small-angle branch.
+    const float tanHalf = std::tan(halfSpread);
+    spreadCompensation = halfSpread > 0.05f
+        ? (tanHalf - halfSpread) / tanHalf
+        : (halfSpread * halfSpread * halfSpread) / (3.f * tanHalf);
+  }
+  // Same normalize-off radiance mapping as QuadLight: emitted radiance is
+  // strength/pi, so ANARI 'radiance' maps to strength = pi * radiance.
+  light->set_normalize(false);
+  m_cyclesLight->set_strength(
+      scaledColor(float(M_PI) * m_radiance * spreadCompensation));
+  m_cyclesLight->tag_update(deviceState()->scene);
+  Light::finalize();
+}
+
+math::mat4 Ring::xfm() const
+{
+  return positionDirectionXfm(m_position, m_direction);
 }
 
 // Quad definitions ///////////////////////////////////////////////////////////
@@ -505,17 +644,8 @@ void QuadLight::commitParameters()
   m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
   m_edge1 = getParam<math::float3>("edge1", {1.f, 0.f, 0.f});
   m_edge2 = getParam<math::float3>("edge2", {0.f, 1.f, 0.f});
-  const float area = math::length(math::cross(m_edge1, m_edge2));
-  if (hasParam("radiance", ANARI_FLOAT32)) {
-    m_radiance = getParam<float>("radiance", 1.f);
-  } else if (hasParam("intensity", ANARI_FLOAT32) && area > 0.f) {
-    m_radiance = getParam<float>("intensity", 1.f) / area;
-  } else if (hasParam("power", ANARI_FLOAT32) && area > 0.f) {
-    m_radiance = getParam<float>("power", 1.f) / (float(M_PI) * area);
-  } else {
-    m_radiance = 1.f;
-  }
-  m_radiance = std::clamp(m_radiance, 0.f, std::numeric_limits<float>::max());
+  m_radiance =
+      photometricRadiance(math::length(math::cross(m_edge1, m_edge2)));
   m_side = getParamString("side", "front");
 }
 
