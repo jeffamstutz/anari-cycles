@@ -4,6 +4,8 @@
 #include "Camera.h"
 // cycles
 #include "scene/camera.h"
+// std
+#include <algorithm>
 
 namespace anari_cycles {
 
@@ -54,6 +56,14 @@ void Camera::commitParameters()
   m_pos = getParam<anari_vec::float3>("position", {0.f, 0.f, 0.f});
   m_dir = getParam<anari_vec::float3>("direction", {0.f, 0.f, -1.f});
   m_up = getParam<anari_vec::float3>("up", {0.f, 1.f, 0.f});
+  // KHR_CAMERA_DEPTH_OF_FIELD -- ANARI 'apertureRadius' is the lens radius in
+  // world units, which is exactly what Cycles 'aperturesize' scales its
+  // unit-disk lens samples by (kernel/camera/camera.h).
+  m_apertureRadius = getParam<float>("apertureRadius", 0.f);
+  m_focusDistance = getParam<float>("focusDistance", 1.f);
+  // Vendor params: polygonal bokeh (Cycles clamps blades < 3 to a disk)
+  m_apertureBlades = getParam<int>("apertureBlades", 0);
+  m_apertureRotation = getParam<float>("apertureRotation", 0.f);
 }
 
 void Camera::finalize()
@@ -67,6 +77,11 @@ void Camera::setCameraCurrent(int width, int height)
   state.scene->camera->set_matrix(getMatrix());
   state.scene->camera->set_full_width(width);
   state.scene->camera->set_full_height(height);
+  state.scene->camera->set_aperturesize(std::max(m_apertureRadius, 0.f));
+  state.scene->camera->set_focaldistance(m_focusDistance);
+  state.scene->camera->set_blades(
+      static_cast<unsigned int>(std::max(m_apertureBlades, 0)));
+  state.scene->camera->set_bladesrotation(m_apertureRotation);
   state.scene->camera->need_flags_update = true;
   state.scene->camera->need_device_update = true;
 }
