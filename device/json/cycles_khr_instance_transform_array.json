@@ -1,0 +1,30 @@
+{
+ "info": {
+  "name": "KHR_INSTANCE_TRANSFORM_ARRAY",
+  "type": "extension",
+  "dependencies": [
+   "cycles_khr_instance_transform"
+  ],
+  "comment": "Local copy of the ANARI registry extension, trimmed to the parameters anari-cycles actually reads. Parameters removed here are unimplemented; they will be restored when the corresponding feature tasks land. Keep info.name equal to the official extension name so introspection still advertises it."
+ },
+ "objects": [
+  {
+   "type": "ANARI_INSTANCE",
+   "name": "transform",
+   "description": "instance object",
+   "parameters": [
+    {
+     "name": "transform",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32_MAT4"
+     ],
+     "tags": [],
+     "description": "array of transforms applied to objects in the instance"
+    }
+   ]
+  }
+ ]
+}

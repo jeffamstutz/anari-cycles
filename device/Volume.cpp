@@ -34,6 +34,11 @@ Volume::Volume(CyclesGlobalState *s) : Object(ANARI_VOLUME, s) {}
 
 Volume::~Volume() = default;
 
+uint32_t Volume::id() const
+{
+  return m_id;
+}
+
 Volume *Volume::createInstance(std::string_view subtype, CyclesGlobalState *s)
 {
   if (subtype == "transferFunction1D")
@@ -78,6 +83,7 @@ void TransferFunction1D::commitParameters()
   m_colorData = getParamObject<Array1D>("color");
   m_opacityData = getParamObject<Array1D>("opacity");
   m_unitDistance = getParam<float>("unitDistance", 1.f);
+  m_id = getParam<uint32_t>("id", ~0u);
 
   if (!m_field) {
     reportMessage(ANARI_SEVERITY_WARNING,

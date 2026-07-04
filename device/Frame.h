@@ -60,6 +60,8 @@ struct Frame : public helium::BaseFrame
     uint2 size;
   } m_frameData;
 
+  bool m_accumulation{false};
+
   anari::DataType m_colorType{ANARI_UNKNOWN};
   anari::DataType m_depthType{ANARI_UNKNOWN};
   anari::DataType m_normalType{ANARI_UNKNOWN};

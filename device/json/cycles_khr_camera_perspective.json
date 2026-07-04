@@ -1,0 +1,87 @@
+{
+ "info": {
+  "name": "KHR_CAMERA_PERSPECTIVE",
+  "type": "extension",
+  "dependencies": [],
+  "comment": "Local copy of the ANARI registry extension, trimmed to the parameters anari-cycles actually reads. Parameters removed here are unimplemented; they will be restored when the corresponding feature tasks land. Keep info.name equal to the official extension name so introspection still advertises it."
+ },
+ "objects": [
+  {
+   "type": "ANARI_CAMERA",
+   "name": "perspective",
+   "description": "perspective camera object",
+   "parameters": [
+    {
+     "name": "name",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "optional object name"
+    },
+    {
+     "name": "position",
+     "types": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [
+      "point"
+     ],
+     "default": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "description": "camera position"
+    },
+    {
+     "name": "direction",
+     "types": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [
+      "direction"
+     ],
+     "default": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "description": "main viewing direction"
+    },
+    {
+     "name": "up",
+     "types": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [
+      "direction"
+     ],
+     "default": [
+      0.0,
+      1.0,
+      0.0
+     ],
+     "description": "camera up direction"
+    },
+    {
+     "name": "fovy",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 1.0471975512,
+     "description": "vertical field of view in radians"
+    },
+    {
+     "name": "aspect",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "description": "aspect ratio"
+    }
+   ]
+  }
+ ]
+}

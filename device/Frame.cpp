@@ -37,6 +37,7 @@ void Frame::commitParameters()
   m_normalType = getParam<anari::DataType>("channel.normal", ANARI_UNKNOWN);
   m_albedoType = getParam<anari::DataType>("channel.albedo", ANARI_UNKNOWN);
   m_objectIdType = getParam<anari::DataType>("channel.objectId", ANARI_UNKNOWN);
+  m_accumulation = getParam<bool>("accumulation", false);
   m_frameData.size = getParam<uint2>("size", make_uint2(10, 10));
 }
 
@@ -210,6 +211,11 @@ void Frame::wait() const
 
 bool Frame::resetAccumulationNextFrame() const
 {
+  // Without KHR_FRAME_ACCUMULATION enabled ('accumulation' = false), every
+  // anariRenderFrame() renders from scratch instead of refining the previous
+  // result.
+  if (!m_accumulation)
+    return true;
   auto *state = deviceState();
   return state->objectUpdates.lastAccumulationReset
       < state->commitBuffer.lastObjectFinalization();

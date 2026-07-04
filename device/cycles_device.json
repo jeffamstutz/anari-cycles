@@ -2,29 +2,44 @@
   "info": {
     "name": "CYCLES_DEVICE",
     "type": "device",
+    "comment": [
+      "Dependency stems prefixed with 'cycles_' resolve to trimmed local",
+      "copies in device/json/ (see CMakeLists.txt JSON_ROOT_LOCATION).",
+      "They advertise the official KHR extension names but omit registry",
+      "parameters this device does not implement yet.",
+      "khr_frame_channel_object_id must stay listed after",
+      "khr_volume_transfer_function1d: its anonymous ANARI_VOLUME 'id' entry",
+      "only merges into subtypes that already exist."
+    ],
     "dependencies": [
       "anari_core_1_0",
       "anari_core_objects_base_1_0",
-      "khr_camera_orthographic",
-      "khr_camera_perspective",
+      "cycles_khr_camera_orthographic",
+      "cycles_khr_camera_perspective",
+      "cycles_khr_geometry_quad",
+      "cycles_khr_geometry_sphere",
+      "cycles_khr_geometry_triangle",
+      "cycles_khr_instance_transform",
+      "cycles_khr_instance_transform_array",
+      "cycles_khr_sampler_image1d",
       "khr_device_synchronization",
-      "khr_geometry_quad",
-      "khr_geometry_sphere",
-      "khr_geometry_triangle",
-      "khr_instance_transform",
-      "khr_instance_transform_array",
+      "khr_frame_accumulation",
+      "khr_frame_channel_albedo",
+      "khr_frame_channel_normal",
       "khr_light_directional",
       "khr_light_hdri",
       "khr_light_point",
       "khr_light_quad",
       "khr_light_spot",
+      "cycles_khr_renderer_ambient_light",
       "khr_material_matte",
       "khr_material_physically_based",
-      "khr_renderer_ambient_light",
       "khr_renderer_background_color",
-      "khr_sampler_image1D",
+      "khr_renderer_denoise",
+      "khr_sampler_image2d",
       "khr_spatial_field_structured_regular",
-      "khr_volume_transfer_function1d"
+      "khr_volume_transfer_function1d",
+      "khr_frame_channel_object_id"
     ]
   },
   "objects": [
@@ -32,44 +47,6 @@
       "type": "ANARI_RENDERER",
       "name": "default",
       "parameters": [
-        {
-          "name": "background",
-          "types": [
-            "ANARI_FLOAT32_VEC4"
-          ],
-          "tags": [],
-          "default": [
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "description": "background color and alpha (RGBA)"
-        },
-        {
-          "name": "ambientColor",
-          "types": [
-            "ANARI_FLOAT32_VEC3"
-          ],
-          "tags": [],
-          "default": [
-            1.0,
-            1.0,
-            1.0
-          ],
-          "description": "ambient light color (RGB)"
-        },
-        {
-          "name": "ambientRadiance",
-          "types": [
-            "ANARI_FLOAT32"
-          ],
-          "tags": [],
-          "default": [
-            1.0
-          ],
-          "description": "ambient light intensity"
-        },
         {
           "name": "pixelSamples",
           "types": [
@@ -91,17 +68,6 @@
             true
           ],
           "description": "run anariRenderFrame() asynchronously"
-        },
-        {
-          "name": "denoise",
-          "types": [
-            "ANARI_BOOL"
-          ],
-          "tags": [],
-          "default": [
-            false
-          ],
-          "description": "denoise the rendered image (requires OptiX or OIDN at build time)"
         }
       ]
     }

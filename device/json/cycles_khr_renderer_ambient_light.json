@@ -1,0 +1,40 @@
+{
+ "info": {
+  "name": "KHR_RENDERER_AMBIENT_LIGHT",
+  "type": "extension",
+  "comment": "Local copy of the ANARI registry extension. Identical to the registry version except that ambientRadiance defaults to 1.0 (the value Renderer.cpp actually uses) instead of the registry's 0.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_RENDERER",
+   "name": "default",
+   "parameters": [
+    {
+     "name": "ambientColor",
+     "types": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [
+      "color"
+     ],
+     "default": [
+      1,
+      1,
+      1
+     ],
+     "description": "ambient light color"
+    },
+    {
+     "name": "ambientRadiance",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 1.0,
+     "description": "the amount of light emitted by a point on the ambient light source in a direction, in W/sr/m^2 (device default 1.0 overrides the registry default of 0)"
+    }
+   ]
+  }
+ ]
+}
