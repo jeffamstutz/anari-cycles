@@ -1,0 +1,94 @@
+{
+ "info": {
+  "name": "KHR_CAMERA_ROLLING_SHUTTER",
+  "type": "extension",
+  "dependencies": [],
+  "comment": "Local copy of the ANARI registry extension (whose info.name is a copy-paste error, 'KHR_CAMERA_SHUTTER'; the correct official name is used here). The registry file attaches the parameters to an ANARI_CAMERA named 'default'; instead they are declared here on the camera subtypes this device actually exposes. 'rollingShutterDirection' is trimmed to the values Cycles can express: its single rolling shutter model scans the top scan-line first, i.e. the shutter sweeps 'down'; 'left', 'right' and 'up' warn and fall back to 'none'."
+ },
+ "objects": [
+  {
+   "type": "ANARI_CAMERA",
+   "name": "perspective",
+   "parameters": [
+    {
+     "name": "rollingShutterDirection",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "default": "none",
+     "values": [
+      "none",
+      "down"
+     ],
+     "description": "rolling direction of the shutter"
+    },
+    {
+     "name": "rollingShutterDuration",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 0,
+     "description": "open time per line"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_CAMERA",
+   "name": "orthographic",
+   "parameters": [
+    {
+     "name": "rollingShutterDirection",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "default": "none",
+     "values": [
+      "none",
+      "down"
+     ],
+     "description": "rolling direction of the shutter"
+    },
+    {
+     "name": "rollingShutterDuration",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 0,
+     "description": "open time per line"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_CAMERA",
+   "name": "omnidirectional",
+   "parameters": [
+    {
+     "name": "rollingShutterDirection",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "default": "none",
+     "values": [
+      "none",
+      "down"
+     ],
+     "description": "rolling direction of the shutter"
+    },
+    {
+     "name": "rollingShutterDuration",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 0,
+     "description": "open time per line"
+    }
+   ]
+  }
+ ]
+}
