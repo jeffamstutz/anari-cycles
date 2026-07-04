@@ -1,15 +1,15 @@
 {
  "info": {
-  "name": "KHR_SAMPLER_IMAGE1D",
+  "name": "KHR_SAMPLER_IMAGE2D",
   "type": "extension",
   "dependencies": [],
-  "comment": "Local copy of the ANARI registry extension. All registry parameters are implemented; the only difference is the 'filter' default, which this device (like helide) treats as 'linear'. 'wrapMode1' is additionally accepted at runtime as an alias for 'wrapMode' (the SDK test scenes use it). Keep info.name equal to the official extension name so introspection still advertises it."
+  "comment": "Local copy of the ANARI registry extension. All registry parameters are implemented; the only difference is the 'filter' default, which this device (like helide) treats as 'linear'. Keep info.name equal to the official extension name so introspection still advertises it."
  },
  "objects": [
   {
    "type": "ANARI_SAMPLER",
-   "name": "image1D",
-   "description": "image1D object",
+   "name": "image2D",
+   "description": "image2D object",
    "parameters": [
     {
      "name": "name",
@@ -19,7 +19,7 @@
     },
     {
      "name": "image",
-     "types": ["ANARI_ARRAY1D"],
+     "types": ["ANARI_ARRAY2D"],
      "elementType": [
       "ANARI_UFIXED8", "ANARI_UFIXED8_VEC2", "ANARI_UFIXED8_VEC3", "ANARI_UFIXED8_VEC4",
       "ANARI_UFIXED8_R_SRGB", "ANARI_UFIXED8_RA_SRGB", "ANARI_UFIXED8_RGB_SRGB", "ANARI_UFIXED8_RGBA_SRGB",
@@ -45,12 +45,20 @@
      "description": "filter mode"
     },
     {
-     "name": "wrapMode",
+     "name": "wrapMode1",
      "types": ["ANARI_STRING"],
      "tags": [],
      "default": "clampToEdge",
      "values": ["clampToEdge", "repeat", "mirrorRepeat"],
-     "description": "wrap mode"
+     "description": "wrap mode for the 1st dimension"
+    },
+    {
+     "name": "wrapMode2",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "default": "clampToEdge",
+     "values": ["clampToEdge", "repeat", "mirrorRepeat"],
+     "description": "wrap mode for the 2nd dimension"
     },
     {
      "name": "inTransform",

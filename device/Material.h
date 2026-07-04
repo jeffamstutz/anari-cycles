@@ -41,10 +41,15 @@ struct Material : public Object
       Sampler *sampler = nullptr);
   // Wire the "Alpha" input of 'bsdf' honoring alphaMode/alphaCutoff semantics
   // (opaque: force 1, blend: pass through, mask: threshold against cutoff).
+  // Per spec the effective alpha is the product of the scalar 'opacity'
+  // source and the 4th (alpha) component of the color source, so the color
+  // parameter's attribute/sampler is needed here too.
   void connectAlpha(ccl::ShaderNode *bsdf,
-      const std::string &attributeSource,
+      const std::string &opacityAttribute,
       float opacity,
-      Sampler *sampler,
+      Sampler *opacitySampler,
+      const std::string &colorAttribute,
+      Sampler *colorSampler,
       helium::AlphaMode mode,
       float cutoff);
 
@@ -78,10 +83,21 @@ struct Material : public Object
     ccl::ShaderOutput *attr2_sc{nullptr};
     ccl::ShaderOutput *attr3_sc{nullptr};
     ccl::ShaderOutput *attrPid_sc{nullptr};
+    // 4th (alpha) component of each attribute; primitiveId is a scalar
+    // attribute whose conceptual alpha is the constant 1 (no output needed)
+    ccl::ShaderOutput *attrC_a{nullptr};
+    ccl::ShaderOutput *attr0_a{nullptr};
+    ccl::ShaderOutput *attr1_a{nullptr};
+    ccl::ShaderOutput *attr2_a{nullptr};
+    ccl::ShaderOutput *attr3_a{nullptr};
   } m_attributeNodes;
 
   // Get or create sampler outputs for a given sampler
   Sampler::SamplerOutputs getSamplerOutputs(Sampler *sampler);
+
+  // Alpha (4th) component output of an attribute source; nullptr when it is
+  // the constant 1
+  ccl::ShaderOutput *attributeAlphaOutput(const std::string &attributeSource);
 
  private:
   void connectAttributesImpl(ccl::ShaderNode *bsdf,
