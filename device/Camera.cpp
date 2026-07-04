@@ -6,6 +6,7 @@
 #include "scene/camera.h"
 // std
 #include <algorithm>
+#include <limits>
 
 namespace anari_cycles {
 
@@ -44,6 +45,7 @@ struct Omnidirectional : public Camera
 
  protected:
   ccl::Transform getMatrix() const override;
+  bool usesNativeStereo() const override;
 };
 
 // Camera definitions /////////////////////////////////////////////////////////
@@ -77,6 +79,61 @@ void Camera::commitParameters()
   // Vendor params: polygonal bokeh (Cycles clamps blades < 3 to a disk)
   m_apertureBlades = getParam<int>("apertureBlades", 0);
   m_apertureRotation = getParam<float>("apertureRotation", 0.f);
+
+  // KHR_CAMERA_SHUTTER -- the interval within the frame time domain [0,1]
+  // during which the shutter is open. The default [0.5,0.5] (and any [t,t])
+  // is a degenerate interval: no motion blur.
+  m_shutter = getParam<helium::box1>("shutter", helium::box1{0.5f, 0.5f});
+  if (m_shutter.upper < m_shutter.lower) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "invalid 'shutter' interval [%f, %f] (upper < lower) -- treating as "
+        "a degenerate interval (no motion blur)",
+        m_shutter.lower,
+        m_shutter.upper);
+  }
+
+  // KHR_CAMERA_ROLLING_SHUTTER -- Cycles implements exactly one rolling
+  // shutter model, ROLLING_SHUTTER_TOP: scan-lines are acquired top of the
+  // image first (kernel time = 1 - y/height with raster y = 0 at the bottom
+  // row, which is also the first row of the ANARI frame buffer -- this device
+  // performs no vertical flip). Scanning the top row first means the shutter
+  // sweeps downward across the image, i.e. ANARI direction 'down'. The other
+  // directions have no Cycles equivalent and are ignored with a warning.
+  auto rollingDir = getParamString("rollingShutterDirection", "none");
+  m_rollingShutterDown = (rollingDir == "down");
+  if (!m_rollingShutterDown && rollingDir != "none") {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "unsupported 'rollingShutterDirection' value '%s' -- Cycles only "
+        "supports a top-to-bottom scan ('down'); using 'none'",
+        rollingDir.c_str());
+  }
+  m_rollingShutterDuration = getParam<float>("rollingShutterDuration", 0.f);
+  if (m_rollingShutterDown && !(m_shutter.upper > m_shutter.lower)) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'rollingShutterDirection' is set but the 'shutter' interval is "
+        "degenerate -- rolling shutter has no effect without an open shutter");
+  }
+
+  // KHR_CAMERA_STEREO -- 'left'/'right' render a single eye. 'sideBySide'
+  // and 'topBottom' require two renders (or per-eye imageRegion support)
+  // composited into one frame, which this device cannot do in a single
+  // Cycles render pass yet; they warn and fall back to 'none'.
+  auto stereoMode = getParamString("stereoMode", "none");
+  if (stereoMode == "left")
+    m_stereoMode = StereoMode::LEFT;
+  else if (stereoMode == "right")
+    m_stereoMode = StereoMode::RIGHT;
+  else {
+    if (stereoMode != "none") {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "unsupported 'stereoMode' value '%s' -- only 'left' and 'right' "
+          "are implemented (per-eye layouts need two render passes); "
+          "using 'none'",
+          stereoMode.c_str());
+    }
+    m_stereoMode = StereoMode::NONE;
+  }
+  m_interpupillaryDistance = getParam<float>("interpupillaryDistance", 0.0635f);
 }
 
 void Camera::finalize()
@@ -95,8 +152,77 @@ void Camera::setCameraCurrent(int width, int height)
   state.scene->camera->set_blades(
       static_cast<unsigned int>(std::max(m_apertureBlades, 0)));
   state.scene->camera->set_bladesrotation(m_apertureRotation);
+
+  // KHR_CAMERA_SHUTTER -> Cycles mapping (latent until motion blur, task 14,
+  // enables integrator motion_blur -- without it Cycles forces kernel
+  // shuttertime to -1, i.e. all rays at time 0.5, so these sockets are inert
+  // for static scenes). The contract chosen here, which task 14 MUST honor
+  // when baking motion keys:
+  //   * Cycles' kernel ray->time domain [0,1] (uniform via the default flat
+  //     shutter curve) corresponds exactly to the ANARI shutter interval
+  //     [s0,s1]; Cycles motion step i of N is sampled at ANARI frame time
+  //     s0 + (s1-s0) * i/(N-1). Cycles does NOT rescale ray->time by
+  //     shuttertime, so the interval position/extent live entirely in how
+  //     the motion keys are baked.
+  //   * shuttertime is set to the interval extent (s1-s0): it only gates
+  //     blur and biases heterogeneous-volume shading times; a degenerate
+  //     [t,t] interval (extent 0) must render without motion blur -- task 14
+  //     must bake all motion samples at the single time t (or skip enabling
+  //     motion for that frame) since Cycles still spreads ray->time over
+  //     [0,1] whenever kernel shuttertime != -1.
+  //   * motion_position START matches "ray time 0 == interval start" for the
+  //     one kernel consumer (volume_shader.h time offset).
+  const float shutterExtent = std::max(m_shutter.upper - m_shutter.lower, 0.f);
+  state.scene->camera->set_shuttertime(shutterExtent);
+  state.scene->camera->set_motion_position(ccl::MOTION_POSITION_START);
+
+  // KHR_CAMERA_ROLLING_SHUTTER: Cycles' rolling_shutter_duration is the
+  // per-scan-line exposure expressed as a fraction of shuttertime (1 = pure
+  // motion blur, 0 = instantaneous lines / pure rolling), while ANARI's
+  // rollingShutterDuration is the per-line open time in frame-time units,
+  // hence the division by the shutter extent. With a degenerate shutter
+  // there is no time span to roll across, so the effect is disabled.
+  if (m_rollingShutterDown && shutterExtent > 0.f) {
+    state.scene->camera->set_rolling_shutter_type(
+        ccl::Camera::ROLLING_SHUTTER_TOP);
+    state.scene->camera->set_rolling_shutter_duration(
+        std::clamp(m_rollingShutterDuration / shutterExtent, 0.f, 1.f));
+  } else {
+    state.scene->camera->set_rolling_shutter_type(
+        ccl::Camera::ROLLING_SHUTTER_NONE);
+    state.scene->camera->set_rolling_shutter_duration(0.f);
+  }
+
+  // KHR_CAMERA_STEREO: reset Cycles' native stereo state here; getMatrix()
+  // applies the eye offset manually for non-panorama subtypes (Cycles' own
+  // stereo path runs spherical_stereo_transform in *world* space for
+  // perspective cameras, assuming a Z-up world -- wrong for arbitrary ANARI
+  // 'up'). Omnidirectional overrides this with native spherical stereo.
+  state.scene->camera->set_stereo_eye(ccl::Camera::STEREO_NONE);
+  state.scene->camera->set_use_spherical_stereo(false);
+  state.scene->camera->set_interocular_distance(m_interpupillaryDistance);
+  // Parallel stereo (ANARI has no convergence parameter); FLT_MAX is Cycles'
+  // parallel-convergence sentinel (kernel/camera/projection.h).
+  state.scene->camera->set_convergence_distance(
+      std::numeric_limits<float>::max());
+
   state.scene->camera->need_flags_update = true;
   state.scene->camera->need_device_update = true;
+}
+
+bool Camera::usesNativeStereo() const
+{
+  return false;
+}
+
+float Camera::stereoEyeOffset() const
+{
+  if (usesNativeStereo() || m_stereoMode == StereoMode::NONE)
+    return 0.f;
+  // Matches Cycles' convention: left eye sits at -IPD/2 along the camera
+  // right vector, right eye at +IPD/2.
+  return (m_stereoMode == StereoMode::LEFT ? -0.5f : 0.5f)
+      * m_interpupillaryDistance;
 }
 
 ccl::Transform Camera::getMatrix() const
@@ -109,6 +235,11 @@ ccl::Transform Camera::getMatrix() const
 
   const auto s = ccl::normalize(ccl::cross(dir, up));
   const auto u = ccl::normalize(ccl::cross(s, dir));
+
+  // KHR_CAMERA_STEREO ('left'/'right'): offset the eye along the camera
+  // right vector; view direction is unchanged (parallel stereo).
+  pos += s * stereoEyeOffset();
+
   retval.x[0] = s.x;
   retval.x[1] = u.x;
   retval.x[2] = dir.x;
@@ -203,6 +334,27 @@ void Omnidirectional::setCameraCurrent(int width, int height)
   state.scene->camera->viewplane.right = 1.f;
   state.scene->camera->viewplane.bottom = 0.f;
   state.scene->camera->viewplane.top = 1.f;
+
+  // KHR_CAMERA_STEREO: use Cycles' native spherical stereo for the panorama
+  // camera -- it rotates the per-eye offset with the view direction (correct
+  // 360 stereo) and works in a single render pass (the kernel only checks
+  // interocular_offset, no multi-view machinery involved). In the panorama
+  // path spherical_stereo_transform runs in *camera* space where its
+  // hardcoded up axis (0,0,1) is exactly the axis this camera's getMatrix()
+  // maps to the ANARI 'up' direction, so arbitrary orientations are fine
+  // (unlike the perspective path). interocular_distance and parallel
+  // convergence were already set by the base class.
+  if (m_stereoMode != StereoMode::NONE) {
+    state.scene->camera->set_use_spherical_stereo(true);
+    state.scene->camera->set_stereo_eye(m_stereoMode == StereoMode::LEFT
+            ? ccl::Camera::STEREO_LEFT
+            : ccl::Camera::STEREO_RIGHT);
+  }
+}
+
+bool Omnidirectional::usesNativeStereo() const
+{
+  return true;
 }
 
 ccl::Transform Omnidirectional::getMatrix() const

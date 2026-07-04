@@ -1,0 +1,64 @@
+{
+ "info": {
+  "name": "KHR_CAMERA_SHUTTER",
+  "type": "extension",
+  "dependencies": [],
+  "comment": "Local copy of the ANARI registry extension. The registry file attaches the parameter to an ANARI_CAMERA named 'default', which the query codegen would append as a bogus 'default' camera subtype; instead it is declared here on the camera subtypes this device actually exposes. Keep info.name equal to the official extension name so introspection still advertises it."
+ },
+ "objects": [
+  {
+   "type": "ANARI_CAMERA",
+   "name": "perspective",
+   "parameters": [
+    {
+     "name": "shutter",
+     "types": [
+      "ANARI_FLOAT32_BOX1"
+     ],
+     "tags": [],
+     "default": [
+      0.5,
+      0.5
+     ],
+     "description": "start and end of shutter time"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_CAMERA",
+   "name": "orthographic",
+   "parameters": [
+    {
+     "name": "shutter",
+     "types": [
+      "ANARI_FLOAT32_BOX1"
+     ],
+     "tags": [],
+     "default": [
+      0.5,
+      0.5
+     ],
+     "description": "start and end of shutter time"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_CAMERA",
+   "name": "omnidirectional",
+   "parameters": [
+    {
+     "name": "shutter",
+     "types": [
+      "ANARI_FLOAT32_BOX1"
+     ],
+     "tags": [],
+     "default": [
+      0.5,
+      0.5
+     ],
+     "description": "start and end of shutter time"
+    }
+   ]
+  }
+ ]
+}
