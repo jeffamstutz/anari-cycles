@@ -17,6 +17,7 @@
     "dependencies": [
       "anari_core_1_0",
       "anari_core_objects_base_1_0",
+      "cycles_khr_camera_omnidirectional",
       "cycles_khr_camera_orthographic",
       "cycles_khr_camera_perspective",
       "cycles_khr_camera_depth_of_field",
@@ -83,6 +84,34 @@
     {
       "type": "ANARI_CAMERA",
       "name": "orthographic",
+      "parameters": [
+        {
+          "name": "apertureBlades",
+          "types": [
+            "ANARI_INT32"
+          ],
+          "tags": [],
+          "default": [
+            0
+          ],
+          "description": "Cycles vendor addition: aperture blade count for polygonal bokeh (< 3 gives a circular aperture)"
+        },
+        {
+          "name": "apertureRotation",
+          "types": [
+            "ANARI_FLOAT32"
+          ],
+          "tags": [],
+          "default": [
+            0.0
+          ],
+          "description": "Cycles vendor addition: aperture blade rotation in radians"
+        }
+      ]
+    },
+    {
+      "type": "ANARI_CAMERA",
+      "name": "omnidirectional",
       "parameters": [
         {
           "name": "apertureBlades",

@@ -35,6 +35,17 @@ struct Orthographic : public Camera
   float m_aspect{1.f};
 };
 
+struct Omnidirectional : public Camera
+{
+  Omnidirectional(CyclesGlobalState *s);
+
+  void commitParameters() override;
+  void setCameraCurrent(int width, int height) override;
+
+ protected:
+  ccl::Transform getMatrix() const override;
+};
+
 // Camera definitions /////////////////////////////////////////////////////////
 
 Camera::Camera(CyclesGlobalState *s) : Object(ANARI_CAMERA, s) {}
@@ -47,6 +58,8 @@ Camera *Camera::createInstance(std::string_view type, CyclesGlobalState *s)
     return new Perspective(s);
   else if (type == "orthographic")
     return new Orthographic(s);
+  else if (type == "omnidirectional")
+    return new Omnidirectional(s);
   else
     return (Camera *)new UnknownObject(ANARI_CAMERA, type, s);
 }
@@ -155,6 +168,61 @@ void Orthographic::setCameraCurrent(int width, int height)
   state.scene->camera->viewplane.right = m_aspect * scale;
   state.scene->camera->viewplane.bottom = -scale;
   state.scene->camera->viewplane.top = scale;
+}
+
+// Omnidirectional definitions ////////////////////////////////////////////////
+
+Omnidirectional::Omnidirectional(CyclesGlobalState *s) : Camera(s) {}
+
+void Omnidirectional::commitParameters()
+{
+  Camera::commitParameters();
+  // KHR_CAMERA_OMNIDIRECTIONAL only defines "equirectangular"; anything else
+  // is unsupported, so warn and fall back to it. 'imageRegion' is not
+  // implemented by any camera subtype in this device yet, so it is
+  // (deliberately) not read here either.
+  auto layout = getParamString("layout", "equirectangular");
+  if (layout != "equirectangular") {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "unsupported omnidirectional camera 'layout' value '%s' -- "
+        "falling back to 'equirectangular'",
+        layout.c_str());
+  }
+}
+
+void Omnidirectional::setCameraCurrent(int width, int height)
+{
+  Camera::setCameraCurrent(width, height);
+  auto &state = *deviceState();
+  state.scene->camera->set_camera_type(ccl::CameraType::CAMERA_PANORAMA);
+  state.scene->camera->set_panorama_type(ccl::PANORAMA_EQUIRECTANGULAR);
+  // Panorama rays are generated from screen coordinates in [0,1]^2 (see
+  // kernel/camera/camera.h camera_panorama_direction); reset the viewplane in
+  // case another camera subtype left a perspective/ortho viewplane behind.
+  state.scene->camera->viewplane.left = 0.f;
+  state.scene->camera->viewplane.right = 1.f;
+  state.scene->camera->viewplane.bottom = 0.f;
+  state.scene->camera->viewplane.top = 1.f;
+}
+
+ccl::Transform Omnidirectional::getMatrix() const
+{
+  // Cycles' equirectangular kernel mapping (kernel/camera/projection.h,
+  // equirectangular_range_to_direction with the default longitude/latitude
+  // range) places the image center along camera-space +X, the image top pole
+  // along +Z, and the right half of the image toward -Y. The base look-at
+  // matrix maps (right, up, dir) onto camera-space (+X, +Y, +Z), so append a
+  // constant rotation taking panorama camera space into that frame
+  // (+X -> +Z, +Y -> -X, +Z -> +Y). The result honors the ANARI convention:
+  // image center looks along 'direction', the top pole is '+up' (and
+  // left/right of the image are the viewer's left/right).
+  // clang-format off
+  return Camera::getMatrix()
+      * ccl::make_transform(
+          0.f, -1.f, 0.f, 0.f,
+          0.f,  0.f, 1.f, 0.f,
+          1.f,  0.f, 0.f, 0.f);
+  // clang-format on
 }
 
 } // namespace anari_cycles
