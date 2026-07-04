@@ -38,6 +38,10 @@ struct Light : public Object
   // expects for ccl::Light::strength.
   ccl::float3 scaledColor(float scale) const;
 
+  // Resolve the ANARI area-light 'radiance'/'intensity'/'power' parameter
+  // precedence into a radiance value for an emitter of the given area.
+  float photometricRadiance(float area);
+
   ccl::Light *m_cyclesLight{nullptr};
   ccl::Shader *m_cyclesShader{nullptr};
 
