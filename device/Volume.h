@@ -19,6 +19,12 @@ struct Volume : public Object
   // volume is invalid).
   virtual ccl::Geometry *cyclesGeometry() const = 0;
   virtual box3 bounds() const = 0;
+
+  // User id reported through the 'channel.objectId' frame channel.
+  uint32_t id() const;
+
+ protected:
+  uint32_t m_id{~0u};
 };
 
 // Subtypes ///////////////////////////////////////////////////////////////////

@@ -90,10 +90,20 @@ PRIVATE
 
 ## ANARI query code generation ##
 
+# device/json/ holds local copies of registry extensions (stems prefixed with
+# 'cycles_') trimmed to the parameters this device actually implements; they
+# take the place of the SDK registry files for the stems referenced by
+# cycles_device.json.
+file(GLOB LOCAL_EXTENSION_JSONS CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/json/*.json
+)
+
 anari_generate_queries(
   DEVICE_TARGET ${PROJECT_NAME}
   CPP_NAMESPACE anari_cycles
   JSON_DEFINITIONS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/cycles_device.json
+  JSON_ROOT_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/json
+  JSON_EXTENSION_FILES "${LOCAL_EXTENSION_JSONS}"
 )
 
 ## Installation ##
