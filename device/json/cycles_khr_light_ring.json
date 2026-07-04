@@ -3,7 +3,7 @@
   "name": "KHR_LIGHT_RING",
   "type": "extension",
   "dependencies": [],
-  "comment": "Local copy of the ANARI registry extension, trimmed to what this device implements. Omitted registry parameters: 'falloffAngle' (Cycles area-light spread has a fixed built-in soft edge; setting it warns and is ignored), 'innerRadius' (no Cycles analog for an annulus; nonzero values warn and the light stays a full disc), and 'intensityDistribution'/'c0' (photometric distributions are not implemented; see task 17). Keep info.name equal to the official extension name so introspection still advertises it."
+  "comment": "Local copy of the ANARI registry extension, trimmed to what this device implements. Omitted registry parameters: 'falloffAngle' (Cycles area-light spread has a fixed built-in soft edge; setting it warns and is ignored) and 'innerRadius' (no Cycles analog for an annulus; nonzero values warn and the light stays a full disc). 'intensityDistribution' values modulate the resolved radiance: 1D is rotationally symmetric over the polar angle from 'direction' (uniform on [0,pi], >=2 entries), 2D rows are C-halfplanes uniform over [0,2pi) anchored at 'c0', increasing right-handed around 'direction' (IES LM-63 Type C winding). The distribution's angular mapping is exact under rigid/uniform-scale instance transforms; non-uniform instance scaling skews the lookup angles slightly. Keep info.name equal to the official extension name so introspection still advertises it."
  },
  "objects": [
   {
@@ -118,6 +118,31 @@
      "tags": [],
      "default": 1.0,
      "description": "the amount of light emitted by a point on the light source in a direction in W/sr/m^2"
+    },
+    {
+     "name": "intensityDistribution",
+     "types": [
+      "ANARI_ARRAY1D",
+      "ANARI_ARRAY2D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "description": "luminous intensity distribution for photometric lights"
+    },
+    {
+     "name": "c0",
+     "types": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [],
+     "default": [
+      1.0,
+      0.0,
+      0.0
+     ],
+     "description": "direction of the C0-(half)plane (only used with a 2D intensityDistribution)"
     }
    ]
   }

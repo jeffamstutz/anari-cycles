@@ -3,7 +3,7 @@
   "name": "KHR_LIGHT_QUAD",
   "type": "extension",
   "dependencies": [],
-  "comment": "Local copy of the ANARI registry extension, trimmed to what this device implements. Omitted registry parameter: 'intensityDistribution'/'c0' (photometric distributions are not implemented; see task 17). 'side' supports all three registry values; with 'both' each face emits the resolved radiance, so 'intensity'/'power' are interpreted per face (total flux doubles). LIMITATION: 'intensity'/'power' are converted to radiance using the light's LOCAL edge area at commit time, so they are only exact for unscaled instances; 'radiance' is exact under any instance transform. Keep info.name equal to the official extension name so introspection still advertises it."
+  "comment": "Local copy of the ANARI registry extension, trimmed to what this device implements. 'side' supports all three registry values; with 'both' each face emits the resolved radiance, so 'intensity'/'power' are interpreted per face (total flux doubles). 'intensityDistribution' is declared with FLOAT32 elements per the spec text (the registry JSON says FLOAT32_VEC3, but the spec table and the CTS use scalars); values modulate the resolved radiance: 1D is rotationally symmetric over the polar angle from the emitting face's normal (uniform on [0,pi], >=2 entries), 2D rows are C-halfplanes uniform over [0,2pi) anchored at edge1, increasing right-handed around the emission direction (IES LM-63 Type C winding); for side='back'/'both' each face gets the profile mirrored about the quad's plane. LIMITATION: 'intensity'/'power' are converted to radiance using the light's LOCAL edge area at commit time, so they are only exact for unscaled instances; 'radiance' is exact under any instance transform. The distribution's angular mapping is exact under rigid/uniform-scale instance transforms; non-uniform instance scaling skews the lookup angles slightly. Keep info.name equal to the official extension name so introspection still advertises it."
  },
  "objects": [
   {
@@ -129,6 +129,18 @@
       "both"
      ],
      "description": "light emitting sides of the quad"
+    },
+    {
+     "name": "intensityDistribution",
+     "types": [
+      "ANARI_ARRAY1D",
+      "ANARI_ARRAY2D"
+     ],
+     "elementType": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "description": "luminous intensity distribution for photometric lights"
     }
    ]
   }

@@ -3,6 +3,7 @@
 
 #include "Light.h"
 #include <anari/anari_cpp/ext/linalg.h>
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -173,12 +174,14 @@ struct Ring : public Light
  private:
   math::float3 m_position{0.f, 0.f, 0.f};
   math::float3 m_direction{0.f, 0.f, -1.f};
+  math::float3 m_c0{1.f, 0.f, 0.f};
   float m_openingAngle{M_PI};
   float m_radius{0.f};
   float m_effectiveRadius{0.f};
   float m_innerRadius{0.f};
   float m_radiance{1.f};
   bool m_falloffAngleSet{false};
+  IntensityDistribution m_distribution;
 };
 
 struct QuadLight : public Light
@@ -206,6 +209,7 @@ struct QuadLight : public Light
   float m_area{1.f};
   float m_radiance{1.f};
   std::string m_side{"front"};
+  IntensityDistribution m_distribution;
 };
 
 struct UnknownLight : public Light
@@ -240,15 +244,72 @@ Light::~Light()
   }
 }
 
-void Light::attachUnitEmissionShader()
+// The unit-emission graph shared by all analytic lights; the light's actual
+// color/intensity is applied via ccl::Light::strength on top.
+static std::unique_ptr<ccl::ShaderGraph> makeUnitEmissionGraph()
 {
   auto graph = std::make_unique<ccl::ShaderGraph>();
-
   auto *emission = graph->create_node<ccl::EmissionNode>();
   emission->set_color(ccl::one_float3());
   emission->set_strength(1.f);
   graph->connect(
       emission->output("Emission"), graph->output()->input("Surface"));
+  return graph;
+}
+
+// Append a number in a locale-independent way (snprintf %g honors
+// LC_NUMERIC; a comma decimal separator would corrupt the IES stream, whose
+// parser treats commas as whitespace).
+template <typename T>
+static void appendNumber(std::string &s, T value, char sep)
+{
+  char buf[64];
+  auto res = std::to_chars(buf, buf + sizeof(buf) - 1, value);
+  *res.ptr = sep;
+  s.append(buf, res.ptr + 1);
+}
+
+// Serialize an ANARI intensityDistribution as an IES LM-63 Type C photometry
+// string for Cycles' IESLightNode (parser: cycles/src/util/ies.cpp).
+// Vertical angles are the ANARI polar angles (uniform over [0,180] deg);
+// horizontal angles are the C-planes (uniform over [0,360) deg, plus a
+// duplicated wrap row at 360 so the kernel interpolates across C0). A 1D
+// distribution (nC == 1) emits a single horizontal block, which Cycles
+// expands to a rotationally symmetric profile. Expects nV >= 2 and nC >= 1.
+static std::string synthesizeTypeCIES(
+    const std::vector<float> &values, int nV, int nC)
+{
+  // Cycles converts IES candela values to watts with a fixed factor
+  // (4*pi/177.83, util/ies.cpp); pre-divide via the file's candela
+  // multiplier so the kernel returns the raw ANARI modulation weights.
+  const double candelaCompensation = 1.0 / 0.0706650768394;
+
+  const int nH = nC <= 1 ? 1 : nC + 1;
+
+  std::string s = "IESNA:LM-63-2002\nTILT=NONE\n";
+  // lamps, lumens, candela multiplier, #v-angles, #h-angles, photometric
+  // type (1 = C), units, width, length, height, ballast factor,
+  // ballast-lamp factor, input watts
+  s += "1 -1 ";
+  appendNumber(s, candelaCompensation, ' ');
+  appendNumber(s, nV, ' ');
+  appendNumber(s, nH, ' ');
+  s += "1 2 0 0 0 1 1 0\n";
+  for (int i = 0; i < nV; i++)
+    appendNumber(s, 180.0 * i / (nV - 1), i + 1 == nV ? '\n' : ' ');
+  for (int j = 0; j < nH; j++)
+    appendNumber(s, 360.0 * j / nC, j + 1 == nH ? '\n' : ' ');
+  for (int j = 0; j < nH; j++) {
+    const float *row = values.data() + size_t(j % nC) * nV;
+    for (int i = 0; i < nV; i++)
+      appendNumber(s, row[i], i + 1 == nV ? '\n' : ' ');
+  }
+  return s;
+}
+
+void Light::attachUnitEmissionShader()
+{
+  auto graph = makeUnitEmissionGraph();
 
   m_cyclesShader = deviceState()->scene->create_node<ccl::Shader>();
   m_cyclesShader->name = "anari_light_emission";
@@ -293,6 +354,146 @@ float Light::photometricRadiance(float area)
     radiance = getParam<float>("power", 1.f) / (float(M_PI) * area);
   }
   return std::clamp(radiance, 0.f, std::numeric_limits<float>::max());
+}
+
+Light::IntensityDistribution Light::getIntensityDistributionParam()
+{
+  IntensityDistribution dist;
+  if (!hasParam("intensityDistribution"))
+    return dist;
+
+  const float *data = nullptr;
+  size_t nV = 0, nC = 1;
+  ANARIDataType elementType = ANARI_UNKNOWN;
+  auto a1 = getParamObject<Array1D>("intensityDistribution");
+  auto a2 = getParamObject<Array2D>("intensityDistribution");
+  if (a1) {
+    elementType = a1->elementType();
+    data = a1->beginAs<float>();
+    nV = a1->size();
+  } else if (a2) {
+    elementType = a2->elementType();
+    data = a2->dataAs<float>();
+    nV = a2->size().x;
+    nC = a2->size().y;
+  } else {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "light 'intensityDistribution' must be an ARRAY1D or ARRAY2D of "
+        "FLOAT32; ignoring");
+    return dist;
+  }
+  if (elementType != ANARI_FLOAT32) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "light 'intensityDistribution' must have FLOAT32 elements "
+        "(got %s); ignoring",
+        anari::toString(elementType));
+    return dist;
+  }
+
+  if (nV < 2) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "light 'intensityDistribution' needs at least two polar-angle "
+        "samples (got %zu); ignoring",
+        nV);
+    return dist;
+  }
+
+  dist.nV = int(nV);
+  dist.nC = int(std::max<size_t>(nC, 1));
+  dist.values.resize(nV * dist.nC);
+  bool sawInvalid = false;
+  for (size_t i = 0; i < dist.values.size(); i++) {
+    float v = data[i];
+    if (!std::isfinite(v) || v < 0.f) {
+      sawInvalid = true;
+      v = std::isfinite(v) ? std::max(v, 0.f) : 0.f;
+    }
+    dist.values[i] = v;
+  }
+  if (sawInvalid) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "light 'intensityDistribution' has negative or non-finite entries; "
+        "clamping to 0");
+  }
+  return dist;
+}
+
+void Light::updateEmissionShaderDistribution(const IntensityDistribution &dist,
+    const math::float3 &rowX,
+    const math::float3 &rowY,
+    const math::float3 &rowZ)
+{
+  if (!dist.present()) {
+    // Keep the constructor-built unit-emission graph untouched (renders
+    // without the parameter must be unchanged); only rebuild to drop a
+    // previously applied distribution.
+    if (!m_shaderHasDistribution)
+      return;
+    m_cyclesShader->set_graph(makeUnitEmissionGraph());
+    m_cyclesShader->tag_update(deviceState()->scene);
+    m_shaderHasDistribution = false;
+    m_appliedIES.clear();
+    return;
+  }
+
+  // Skip the rebuild (and the shader recompile + IES table re-upload it
+  // triggers) when a re-commit leaves the distribution and orientation
+  // unchanged; the IES string is a full fingerprint of the sample values.
+  auto iesString = synthesizeTypeCIES(dist.values, dist.nV, dist.nC);
+  if (m_shaderHasDistribution && iesString == m_appliedIES
+      && rowX == m_appliedRows[0] && rowY == m_appliedRows[1]
+      && rowZ == m_appliedRows[2]) {
+    return;
+  }
+
+  auto graph = std::make_unique<ccl::ShaderGraph>();
+
+  // In light shaders 'Incoming' is the world-space emission direction
+  // (light sample point -> receiver); bring it into the per-instance local
+  // space of the light...
+  auto *geom = graph->create_node<ccl::GeometryNode>();
+  auto *toLocal = graph->create_node<ccl::VectorTransformNode>();
+  toLocal->set_transform_type(ccl::NODE_VECTOR_TRANSFORM_TYPE_VECTOR);
+  toLocal->set_convert_from(ccl::NODE_VECTOR_TRANSFORM_CONVERT_SPACE_WORLD);
+  toLocal->set_convert_to(ccl::NODE_VECTOR_TRANSFORM_CONVERT_SPACE_OBJECT);
+  graph->connect(geom->output("Incoming"), toLocal->input("Vector"));
+
+  // ...and map it (dot products with the caller's matrix rows, which also
+  // undo any skew/scale baked into the light's transform) to the vector
+  // whose angles Cycles' IES kernel decodes (see Light.h).
+  const math::float3 rows[3] = {rowX, rowY, rowZ};
+  ccl::ShaderNode *dots[3];
+  for (int i = 0; i < 3; i++) {
+    auto *dot = graph->create_node<ccl::VectorMathNode>();
+    dot->set_math_type(ccl::NODE_VECTOR_MATH_DOT_PRODUCT);
+    dot->set_vector2(ccl::make_float3(rows[i].x, rows[i].y, rows[i].z));
+    graph->connect(toLocal->output("Vector"), dot->input("Vector1"));
+    dots[i] = dot;
+  }
+  auto *combine = graph->create_node<ccl::CombineXYZNode>();
+  graph->connect(dots[0]->output("Value"), combine->input("X"));
+  graph->connect(dots[1]->output("Value"), combine->input("Y"));
+  graph->connect(dots[2]->output("Value"), combine->input("Z"));
+
+  auto *ies = graph->create_node<ccl::IESLightNode>();
+  ies->set_ies(ccl::ustring(iesString));
+  graph->connect(combine->output("Vector"), ies->input("Vector"));
+
+  // The IES factor modulates the unit emission; the resolved photometric
+  // strength still comes in via ccl::Light::strength.
+  auto *emission = graph->create_node<ccl::EmissionNode>();
+  emission->set_color(ccl::one_float3());
+  graph->connect(ies->output("Fac"), emission->input("Strength"));
+  graph->connect(
+      emission->output("Emission"), graph->output()->input("Surface"));
+
+  m_cyclesShader->set_graph(std::move(graph));
+  m_cyclesShader->tag_update(deviceState()->scene);
+  m_shaderHasDistribution = true;
+  m_appliedIES = std::move(iesString);
+  m_appliedRows[0] = rowX;
+  m_appliedRows[1] = rowY;
+  m_appliedRows[2] = rowZ;
 }
 
 Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
@@ -765,6 +966,8 @@ void Ring::commitParameters()
   m_effectiveRadius = m_radius > 0.f ? m_radius : g_minRingRadius;
   m_radiance =
       photometricRadiance(float(M_PI) * m_effectiveRadius * m_effectiveRadius);
+  m_distribution = getIntensityDistributionParam();
+  m_c0 = getParam<math::float3>("c0", {1.f, 0.f, 0.f});
 }
 
 void Ring::finalize()
@@ -818,6 +1021,32 @@ void Ring::finalize()
   m_cyclesLight->set_strength(
       scaledColor(float(M_PI) * m_radiance * spreadCompensation));
   m_cyclesLight->tag_update(deviceState()->scene);
+
+  // intensityDistribution: gamma is measured from 'direction'; the C0
+  // half-plane is anchored at 'c0' (KHR_LIGHT_RING). The ring's local frame
+  // (positionDirectionXfm) is orthonormal with the emission axis on -Z, so
+  // the rows only rotate the C origin onto c0 (see Light.h).
+  {
+    auto c0 = math::float3{1.f, 0.f, 0.f};
+    if (m_distribution.present() && m_distribution.nC > 1) {
+      // c0 in the light's local frame, projected onto the ring's plane
+      const auto worldToLocal = rotationFromZNegativeToTarget(m_direction);
+      const auto c0l = math::mul(worldToLocal,
+          math::float4{m_c0.x, m_c0.y, m_c0.z, 0.f});
+      const float projLen = std::hypot(c0l.x, c0l.y);
+      if (std::isfinite(projLen) && projLen > 1e-6f) {
+        c0 = math::float3{c0l.x / projLen, c0l.y / projLen, 0.f};
+      } else {
+        reportMessage(ANARI_SEVERITY_WARNING,
+            "ring light 'c0' is parallel to 'direction' (or degenerate); "
+            "using an arbitrary C0-plane orientation");
+      }
+    }
+    updateEmissionShaderDistribution(m_distribution,
+        {-c0.y, c0.x, 0.f},
+        {-c0.x, -c0.y, 0.f},
+        {0.f, 0.f, 1.f});
+  }
   Light::finalize();
 }
 
@@ -862,6 +1091,7 @@ void QuadLight::commitParameters()
     m_area = 0.f;
   m_radiance = photometricRadiance(m_area);
   m_side = getParamString("side", "front");
+  m_distribution = getIntensityDistributionParam();
 }
 
 void QuadLight::finalize()
@@ -900,6 +1130,27 @@ void QuadLight::finalize()
   setup(m_cyclesLight);
   if (m_side == "both") // the back emitter is only instanced for 'both'
     setup(m_cyclesLightBack);
+
+  // intensityDistribution: gamma is measured from the emitting face's
+  // normal, the C0 half-plane is anchored at edge1 (KHR_LIGHT_QUAD). The
+  // matrix rows below map the local emission direction -- whose coordinates
+  // are in the (possibly skewed/scaled) edge1/edge2/normal basis baked into
+  // quadXfm() -- to the orthonormal-frame vector the IES kernel expects
+  // (see Light.h). For side='back'/'both' the flipped per-face transform
+  // mirrors the profile about the quad's plane automatically.
+  {
+    auto n = math::cross(m_edge1, m_edge2);
+    const float nLen = math::length(n);
+    n = nLen > 0.f ? n / nLen : math::float3{0.f, 0.f, 1.f};
+    const float e1Len = math::length(m_edge1);
+    const auto e1Hat =
+        e1Len > 0.f ? m_edge1 / e1Len : math::float3{1.f, 0.f, 0.f};
+    const auto e2Hat = math::cross(n, e1Hat);
+    updateEmissionShaderDistribution(m_distribution,
+        {0.f, -math::dot(m_edge2, e2Hat), 0.f},
+        {-e1Len, -math::dot(m_edge2, e1Hat), 0.f},
+        {0.f, 0.f, 1.f});
+  }
   Light::finalize();
 }
 

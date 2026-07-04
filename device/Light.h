@@ -3,12 +3,15 @@
 
 #pragma once
 
+#include "Array.h"
 #include "Object.h"
 // cycles
 #include "scene/light.h"
 #include "scene/shader.h"
 // std
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace anari_cycles {
 
@@ -48,6 +51,35 @@ struct Light : public Object
   // which Cycles multiplies on top of the shader's emission.
   void attachUnitEmissionShader();
 
+  // Parsed 'intensityDistribution' (KHR quad/ring photometric profiles):
+  // nC C-halfplane rows (uniform over [0,2pi), row 0 at C=0) of nV luminous
+  // intensity samples over the polar angle gamma, uniform on [0,pi]. Values
+  // are dimensionless weights that modulate the light's resolved radiance.
+  struct IntensityDistribution
+  {
+    std::vector<float> values; // nC * nV, C-major (row j = C-plane j)
+    int nV{0};
+    int nC{0};
+    bool present() const { return nV >= 2; }
+  };
+
+  // Read + validate the 'intensityDistribution' parameter (ARRAY1D/ARRAY2D
+  // of FLOAT32); returns an empty distribution (and warns) when unset or
+  // malformed.
+  IntensityDistribution getIntensityDistributionParam();
+
+  // Rebuild this light's emission shader graph to apply 'dist' (or restore
+  // the plain unit-emission graph when 'dist' is empty). The rows are the
+  // light-local -> IES-lookup-vector matrix: the shader dots the local-space
+  // emission direction with them so Cycles' IES kernel sees
+  // gamma = acos(-z) as the polar angle from the light's emission axis and
+  // h = atan2(x, y) + pi as the ANARI C-plane angle (C0 at the subtype's
+  // anchor, increasing right-handed around the emission direction).
+  void updateEmissionShaderDistribution(const IntensityDistribution &dist,
+      const math::float3 &rowX,
+      const math::float3 &rowY,
+      const math::float3 &rowZ);
+
   // The light color scaled by a photometric factor, in the form Cycles
   // expects for ccl::Light::strength.
   ccl::float3 scaledColor(float scale) const;
@@ -63,6 +95,12 @@ struct Light : public Object
 
   ccl::Light *m_cyclesLight{nullptr};
   ccl::Shader *m_cyclesShader{nullptr};
+  // Whether m_cyclesShader currently carries an intensityDistribution graph
+  // (so removing the parameter restores the plain unit-emission graph), and
+  // the applied graph's inputs (to skip no-op rebuilds on re-commit).
+  bool m_shaderHasDistribution{false};
+  std::string m_appliedIES;
+  math::float3 m_appliedRows[3]{};
 
   anari_vec::float3 m_color;
   bool m_visible{true};
