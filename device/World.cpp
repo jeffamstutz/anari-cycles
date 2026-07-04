@@ -155,9 +155,9 @@ Light *World::findFirstHDRILight() const
     auto **lightsEnd = (Light **)m_zeroLightData->handlesEnd();
 
     for (Light **lightPtr = lightsBegin; lightPtr != lightsEnd; ++lightPtr) {
-      if (Light *light = *lightPtr; light) {
+      if (Light *light = *lightPtr; light && light->cyclesLight()) {
         // Check if this is an HDRI light - we'll do this by checking the cycles
-        // light type
+        // light type (unknown light subtypes have no Cycles light at all)
         if (light->cyclesLight()->get_light_type() == ccl::LIGHT_BACKGROUND) {
           return light;
         }
@@ -180,9 +180,9 @@ Light *World::findFirstHDRILight() const
 
           for (Light **lightPtr = lightsBegin; lightPtr != lightsEnd;
               ++lightPtr) {
-            if (Light *light = *lightPtr; light) {
+            if (Light *light = *lightPtr; light && light->cyclesLight()) {
               // Check if this is an HDRI light - we'll do this by checking the
-              // cycles light type
+              // cycles light type (unknown subtypes have no Cycles light)
               if (light->cyclesLight()->get_light_type()
                   == ccl::LIGHT_BACKGROUND) {
                 return light;
@@ -199,8 +199,11 @@ Light *World::findFirstHDRILight() const
 
 void World::setupHDRIBackground()
 {
-  // Find first HDRI light from the world
-  if (Light *hdriLight = findFirstHDRILight()) {
+  // Find first HDRI light from the world (cached so per-frame consumers do
+  // not re-walk every instance's light array; see backgroundHdriLight()).
+  Light *hdriLight = findFirstHDRILight();
+  m_backgroundHdriLight = hdriLight;
+  if (hdriLight) {
     // Set the new HDRI background
     deviceState()->scene->background->set_shader(hdriLight->cyclesShader());
     deviceState()->scene->background->tag_update(deviceState()->scene);
@@ -208,6 +211,11 @@ void World::setupHDRIBackground()
     // Clear any existing HDRI background first
     deviceState()->scene->background->set_shader(nullptr);
   }
+}
+
+Light *World::backgroundHdriLight() const
+{
+  return m_backgroundHdriLight.ptr;
 }
 
 box3 World::bounds() const

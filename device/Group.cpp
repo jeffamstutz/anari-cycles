@@ -3,6 +3,7 @@
 
 #include "Group.h"
 // cycles
+#include "kernel/types.h"
 #include "scene/object.h"
 
 namespace anari_cycles {
@@ -94,9 +95,20 @@ void Group::addGroupToCurrentCyclesScene(
         l->warnIfUnknownObject();
         return;
       }
-      auto *o = state.scene->create_node<ccl::Object>();
-      o->set_geometry(l->cyclesLight());
-      o->set_tfm(mat4ToCycles(math::mul(xfm, l->xfm())));
+      auto makeLightObject = [&](ccl::Light *cl, const math::mat4 &lightXfm) {
+        auto *o = state.scene->create_node<ccl::Object>();
+        o->set_geometry(cl);
+        o->set_tfm(mat4ToCycles(math::mul(xfm, lightXfm)));
+        // KHR_AREA_LIGHTS 'visible': hide the light geometry from camera
+        // rays (Cycles turns this into SHADER_EXCLUDE_CAMERA on the light);
+        // illumination of the scene is unaffected.
+        if (!l->visibleToCamera())
+          o->set_visibility(o->get_visibility() & ~ccl::PATH_RAY_CAMERA);
+      };
+      makeLightObject(l->cyclesLight(), l->xfm());
+      // Second emitter for e.g. two-sided quad lights.
+      if (auto *second = l->secondaryCyclesLight())
+        makeLightObject(second, l->secondaryXfm());
     });
   }
 }

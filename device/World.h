@@ -32,6 +32,12 @@ struct World : public Object
 
   Light *findFirstHDRILight() const;
 
+  // The HDRI light currently driving scene->background (cached by
+  // setupHDRIBackground() during setCyclesWorldObjects()); nullptr when the
+  // world has none. Valid between world rebuilds because the world's light
+  // arrays keep the light alive.
+  Light *backgroundHdriLight() const;
+
   box3 bounds() const override;
 
  private:
@@ -43,6 +49,8 @@ struct World : public Object
   helium::IntrusivePtr<Instance> m_zeroInstance;
 
   helium::IntrusivePtr<ObjectArray> m_instanceData;
+
+  helium::IntrusivePtr<Light> m_backgroundHdriLight;
 
   // Camera shutter interval the motion instances were last baked against
   // (kept on the world -- not per frame -- so multiple frames/cameras
