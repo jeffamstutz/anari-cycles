@@ -38,6 +38,8 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm) const
         s->warnIfUnknownObject();
         return;
       }
+      if (!s->cyclesGeometry())
+        return;
       auto *o = state.scene->create_node<ccl::Object>();
       o->set_geometry(s->cyclesGeometry());
       o->set_tfm(cxfm);

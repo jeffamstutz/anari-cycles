@@ -231,6 +231,8 @@ Material::Material(CyclesGlobalState *s) : Object(ANARI_MATERIAL, s) {}
 
 Material::~Material()
 {
+  // Object release can happen while the render thread reads the scene.
+  CyclesGlobalState::SceneLock sceneLock(*deviceState());
   if (m_shader)
     deviceState()->scene->delete_node(m_shader);
 }

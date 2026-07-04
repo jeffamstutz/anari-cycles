@@ -75,7 +75,20 @@ void World::setCyclesWorldObjects()
   auto &state = *deviceState();
   auto *scene = state.scene;
 
-  scene->objects.clear();
+  // Self-guarding against the render thread (reentrant when the caller --
+  // normally Frame::renderFrame() -- already holds the lock).
+  CyclesGlobalState::SceneLock sceneLock(state);
+
+  // Remove the old objects through Scene::delete_nodes() rather than
+  // objects.clear(): managers cache per-object state keyed by Object pointer
+  // (e.g. VolumeManager::object_octrees_) and only delete_nodes() tells them
+  // to drop those entries.
+  if (!scene->objects.empty()) {
+    ccl::set<ccl::Object *> oldObjects;
+    for (size_t i = 0; i < scene->objects.size(); i++)
+      oldObjects.insert(scene->objects[i]);
+    scene->delete_nodes(oldObjects);
+  }
 
   m_zeroInstance->addInstanceObjectsToCyclesScene();
 

@@ -54,10 +54,10 @@ TransferFunction1D::TransferFunction1D(CyclesGlobalState *s)
 {
   auto &state = *deviceState();
 
-  auto shader = std::make_unique<ccl::Shader>();
-  shader->name = ccl::ustring("ANARI TransferFunction1D");
-  m_shader = shader.get();
-  state.scene->shaders.push_back(std::move(shader));
+  // create_node also sets the node's owner to the scene, which delete_node
+  // asserts on
+  m_shader = state.scene->create_node<ccl::Shader>();
+  m_shader->name = ccl::ustring("ANARI TransferFunction1D");
 
   m_shader->set_graph(std::make_unique<ccl::ShaderGraph>());
   m_shader->tag_update(state.scene);
@@ -66,9 +66,13 @@ TransferFunction1D::TransferFunction1D(CyclesGlobalState *s)
 TransferFunction1D::~TransferFunction1D()
 {
   auto &state = *deviceState();
-  if (m_mesh)
-    state.scene->delete_node(m_mesh);
-  state.scene->shaders.erase(m_shader);
+  // Object release can happen while the render thread reads the scene, and
+  // scene->objects may still reference the mesh -- defer its deletion.
+  CyclesGlobalState::SceneLock sceneLock(state);
+  state.retireGeometry(m_mesh);
+  // delete_node(Shader*) only clears the reference count; erasing the shader
+  // outright would leave a dangling used_shaders entry on the retired mesh.
+  state.scene->delete_node(m_shader);
 }
 
 bool TransferFunction1D::isValid() const
@@ -104,10 +108,9 @@ void TransferFunction1D::finalize()
   auto &state = *deviceState();
 
   if (!isValid()) {
-    if (m_mesh) {
-      state.scene->delete_node(m_mesh);
-      m_mesh = nullptr;
-    }
+    // deletion is deferred: scene->objects may still reference the mesh
+    state.retireGeometry(m_mesh);
+    m_mesh = nullptr;
     Volume::finalize();
     return;
   }
