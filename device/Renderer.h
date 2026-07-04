@@ -18,6 +18,7 @@ struct Renderer : public Object
 
   bool runAsync() const;
   int pixelSamples() const;
+  math::float3 backgroundColor() const;
 
  private:
   struct {

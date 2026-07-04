@@ -92,8 +92,9 @@ struct Directional : public Light
 
  private:
   math::float3 m_direction{0.f, 0.f, -1.f};
-  math::float3 m_prevDirection{0.f, 0.f, 0.f};
-  float m_irradiance{1.f};
+  float m_angularDiameter{0.f};
+  float m_strengthValue{1.f};
+  bool m_usesRadiance{false};
 };
 
 struct HDRI : public Light
@@ -105,13 +106,26 @@ struct HDRI : public Light
   void finalize() override;
   math::mat4 xfm() const override;
 
+  void setCameraBackgroundColor(const math::float3 &color) override;
+
  private:
+  // (Re)build the environment shader graph from the committed parameters
+  // and m_cameraBgColor. Keeps the ccl::Shader node itself stable so
+  // scene->background's shader pointer stays valid across rebuilds.
+  void rebuildEnvironmentShader();
+
   helium::IntrusivePtr<Array2D> m_radiance{};
   math::float3 m_up{0.f, 0.f, 1.f};
   math::float3 m_direction{1.f, 0.f, 0.f};
 
   float m_scale{1.f};
-  bool m_visible{true};
+
+  // When not 'visible', camera rays see this solid color instead of the
+  // environment; synced to the active renderer's 'background' each frame.
+  // Baked into the shader graph as a constant (cached ShaderNode pointers
+  // are unsafe: Cycles constant-folds and frees nodes on compile), so a
+  // color change rebuilds the graph.
+  math::float3 m_cameraBgColor{0.f, 0.f, 0.f};
 };
 
 struct Point : public Light
@@ -123,8 +137,10 @@ struct Point : public Light
   math::mat4 xfm() const override;
 
  private:
+  enum class Quantity { RADIANCE, INTENSITY, POWER };
   math::float3 m_position{0.f, 0.f, 0.f};
-  float m_intensity{1.f};
+  Quantity m_quantity{Quantity::INTENSITY};
+  float m_value{1.f};
   float m_radius{0.f};
 };
 
@@ -139,7 +155,8 @@ struct Spot : public Light
  private:
   math::float3 m_position{0.f, 0.f, 0.f};
   math::float3 m_direction{0.f, 0.f, -1.f};
-  float m_intensity{1.f};
+  float m_value{1.f};
+  bool m_usesPower{false};
   float m_openingAngle{M_PI};
   float m_falloffAngle{0.1f};
   float m_radius{0.f};
@@ -167,15 +184,26 @@ struct Ring : public Light
 struct QuadLight : public Light
 {
   QuadLight(CyclesGlobalState *s);
+  ~QuadLight() override;
 
+  bool isValid() const override;
   void commitParameters() override;
   void finalize() override;
   math::mat4 xfm() const override;
+  ccl::Light *secondaryCyclesLight() const override;
+  math::mat4 secondaryXfm() const override;
 
  private:
+  math::mat4 quadXfm(bool backSide) const;
+
+  // Second emitter for side='both' (a Cycles area light only emits from one
+  // hemisphere); shares the unit-emission shader, only instanced when used.
+  ccl::Light *m_cyclesLightBack{nullptr};
+
   math::float3 m_position{0.f, 0.f, 0.f};
   math::float3 m_edge1{1.f, 0.f, 0.f};
   math::float3 m_edge2{0.f, 1.f, 0.f};
+  float m_area{1.f};
   float m_radiance{1.f};
   std::string m_side{"front"};
 };
@@ -231,6 +259,11 @@ void Light::attachUnitEmissionShader()
   ccl::array<ccl::Node *> usedShaders;
   usedShaders.push_back_slow(m_cyclesShader);
   m_cyclesLight->set_used_shaders(usedShaders);
+
+  // MIS lets camera rays display the light geometry (KHR_AREA_LIGHTS
+  // 'visible', default true; the per-instance camera-visibility switch is
+  // in Group.cpp). Cycles' own default is false.
+  m_cyclesLight->set_use_mis(true);
 }
 
 ccl::float3 Light::scaledColor(float scale) const
@@ -243,6 +276,14 @@ float Light::photometricRadiance(float area)
   // ANARI area-light photometric precedence: 'radiance' wins over
   // 'intensity' (W/sr, divided by the emitting area) over 'power' (W,
   // divided by pi times the area for a Lambertian emitter).
+  //
+  // LIMITATION: 'area' is computed from the light's LOCAL parameters at
+  // commit time, but instance transforms (Group.cpp) are applied later and
+  // may scale the emitter. Since the Cycles lights are configured with
+  // normalize off (emitted radiance independent of world-space area), only
+  // 'radiance' is exact under instance scaling; 'intensity' and 'power' are
+  // only exact for unscaled instances. Fixing this would require per-instance
+  // light nodes; documented in the device's extension JSON instead.
   float radiance = 1.f;
   if (hasParam("radiance", ANARI_FLOAT32)) {
     radiance = getParam<float>("radiance", 1.f);
@@ -272,13 +313,60 @@ Light *Light::createInstance(std::string_view type, CyclesGlobalState *s)
     return new UnknownLight(type, s);
 }
 
+math::float3 Light::getNormalizedDirection(
+    const char *name, const math::float3 &fallback)
+{
+  const auto dir = getParam<math::float3>(name, fallback);
+  const float len = math::length(dir);
+  if (!std::isfinite(len) || len <= 0.f) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "light '%s' parameter is zero-length or non-finite; "
+        "using (%g, %g, %g)",
+        name,
+        double(fallback.x),
+        double(fallback.y),
+        double(fallback.z));
+    return fallback;
+  }
+  return dir / len;
+}
+
 void Light::commitParameters()
 {
   m_color = getParam<anari_vec::float3>("color", {1.f, 1.f, 1.f});
+  // KHR_AREA_LIGHTS: light geometry is visible to camera rays by default.
+  m_visible = getParam<bool>("visible", true);
+}
+
+bool Light::visibleToCamera() const
+{
+  return m_visible;
+}
+
+ccl::Light *Light::secondaryCyclesLight() const
+{
+  return nullptr;
+}
+
+math::mat4 Light::secondaryXfm() const
+{
+  return math::mat4(linalg::identity);
+}
+
+void Light::setCameraBackgroundColor(const math::float3 &)
+{
+  // only meaningful for HDRI lights
 }
 
 void Light::finalize()
 {
+  // Light state is baked into per-instance ccl::Objects at world-rebuild
+  // time (transform, camera visibility, secondary emitters), and neither
+  // helium object arrays nor Object::markFinalized() propagate light
+  // commits to the world -- invalidate the baked scene objects here so any
+  // light change triggers a rebuild on the next frame.
+  // TODO: make light updates more efficient (rebuilds the whole world).
+  deviceState()->objectUpdates.lastSceneChange = helium::newTimeStamp();
   Object::finalize();
 }
 
@@ -303,23 +391,46 @@ Directional::Directional(CyclesGlobalState *s)
 void Directional::commitParameters()
 {
   Light::commitParameters();
-  m_direction =
-      math::normalize(getParam<math::float3>("direction", {0.f, 0.f, -1.f}));
-  m_irradiance = std::clamp(getParam<float>("irradiance", 1.f),
+  m_direction = getNormalizedDirection("direction", {0.f, 0.f, -1.f});
+  // KHR_AREA_LIGHTS 'angularDiameter': apparent (full) angle of the sun
+  // disc, matching the Cycles SunLight 'angle' socket (also a full angle;
+  // the kernel halves it itself).
+  m_angularDiameter = std::clamp(
+      getParam<float>("angularDiameter", 0.f), 0.f, float(M_PI));
+  // KHR_AREA_LIGHTS 'radiance' (surface radiance of the sun disc) takes
+  // precedence over the base 'irradiance'.
+  m_usesRadiance = hasParam("radiance", ANARI_FLOAT32);
+  m_strengthValue = std::clamp(m_usesRadiance
+          ? getParam<float>("radiance", 1.f)
+          : getParam<float>("irradiance", 1.f),
       0.f,
       std::numeric_limits<float>::max());
 }
 
 void Directional::finalize()
 {
-  if (m_prevDirection != m_direction) {
-    reportMessage(ANARI_SEVERITY_PERFORMANCE_WARNING,
-        "make light updates more efficient!");
-    deviceState()->objectUpdates.lastSceneChange = helium::newTimeStamp();
-    m_prevDirection = m_direction;
+  auto *light = static_cast<ccl::SunLight *>(m_cyclesLight);
+  light->set_angle(m_angularDiameter);
+  if (m_usesRadiance) {
+    if (m_angularDiameter <= 0.f) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "directional light 'radiance' with angularDiameter 0 is a "
+          "degenerate (delta) sun; treating the value as irradiance");
+    }
+    // With normalize off, Cycles emits 'strength' directly as the disc's
+    // radiance (SunLight eval_fac = 1). The resulting irradiance on a
+    // surface facing the light is radiance * pi * sin^2(angularDiameter/2);
+    // at angularDiameter 0 the kernel degenerates to a delta light whose
+    // irradiance equals 'strength'.
+    light->set_normalize(false);
+  } else {
+    // Cycles' normalized sun divides by the disc's solid angle
+    // (area() = pi * sin^2(angle/2)), making 'strength' the irradiance on
+    // a surface facing the light independent of angularDiameter -- exactly
+    // ANARI 'irradiance'.
+    light->set_normalize(true);
   }
-
-  m_cyclesLight->set_strength(scaledColor(m_irradiance));
+  m_cyclesLight->set_strength(scaledColor(m_strengthValue));
   m_cyclesLight->tag_update(deviceState()->scene);
 
   Light::finalize();
@@ -344,10 +455,18 @@ void HDRI::commitParameters()
 
   m_radiance = getParamObject<Array2D>("radiance");
   m_scale = getParam<float>("scale", 1.f);
-  m_visible = getParam<bool>("visible", true);
 
-  m_up = getParam<math::float3>("up", {0.f, 0.f, 1.f});
-  m_direction = getParam<math::float3>("direction", {1.f, 0.f, 0.f});
+  // Only the registry-defined equirectangular layout is supported.
+  const auto layout = getParamString("layout", "equirectangular");
+  if (layout != "equirectangular") {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "hdri light layout '%s' is not supported; "
+        "using 'equirectangular'",
+        layout.c_str());
+  }
+
+  m_up = getNormalizedDirection("up", {0.f, 0.f, 1.f});
+  m_direction = getNormalizedDirection("direction", {1.f, 0.f, 0.f});
 }
 
 // Transform vector from ANARI coordinate system to Cycles coordinate system
@@ -364,90 +483,126 @@ void HDRI::finalize()
 
   m_cyclesLight->tag_update(deviceState()->scene);
 
-  if (m_cyclesShader) {
+  if (m_radiance) {
+    rebuildEnvironmentShader();
+  } else if (m_cyclesShader) {
     m_cyclesShader->dereference();
     deviceState()->scene->delete_node(m_cyclesShader);
     m_cyclesShader = nullptr;
   }
+}
 
-  // Create shader for HDRI if radiance is provided
-  if (m_radiance) {
-    auto graph = std::make_unique<ccl::ShaderGraph>();
+void HDRI::rebuildEnvironmentShader()
+{
+  auto graph = std::make_unique<ccl::ShaderGraph>();
 
-    // Build orthonormal basis from direction and up vectors
-    // We should ensure that up is not parallel to forward, let save that for
-    // later.
-    auto forward = math::normalize(m_direction);
-    auto up = math::normalize(m_up);
-    auto right = math::normalize(math::cross(forward, up));
-    up = math::normalize(math::cross(right, forward)); // Ensure orthogonality
+  // Build orthonormal basis from direction and up vectors (both already
+  // normalized at commit); guard against 'up' parallel to 'direction'.
+  auto forward = m_direction;
+  auto up = m_up;
+  auto right = math::cross(forward, up);
+  if (math::length(right) < 1e-6f) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "hdri light 'up' is parallel to 'direction'; picking an "
+        "arbitrary perpendicular up vector");
+    up = std::abs(forward.z) < 0.99f ? math::float3{0.f, 0.f, 1.f}
+                                     : math::float3{0.f, 1.f, 0.f};
+    right = math::cross(forward, up);
+  }
+  right = math::normalize(right);
+  up = math::normalize(math::cross(right, forward)); // Ensure orthogonality
 
-    // Create rotation matrix (column-major: each column is a basis vector)
-    // Transform from standard basis to our custom orientation
-    // math::mat3 rotationMat = {
-    //     {forward.x, right.x, up.x},  // First column
-    //     {forward.y, right.y, up.y},  // Second column
-    //     {forward.z, right.z, up.z}   // Third column
-    // };
-    math::mat3 rotationMat = {forward, right, up};
+  // Rotation from the standard basis to the custom orientation, as
+  // axis-angle for the Cycles vector rotation node.
+  math::mat3 rotationMat = {forward, right, up};
+  auto rotation = math::rotation_quat(rotationMat);
+  float angle = qangle(rotation);
+  math::float3 axis = qaxis(rotation);
 
-    // Extract axis-angle representation for Cycles vector rotation node
-    // math::float3 axis;
-    // float angle;
-    // axis_angle_from_matrix(rotationMat, axis, angle);
+  auto tex_coords = graph->create_node<ccl::TextureCoordinateNode>();
 
-    auto rotation = math::rotation_quat(rotationMat);
-    float angle = qangle(rotation);
-    math::float3 axis = qaxis(rotation);
+  auto vectorRotate = graph->create_node<ccl::VectorRotateNode>();
+  vectorRotate->set_rotate_type(ccl::NODE_VECTOR_ROTATE_TYPE_AXIS);
+  vectorRotate->set_angle(angle);
+  vectorRotate->set_axis(ccl::make_float3(axis.x, axis.y, axis.z));
+  graph->connect(
+      tex_coords->output("Generated"), vectorRotate->input("Vector"));
 
-    auto tex_coords = graph->create_node<ccl::TextureCoordinateNode>();
+  // Create environment texture node
+  auto *env_tex = graph->create_node<ccl::EnvironmentTextureNode>();
+  env_tex->set_projection(ccl::NODE_ENVIRONMENT_EQUIRECTANGULAR);
+  env_tex->set_colorspace(ccl::u_colorspace_data);
+  env_tex->set_tex_mapping_type(ccl::TextureMapping::VECTOR);
+  env_tex->set_tex_mapping_x_mapping(ccl::TextureMapping::X);
+  env_tex->set_tex_mapping_y_mapping(ccl::TextureMapping::Y);
+  env_tex->set_tex_mapping_z_mapping(ccl::TextureMapping::Z);
+  env_tex->set_tex_mapping_scale(ccl::make_float3(1.0f, 1.0f, 1.0f));
 
-    auto vectorRotate = graph->create_node<ccl::VectorRotateNode>();
-    vectorRotate->set_rotate_type(ccl::NODE_VECTOR_ROTATE_TYPE_AXIS);
-    vectorRotate->set_angle(angle);
-    vectorRotate->set_axis(ccl::make_float3(axis.x, axis.y, axis.z));
-    graph->connect(
-        tex_coords->output("Generated"), vectorRotate->input("Vector"));
+  graph->connect(vectorRotate->output("Vector"), env_tex->input("Vector"));
 
-    // Create environment texture node
-    auto *env_tex = graph->create_node<ccl::EnvironmentTextureNode>();
-    env_tex->set_projection(ccl::NODE_ENVIRONMENT_EQUIRECTANGULAR);
-    env_tex->set_colorspace(ccl::u_colorspace_data);
-    env_tex->set_tex_mapping_type(ccl::TextureMapping::VECTOR);
-    env_tex->set_tex_mapping_x_mapping(ccl::TextureMapping::X);
-    env_tex->set_tex_mapping_y_mapping(ccl::TextureMapping::Y);
-    env_tex->set_tex_mapping_z_mapping(ccl::TextureMapping::Z);
-    env_tex->set_tex_mapping_scale(ccl::make_float3(1.0f, 1.0f, 1.0f));
+  // Use SamplerImageLoader to get the image handle (identity-based
+  // ImageLoader::equals() dedups repeated adds of the same source array).
+  auto loader = std::make_unique<SamplerImageLoader>(m_radiance.ptr);
+  ccl::ImageParams params;
+  params.alpha_type = IMAGE_ALPHA_AUTO;
+  params.interpolation = INTERPOLATION_LINEAR;
 
-    graph->connect(vectorRotate->output("Vector"), env_tex->input("Vector"));
+  env_tex->handle = deviceState()->scene->image_manager->add_image(
+      std::move(loader), params, false);
 
-    // Use SamplerImageLoader to get the image handle
-    auto loader = std::make_unique<SamplerImageLoader>(m_radiance.ptr);
-    ccl::ImageParams params;
-    params.alpha_type = IMAGE_ALPHA_AUTO;
-    params.interpolation = INTERPOLATION_LINEAR;
+  // Create output node
+  auto *background = graph->create_node<ccl::BackgroundNode>();
 
-    env_tex->handle = deviceState()->scene->image_manager->add_image(
-        std::move(loader), params, false);
-
-    // Create output node
-    auto *background = graph->create_node<ccl::BackgroundNode>();
+  if (m_visible) {
     background->set_strength(m_scale);
-
-    // Connect environment texture to background
     graph->connect(env_tex->output("Color"), background->input("Color"));
+  } else {
+    // KHR_AREA_LIGHTS 'visible' = false: camera rays see the renderer's
+    // 'background' color (kept in sync via setCameraBackgroundColor())
+    // while all other rays still see the scaled environment, so the HDRI
+    // keeps illuminating the scene.
+    auto *scaledEnv = graph->create_node<ccl::MixNode>();
+    scaledEnv->set_mix_type(ccl::NODE_MIX_MUL);
+    scaledEnv->set_fac(1.f);
+    scaledEnv->set_color2(ccl::make_float3(m_scale, m_scale, m_scale));
+    graph->connect(env_tex->output("Color"), scaledEnv->input("Color1"));
 
-    graph->connect(
-        background->output("Background"), graph->output()->input("Surface"));
+    auto *lightPath = graph->create_node<ccl::LightPathNode>();
+    auto *mix = graph->create_node<ccl::MixNode>();
+    mix->set_mix_type(ccl::NODE_MIX_BLEND);
+    mix->set_color2(ccl::make_float3(
+        m_cameraBgColor.x, m_cameraBgColor.y, m_cameraBgColor.z));
+    graph->connect(lightPath->output("Is Camera Ray"), mix->input("Fac"));
+    graph->connect(scaledEnv->output("Color"), mix->input("Color1"));
 
-    // Create shader and assign graph
-    m_cyclesShader = deviceState()->scene->create_node<ccl::Shader>();
-    m_cyclesShader->set_graph(std::move(graph));
-    m_cyclesShader->tag_update(deviceState()->scene);
-    m_cyclesShader->reference();
+    background->set_strength(1.f);
+    graph->connect(mix->output("Color"), background->input("Color"));
   }
 
-  deviceState()->objectUpdates.lastSceneChange = helium::newTimeStamp();
+  graph->connect(
+      background->output("Background"), graph->output()->input("Surface"));
+
+  // Assign the new graph, keeping the shader node itself stable (it is
+  // referenced by scene->background between world rebuilds).
+  if (!m_cyclesShader) {
+    m_cyclesShader = deviceState()->scene->create_node<ccl::Shader>();
+    m_cyclesShader->reference();
+  }
+  m_cyclesShader->set_graph(std::move(graph));
+  m_cyclesShader->tag_update(deviceState()->scene);
+}
+
+void HDRI::setCameraBackgroundColor(const math::float3 &color)
+{
+  if (color == m_cameraBgColor)
+    return;
+  m_cameraBgColor = color; // remembered for future graph rebuilds
+  // Only an invisible HDRI's shader bakes this color into its camera-ray
+  // branch; a visible one shows the environment itself.
+  if (m_visible || !m_cyclesShader || !m_radiance)
+    return;
+  rebuildEnvironmentShader();
+  deviceState()->scene->background->tag_update(deviceState()->scene);
 }
 
 math::mat4 HDRI::xfm() const
@@ -467,19 +622,54 @@ void Point::commitParameters()
 {
   Light::commitParameters();
   m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
-  m_intensity = std::clamp(getParam<float>("intensity", 1.f),
-      0.f,
-      std::numeric_limits<float>::max());
-  m_radius = getParam<float>("radius", 0.f);
+  m_radius = std::max(getParam<float>("radius", 0.f), 0.f);
+  // Photometric precedence: 'radiance' (KHR_AREA_LIGHTS, sphere surface
+  // radiance) over 'intensity' (W/sr) over 'power' (W).
+  float value = 1.f;
+  if (hasParam("radiance", ANARI_FLOAT32)) {
+    m_quantity = Quantity::RADIANCE;
+    value = getParam<float>("radiance", 1.f);
+  } else if (hasParam("intensity", ANARI_FLOAT32)
+      || !hasParam("power", ANARI_FLOAT32)) {
+    m_quantity = Quantity::INTENSITY;
+    value = getParam<float>("intensity", 1.f);
+  } else {
+    m_quantity = Quantity::POWER;
+    value = getParam<float>("power", 1.f);
+  }
+  m_value = std::clamp(value, 0.f, std::numeric_limits<float>::max());
 }
 
 void Point::finalize()
 {
-  static_cast<ccl::PointLight *>(m_cyclesLight)->set_radius(m_radius);
-  // ANARI 'intensity' is radiant intensity (W/sr); Cycles interprets strength
-  // as total radiant flux (W) when 'normalize' is on (the default), so the
-  // isotropic conversion is flux = 4*pi * intensity.
-  m_cyclesLight->set_strength(scaledColor(4.f * float(M_PI) * m_intensity));
+  auto *light = static_cast<ccl::PointLight *>(m_cyclesLight);
+  light->set_radius(m_radius);
+  switch (m_quantity) {
+  case Quantity::RADIANCE:
+    if (m_radius <= 0.f) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "point light 'radiance' with radius 0 is a degenerate sphere; "
+          "treating the value as radiant intensity (W/sr)");
+    }
+    // With normalize off the kernel's eval_fac is 1/pi independent of the
+    // radius, so the sphere's surface radiance is strength/pi.
+    light->set_normalize(false);
+    m_cyclesLight->set_strength(scaledColor(float(M_PI) * m_value));
+    break;
+  case Quantity::INTENSITY:
+    // ANARI 'intensity' is radiant intensity (W/sr); Cycles interprets
+    // strength as total radiant flux (W) when 'normalize' is on, so the
+    // isotropic conversion is flux = 4*pi * intensity.
+    light->set_normalize(true);
+    m_cyclesLight->set_strength(scaledColor(4.f * float(M_PI) * m_value));
+    break;
+  case Quantity::POWER:
+    // ANARI 'power' is the total radiant flux (W) -- exactly Cycles'
+    // normalized strength.
+    light->set_normalize(true);
+    m_cyclesLight->set_strength(scaledColor(m_value));
+    break;
+  }
   m_cyclesLight->tag_update(deviceState()->scene);
   Light::finalize();
 }
@@ -503,9 +693,12 @@ void Spot::commitParameters()
 {
   Light::commitParameters();
   m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
-  m_direction =
-      math::normalize(getParam<math::float3>("direction", {0.f, 0.f, -1.f}));
-  m_intensity = std::clamp(getParam<float>("intensity", 1.f),
+  m_direction = getNormalizedDirection("direction", {0.f, 0.f, -1.f});
+  // Photometric precedence: 'intensity' (W/sr) over 'power' (W).
+  m_usesPower =
+      !hasParam("intensity", ANARI_FLOAT32) && hasParam("power", ANARI_FLOAT32);
+  m_value = std::clamp(m_usesPower ? getParam<float>("power", 1.f)
+                                   : getParam<float>("intensity", 1.f),
       0.f,
       std::numeric_limits<float>::max());
   // ANARI 'openingAngle' is the full apex angle of the cone (default pi),
@@ -527,9 +720,13 @@ void Spot::finalize()
   const float halfAngle = 0.5f * m_openingAngle;
   light->set_smooth(
       halfAngle > 0.f ? std::clamp(m_falloffAngle / halfAngle, 0.f, 1.f) : 0.f);
-  // Same W/sr -> W conversion as point lights (the cone only masks emission;
-  // Cycles does not renormalize flux into the cone).
-  m_cyclesLight->set_strength(scaledColor(4.f * float(M_PI) * m_intensity));
+  light->set_normalize(true);
+  // Same conversions as point lights (the cone only masks emission; neither
+  // ANARI nor Cycles renormalizes flux into the cone): 'intensity' (W/sr)
+  // maps to normalized strength 4*pi*intensity, 'power' (W) is the
+  // normalized strength itself.
+  m_cyclesLight->set_strength(
+      scaledColor(m_usesPower ? m_value : 4.f * float(M_PI) * m_value));
   m_cyclesLight->tag_update(deviceState()->scene);
   Light::finalize();
 }
@@ -551,8 +748,7 @@ void Ring::commitParameters()
 {
   Light::commitParameters();
   m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
-  m_direction =
-      math::normalize(getParam<math::float3>("direction", {0.f, 0.f, -1.f}));
+  m_direction = getNormalizedDirection("direction", {0.f, 0.f, -1.f});
   // ANARI 'openingAngle' is the full cone angle of emission (default pi =
   // full hemisphere), matching the Cycles area-light 'spread' socket (also
   // a full angle with default pi).
@@ -636,6 +832,23 @@ QuadLight::QuadLight(CyclesGlobalState *s)
     : Light(s, s->scene->create_node<ccl::AreaLight>())
 {
   attachUnitEmissionShader();
+  m_cyclesLightBack = s->scene->create_node<ccl::AreaLight>();
+  ccl::array<ccl::Node *> usedShaders;
+  usedShaders.push_back_slow(m_cyclesShader);
+  m_cyclesLightBack->set_used_shaders(usedShaders);
+  m_cyclesLightBack->set_use_mis(true); // see attachUnitEmissionShader()
+}
+
+QuadLight::~QuadLight()
+{
+  // Same deferred deletion as the primary light in ~Light().
+  CyclesGlobalState::SceneLock sceneLock(*deviceState());
+  deviceState()->retireGeometry(m_cyclesLightBack);
+}
+
+bool QuadLight::isValid() const
+{
+  return m_area > 0.f;
 }
 
 void QuadLight::commitParameters()
@@ -644,39 +857,68 @@ void QuadLight::commitParameters()
   m_position = getParam<math::float3>("position", {0.f, 0.f, 0.f});
   m_edge1 = getParam<math::float3>("edge1", {1.f, 0.f, 0.f});
   m_edge2 = getParam<math::float3>("edge2", {0.f, 1.f, 0.f});
-  m_radiance =
-      photometricRadiance(math::length(math::cross(m_edge1, m_edge2)));
+  m_area = math::length(math::cross(m_edge1, m_edge2));
+  if (!std::isfinite(m_area))
+    m_area = 0.f;
+  m_radiance = photometricRadiance(m_area);
   m_side = getParamString("side", "front");
 }
 
 void QuadLight::finalize()
 {
-  if (m_side == "both") {
+  if (m_area <= 0.f) {
     reportMessage(ANARI_SEVERITY_WARNING,
-        "quad light side='both' is not supported; using side='front'");
-  } else if (m_side != "front" && m_side != "back") {
+        "quad light 'edge1'/'edge2' span zero area (degenerate or "
+        "non-finite); skipping light");
+    Light::finalize();
+    return;
+  }
+  if (m_side != "front" && m_side != "back" && m_side != "both") {
     reportMessage(ANARI_SEVERITY_WARNING,
         "invalid quad light side '%s'; using side='front'",
         m_side.c_str());
     m_side = "front";
   }
 
-  auto *light = static_cast<ccl::AreaLight *>(m_cyclesLight);
-  light->set_sizeu(1.f);
-  light->set_sizev(1.f);
-  light->set_ellipse(false);
-  light->set_spread(float(M_PI));
-  // With normalize off, the emitted radiance is strength/pi independent of
-  // the light's area (kernel eval_fac = invarea/pi with invarea = 1), so
-  // ANARI 'radiance' maps to strength = pi * radiance. This also keeps the
-  // radiance invariant under instance scaling.
-  light->set_normalize(false);
-  m_cyclesLight->set_strength(scaledColor(float(M_PI) * m_radiance));
-  m_cyclesLight->tag_update(deviceState()->scene);
+  // side='both' instances the back emitter too (see secondaryCyclesLight());
+  // each face then emits the resolved radiance, so 'intensity'/'power' are
+  // interpreted per face (total flux doubles).
+  const auto setup = [&](ccl::Light *cyclesLight) {
+    auto *light = static_cast<ccl::AreaLight *>(cyclesLight);
+    light->set_sizeu(1.f);
+    light->set_sizev(1.f);
+    light->set_ellipse(false);
+    light->set_spread(float(M_PI));
+    // With normalize off, the emitted radiance is strength/pi independent of
+    // the light's area (kernel eval_fac = invarea/pi with invarea = 1), so
+    // ANARI 'radiance' maps to strength = pi * radiance. This also keeps the
+    // radiance invariant under instance scaling.
+    light->set_normalize(false);
+    light->set_strength(scaledColor(float(M_PI) * m_radiance));
+    light->tag_update(deviceState()->scene);
+  };
+  setup(m_cyclesLight);
+  if (m_side == "both") // the back emitter is only instanced for 'both'
+    setup(m_cyclesLightBack);
   Light::finalize();
 }
 
+ccl::Light *QuadLight::secondaryCyclesLight() const
+{
+  return m_side == "both" ? m_cyclesLightBack : nullptr;
+}
+
 math::mat4 QuadLight::xfm() const
+{
+  return quadXfm(m_side == "back");
+}
+
+math::mat4 QuadLight::secondaryXfm() const
+{
+  return quadXfm(true);
+}
+
+math::mat4 QuadLight::quadXfm(bool backSide) const
 {
   const auto center = m_position + 0.5f * (m_edge1 + m_edge2);
 
@@ -686,7 +928,7 @@ math::mat4 QuadLight::xfm() const
   else
     normal = {0.f, 0.f, 1.f};
 
-  if (m_side == "back")
+  if (backSide)
     normal = -normal;
 
   return math::mat4{{m_edge1.x, m_edge1.y, m_edge1.z, 0.f},

@@ -1,0 +1,143 @@
+{
+ "info": {
+  "name": "KHR_AREA_LIGHTS",
+  "type": "extension",
+  "dependencies": [
+   "khr_light_directional",
+   "khr_light_point",
+   "khr_light_spot",
+   "cycles_khr_light_ring",
+   "cycles_khr_light_quad",
+   "khr_light_hdri"
+  ],
+  "comment": "Local copy of the ANARI registry extension. Parameter set is unmodified (all of it is implemented); only the dependency stems are rewritten to the local trimmed copies (cycles_khr_light_ring, cycles_khr_light_quad) so the code generator does not pull the untrimmed registry files back in, plus khr_light_spot which the registry copy defines an object for but omits from its dependency list. Semantics notes: point 'radiance' with radius 0 and directional 'radiance' with angularDiameter 0 degenerate to intensity/irradiance respectively (warned); hdri 'visible'=false shows the renderer 'background' color to camera rays."
+ },
+ "objects": [
+  {
+   "type": "ANARI_LIGHT",
+   "name": "directional",
+   "parameters": [
+    {
+     "name": "angularDiameter",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 0.0,
+     "description": "apparent size of the light in radians"
+    },
+    {
+     "name": "radiance",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 1.0,
+     "description": "the amount of light emitted by a point on the light source in a direction in W/sr/m^2"
+    },
+    {
+     "name": "visible",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": 1,
+     "description": "visibility of the light geometry"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "point",
+   "parameters": [
+    {
+     "name": "radius",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 0.0,
+     "description": "radius of the sphere light"
+    },
+    {
+     "name": "radiance",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 1.0,
+     "description": "the amount of light emitted by a point on the light source in a direction in W/sr/m^2"
+    },
+    {
+     "name": "visible",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": 1,
+     "description": "visibility of the light geometry"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "hdri",
+   "parameters": [
+    {
+     "name": "visible",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": 1,
+     "description": "visibility of the light geometry"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "ring",
+   "parameters": [
+    {
+     "name": "visible",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": 1,
+     "description": "visibility of the light geometry"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "quad",
+   "parameters": [
+    {
+     "name": "visible",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": 1,
+     "description": "visibility of the light geometry"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "spot",
+   "parameters": [
+    {
+     "name": "visible",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": 1,
+     "description": "visibility of the light geometry"
+    }
+   ]
+  }
+ ]
+}

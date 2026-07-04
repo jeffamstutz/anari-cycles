@@ -118,6 +118,11 @@ int Renderer::pixelSamples() const
   return m_pixelSamples;
 }
 
+math::float3 Renderer::backgroundColor() const
+{
+  return {m_backgroundColor.x, m_backgroundColor.y, m_backgroundColor.z};
+}
+
 } // namespace anari_cycles
 
 CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::Renderer *);

@@ -141,6 +141,13 @@ void Frame::renderFrame()
       m_camera->setCameraCurrent(m_frameData.size.x, m_frameData.size.y);
       m_renderer->makeRendererCurrent();
 
+      // An HDRI light drives scene->background; when it is not 'visible',
+      // its shader shows a solid color to camera rays that must track this
+      // renderer's 'background' parameter (no-op otherwise). The pointer is
+      // cached during the world rebuild above.
+      if (Light *hdri = m_world->backgroundHdriLight())
+        hdri->setCameraBackgroundColor(m_renderer->backgroundColor());
+
       state.buffer_params.width = m_frameData.size.x;
       state.buffer_params.height = m_frameData.size.y;
       state.buffer_params.full_width = m_frameData.size.x;
