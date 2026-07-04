@@ -47,6 +47,11 @@ struct Instance : public Object
   helium::ChangeObserverPtr<Array1D> m_xfmArray;
   math::mat4 m_xfm;
 
+  // KHR_FRAME_CHANNEL_INSTANCE_ID: uniform 'id' (~0u = unset) plus the
+  // per-transform 'id' array of KHR_INSTANCE_TRANSFORM_ARRAY.
+  uint32_t m_id{~0u};
+  helium::ChangeObserverPtr<Array1D> m_idArray;
+
   enum class Subtype
   {
     TRANSFORM,

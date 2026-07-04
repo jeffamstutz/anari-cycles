@@ -13,7 +13,7 @@
 namespace anari_cycles {
 
 CyclesGlobalState::CyclesGlobalState(ANARIDevice d)
-    : helium::BaseGlobalDeviceState(d)
+    : helium::BaseGlobalDeviceState(d), anariDevice(d)
 {}
 
 void CyclesGlobalState::waitOnCurrentFrame() const

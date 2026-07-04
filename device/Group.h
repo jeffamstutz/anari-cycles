@@ -23,8 +23,11 @@ struct Group : public Object
   // uniformly spanning the camera shutter interval (Cycles kernel ray-time
   // [0,1]); it applies to surfaces and volumes -- Cycles has no motion blur
   // for lights, which use 'xfm' (the shutter-start pose) only.
+  // 'instanceId' is the ANARI Instance 'id' (KHR_FRAME_CHANNEL_INSTANCE_ID)
+  // of the instance being expanded; ~0u means "no id set".
   void addGroupToCurrentCyclesScene(const math::mat4 &xfm,
-      const std::vector<ccl::Transform> *motion = nullptr) const;
+      const std::vector<ccl::Transform> *motion = nullptr,
+      uint32_t instanceId = ~0u) const;
 
   box3 bounds() const override;
 

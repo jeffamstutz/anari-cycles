@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Frame.h"
+// std
+#include <algorithm>
 
 namespace anari_cycles {
 
@@ -42,7 +44,15 @@ void Frame::commitParameters()
   m_normalType = getParam<anari::DataType>("channel.normal", ANARI_UNKNOWN);
   m_albedoType = getParam<anari::DataType>("channel.albedo", ANARI_UNKNOWN);
   m_objectIdType = getParam<anari::DataType>("channel.objectId", ANARI_UNKNOWN);
+  m_primitiveIdType =
+      getParam<anari::DataType>("channel.primitiveId", ANARI_UNKNOWN);
+  m_instanceIdType =
+      getParam<anari::DataType>("channel.instanceId", ANARI_UNKNOWN);
   m_accumulation = getParam<bool>("accumulation", false);
+  m_completionCallback = getParam<ANARIFrameCompletionCallback>(
+      "frameCompletionCallback", nullptr);
+  m_completionCallbackUserData =
+      getParam<void *>("frameCompletionCallbackUserData", nullptr);
   m_frameData.size = getParam<uint2>("size", make_uint2(10, 10));
 }
 
@@ -69,6 +79,8 @@ void Frame::finalize()
   m_normalBuffer.resize(m_normalType == ANARI_FLOAT32_VEC3 ? numPixels * 3 : 0);
   m_albedoBuffer.resize(m_albedoType == ANARI_FLOAT32_VEC3 ? numPixels * 3 : 0);
   m_objectIdBuffer.resize(m_objectIdType == ANARI_UINT32 ? numPixels : 0);
+  m_primitiveIdBuffer.resize(m_primitiveIdType == ANARI_UINT32 ? numPixels : 0);
+  m_instanceIdBuffer.resize(m_instanceIdType == ANARI_UINT32 ? numPixels : 0);
 }
 
 bool Frame::getProperty(const std::string_view &name,
@@ -79,6 +91,38 @@ bool Frame::getProperty(const std::string_view &name,
 {
   if (type == ANARI_FLOAT32 && name == "duration") {
     helium::writeToVoidP(ptr, m_duration);
+    return true;
+  } else if (type == ANARI_FLOAT32 && name == "renderProgress") {
+    // Progress of the most recent renderFrame() task: the fraction of the
+    // samples that call added on top of the accumulated result. Derived
+    // from the session Progress' completed-sample counter, which trails
+    // behind this frame's [base, target] sample interval until the render
+    // thread catches up (so it never exceeds it and never goes backwards).
+    float p = 1.f;
+    if (m_progressSampleTarget == 0)
+      p = 0.f; // this frame never rendered
+    else if (!ready()) {
+      auto &progress = deviceState()->session->progress;
+      const double done =
+          double(progress.get_current_sample()) - double(m_progressSampleBase);
+      const double total =
+          double(m_progressSampleTarget - m_progressSampleBase);
+      p = std::clamp(float(done / total), 0.f, 1.f);
+    }
+    helium::writeToVoidP(ptr, p);
+    return true;
+  } else if (type == ANARI_FLOAT32 && name == "refinementProgress") {
+    // Progress of the whole (progressive) accumulation toward the current
+    // cumulative sample target -- restarts near 0 whenever accumulation
+    // resets, reaches 1 when the last requested sample lands.
+    float p = 1.f;
+    if (m_progressSampleTarget == 0)
+      p = 0.f;
+    else if (!ready()) {
+      p = std::clamp(
+          float(deviceState()->session->progress.get_progress()), 0.f, 1.f);
+    }
+    helium::writeToVoidP(ptr, p);
     return true;
   } else if (type == ANARI_INT32 && name == "numSamples") {
     helium::writeToVoidP(ptr, int(deviceState()->sessionSamples));
@@ -159,10 +203,20 @@ void Frame::renderFrame()
       state.session_params.samples = m_renderer->pixelSamples();
       state.session->reset(state.session_params, state.buffer_params);
       state.sessionSamples = 0;
+
+      // Session::reset() is applied lazily on the render thread; zero the
+      // Progress sample counters right away (thread-safe, and no sampling
+      // is in flight here) so the renderProgress/refinementProgress
+      // properties don't read the previous accumulation's counts in the
+      // window before the reset lands -- stale-high counts would make them
+      // spike to 1 and then fall back.
+      state.session->progress.reset_sample();
     }
 
+    m_progressSampleBase = state.sessionSamples;
     state.sessionSamples += m_renderer->pixelSamples();
     state.session->set_samples(state.sessionSamples);
+    m_progressSampleTarget = state.sessionSamples;
   }
 
   state.session->start();
@@ -201,6 +255,12 @@ void *Frame::map(std::string_view channel,
   } else if (channel == "channel.objectId") {
     *pixelType = ANARI_UINT32;
     return m_objectIdBuffer.data();
+  } else if (channel == "channel.primitiveId") {
+    *pixelType = ANARI_UINT32;
+    return m_primitiveIdBuffer.data();
+  } else if (channel == "channel.instanceId") {
+    *pixelType = ANARI_UINT32;
+    return m_instanceIdBuffer.data();
   } else {
     *width = 0;
     *height = 0;
@@ -219,7 +279,9 @@ int Frame::frameReady(ANARIWaitMask m)
   if (m == ANARI_NO_WAIT)
     return ready();
   else {
-    wait();
+    // Per KHR_FRAME_COMPLETION_CALLBACK the completion callback must have
+    // returned before anariFrameReady(ANARI_WAIT) does.
+    deviceState()->output_driver->waitForCallbacks();
     return 1;
   }
 }

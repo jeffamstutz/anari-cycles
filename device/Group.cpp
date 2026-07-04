@@ -24,8 +24,9 @@ void Group::commitParameters()
   m_lightData = getParamObject<ObjectArray>("light");
 }
 
-void Group::addGroupToCurrentCyclesScene(
-    const math::mat4 &xfm, const std::vector<ccl::Transform> *motion) const
+void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
+    const std::vector<ccl::Transform> *motion,
+    uint32_t instanceId) const
 {
   auto &state = *deviceState();
 
@@ -40,6 +41,19 @@ void Group::addGroupToCurrentCyclesScene(
     steps.resize(motion->size());
     std::copy(motion->begin(), motion->end(), steps.data());
     o->set_motion(steps);
+  };
+
+  // The instance 'id' feeds the 'instanceId' frame channel through a
+  // per-object float attribute read by the OutputAOV nodes in every surface
+  // material (see Material::makeGraph()). Stored biased by +1 -- exact in a
+  // float for ids < 2^24 -- so the "no id" default (~0u) becomes 0, the
+  // value untouched AOV pixels read back anyway. Volumes get the attribute
+  // too, but Cycles never runs AOV nodes in volume shading, so volume
+  // pixels always read back ~0u.
+  const float instanceIdAttr = instanceId == ~0u ? 0.f : instanceId + 1.f;
+  auto setInstanceId = [&](ccl::Object *o) {
+    o->attributes.emplace_back(
+        OIIO::ustring("instanceId"), OIIO::TypeFloat, 1, &instanceIdAttr);
   };
 
   if (m_surfaceData) {
@@ -57,6 +71,7 @@ void Group::addGroupToCurrentCyclesScene(
       o->set_geometry(s->cyclesGeometry());
       o->set_tfm(cxfm);
       setMotion(o);
+      setInstanceId(o);
       o->set_pass_id(s->id());
     });
   }
@@ -76,6 +91,7 @@ void Group::addGroupToCurrentCyclesScene(
       o->set_geometry(v->cyclesGeometry());
       o->set_tfm(cxfm);
       setMotion(o);
+      setInstanceId(o);
       o->set_pass_id(v->id());
     });
   }

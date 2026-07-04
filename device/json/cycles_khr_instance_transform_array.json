@@ -23,6 +23,17 @@
      ],
      "tags": [],
      "description": "array of transforms applied to objects in the instance"
+    },
+    {
+     "name": "id",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "elementType": [
+      "ANARI_UINT32"
+     ],
+     "tags": [],
+     "description": "per-transform user id for instanceId channel"
     }
    ]
   }
