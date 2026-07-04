@@ -3,8 +3,11 @@
 
 #include "Geometry.h"
 // cycles
+#include "scene/hair.h"
 #include "scene/mesh.h"
 #include "scene/pointcloud.h"
+// std
+#include <vector>
 
 namespace anari_cycles {
 
@@ -593,6 +596,258 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
   }
 }
 
+// Curve definitions //////////////////////////////////////////////////////////
+
+struct Curve : public Geometry
+{
+  Curve(CyclesGlobalState *s);
+  ~Curve() override;
+
+  void commitParameters() override;
+  void finalize() override;
+
+  ccl::Geometry *createCyclesGeometryNode() override;
+  void syncCyclesNode(ccl::Geometry *node) const override;
+
+  box3 bounds() const override;
+
+ private:
+  // Convert ANARI 2-vertex segments to Cycles curves, merging runs of
+  // consecutive segments that share a vertex into multi-key curves.
+  // keyVertex[k] is the source ANARI vertex of Cycles key k, firstKey[c] the
+  // first key of Cycles curve c.
+  void computeCurveLayout(
+      std::vector<int> &firstKey, std::vector<uint32_t> &keyVertex) const;
+  void setCurves(ccl::Hair *hair,
+      const std::vector<int> &firstKey,
+      const std::vector<uint32_t> &keyVertex) const;
+  void setAttributes(
+      ccl::Hair *hair, const std::vector<uint32_t> &keyVertex) const;
+
+  helium::ChangeObserverPtr<Array1D> m_index;
+  helium::ChangeObserverPtr<Array1D> m_vertexPosition;
+  helium::IntrusivePtr<Array1D> m_vertexColor;
+  helium::IntrusivePtr<Array1D> m_vertexAttribute0;
+  helium::IntrusivePtr<Array1D> m_vertexAttribute1;
+  helium::IntrusivePtr<Array1D> m_vertexAttribute2;
+  helium::IntrusivePtr<Array1D> m_vertexAttribute3;
+  helium::IntrusivePtr<Array1D> m_vertexRadius;
+  float m_radius{1.f};
+};
+
+Curve::Curve(CyclesGlobalState *s)
+    : Geometry(s), m_index(this), m_vertexPosition(this)
+{}
+
+Curve::~Curve() = default;
+
+void Curve::commitParameters()
+{
+  Geometry::commitParameters();
+
+  m_index = getParamObject<Array1D>("primitive.index");
+  m_vertexPosition = getParamObject<Array1D>("vertex.position");
+  m_vertexColor = getParamObject<Array1D>("vertex.color");
+  m_vertexAttribute0 = getParamObject<Array1D>("vertex.attribute0");
+  m_vertexAttribute1 = getParamObject<Array1D>("vertex.attribute1");
+  m_vertexAttribute2 = getParamObject<Array1D>("vertex.attribute2");
+  m_vertexAttribute3 = getParamObject<Array1D>("vertex.attribute3");
+  m_vertexRadius = getParamObject<Array1D>("vertex.radius");
+  m_radius = getParam<float>("radius", 1.f);
+}
+
+void Curve::finalize()
+{
+  if (!m_vertexPosition) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "missing required parameter 'vertex.position' on curve geometry");
+  }
+
+  Geometry::finalize();
+}
+
+ccl::Geometry *Curve::createCyclesGeometryNode()
+{
+  auto *hair = deviceState()->scene->create_node<ccl::Hair>();
+  hair->curve_shape = ccl::CURVE_THICK_LINEAR;
+  return hair;
+}
+
+void Curve::syncCyclesNode(ccl::Geometry *node) const
+{
+  auto *hair = (ccl::Hair *)node;
+
+  if (!m_vertexPosition) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "Curve::syncCyclesNode() detected incomplete geometry");
+    return;
+  }
+
+  std::vector<int> firstKey;
+  std::vector<uint32_t> keyVertex;
+  computeCurveLayout(firstKey, keyVertex);
+
+  setCurves(hair, firstKey, keyVertex);
+  setAttributes(hair, keyVertex);
+}
+
+box3 Curve::bounds() const
+{
+  box3 b = empty_box3();
+  if (!m_vertexPosition)
+    return b;
+
+  // Only vertices referenced by segments contribute (unused vertices must not
+  // inflate the bounds); computeCurveLayout() defines which those are.
+  std::vector<int> firstKey;
+  std::vector<uint32_t> keyVertex;
+  computeCurveLayout(firstKey, keyVertex);
+
+  const float *srcRadius =
+      m_vertexRadius ? m_vertexRadius->beginAs<float>() : nullptr;
+  const auto *srcPoint = m_vertexPosition->beginAs<anari_vec::float3>();
+  for (uint32_t vi : keyVertex) {
+    const auto &v = srcPoint[vi];
+    const float r = srcRadius ? srcRadius[vi] : m_radius;
+    extend(b, make_float3(v[0] - r, v[1] - r, v[2] - r));
+    extend(b, make_float3(v[0] + r, v[1] + r, v[2] + r));
+  }
+  return b;
+}
+
+void Curve::computeCurveLayout(
+    std::vector<int> &firstKey, std::vector<uint32_t> &keyVertex) const
+{
+  const size_t numVerts = m_vertexPosition->size();
+  const size_t nSeg = m_index ? m_index->size() : numVerts / 2;
+
+  const uint32_t *idx32 = nullptr;
+  const uint64_t *idx64 = nullptr;
+  if (m_index) {
+    if (m_index->elementType() == ANARI_UINT64)
+      idx64 = m_index->beginAs<uint64_t>();
+    else
+      idx32 = m_index->beginAs<uint32_t>();
+  }
+
+  firstKey.reserve(nSeg);
+  keyVertex.reserve(nSeg * 2);
+
+  // Runs of consecutive segments sharing a vertex ((a,a+1),(a+1,a+2),...)
+  // merge into one multi-key Cycles curve. Thick-linear curves have spherical
+  // end caps, so the union of per-segment 2-key curves is geometrically
+  // identical; merging just shares the interior keys.
+  bool chainActive = false;
+  uint64_t prevV0 = 0;
+  size_t numSkipped = 0;
+  for (size_t i = 0; i < nSeg; i++) {
+    const uint64_t v0 = idx64 ? idx64[i] : (idx32 ? idx32[i] : i);
+    if (numVerts < 2 || v0 > numVerts - 2) { // overflow-safe v0 + 1 >= numVerts
+      numSkipped++;
+      chainActive = false;
+      continue;
+    }
+    if (!chainActive || v0 != prevV0 + 1) {
+      firstKey.push_back(int(keyVertex.size()));
+      keyVertex.push_back(uint32_t(v0));
+    }
+    keyVertex.push_back(uint32_t(v0 + 1));
+    chainActive = true;
+    prevV0 = v0;
+  }
+
+  if (numSkipped > 0) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "curve geometry: skipped %zu segment(s) referencing out-of-range"
+        " vertices",
+        numSkipped);
+  }
+}
+
+void Curve::setCurves(ccl::Hair *hair,
+    const std::vector<int> &firstKey,
+    const std::vector<uint32_t> &keyVertex) const
+{
+  ccl::array<ccl::float3> keys;
+  ccl::array<float> radius;
+  ccl::array<int> first;
+  ccl::array<int> shader;
+
+  auto *dstKey = keys.resize(keyVertex.size());
+  auto *dstRadius = radius.resize(keyVertex.size());
+  auto *dstFirst = first.resize(firstKey.size());
+  auto *dstShader = shader.resize(firstKey.size());
+
+  const auto *srcPoint = m_vertexPosition->beginAs<anari_vec::float3>();
+  const float *srcRadius =
+      m_vertexRadius ? m_vertexRadius->beginAs<float>() : nullptr;
+
+  for (size_t k = 0; k < keyVertex.size(); k++) {
+    const auto &pt = srcPoint[keyVertex[k]];
+    dstKey[k] = make_float3(pt[0], pt[1], pt[2]);
+    dstRadius[k] = srcRadius ? srcRadius[keyVertex[k]] : m_radius;
+  }
+
+  for (size_t c = 0; c < firstKey.size(); c++) {
+    dstFirst[c] = firstKey[c];
+    dstShader[c] = 0;
+  }
+
+  hair->set_curve_keys(keys);
+  hair->set_curve_radius(radius);
+  hair->set_curve_first_key(first);
+  hair->set_curve_shader(shader);
+
+  // Attributes added on a previous sync keep their old element count;
+  // resize them to the new key count before setAttributes() writes them
+  // (the mesh path gets this implicitly from resize_mesh()).
+  hair->attributes.resize();
+}
+
+void Curve::setAttributes(
+    ccl::Hair *hair, const std::vector<uint32_t> &keyVertex) const
+{
+  auto setCurveKeyAttribute = [&](const helium::IntrusivePtr<Array1D> &array,
+                                  const char *name,
+                                  bool isColor) {
+    if (!array) {
+      // drop stale data if the parameter was removed since the last sync
+      hair->attributes.remove(ustring(name));
+      return;
+    }
+
+    const void *src = array->data();
+    anari::DataType type = array->elementType();
+
+    if (isColor) {
+      Attribute *attr = hair->attributes.add(
+          ustring(name), ccl::TypeColor, ATTR_ELEMENT_CURVE_KEY);
+      attr->std = ATTR_STD_VERTEX_COLOR;
+      float3 *dst = attr->data_float3_for_write();
+      for (size_t k = 0; k < keyVertex.size(); k++) {
+        auto c = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
+            type, src, keyVertex[k]);
+        dst[k] = make_float3(c[0], c[1], c[2]);
+      }
+    } else {
+      Attribute *attr = hair->attributes.add(
+          ustring(name), ccl::TypeFloat4, ATTR_ELEMENT_CURVE_KEY);
+      float4 *dst = attr->data_float4_for_write();
+      for (size_t k = 0; k < keyVertex.size(); k++) {
+        auto c = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
+            type, src, keyVertex[k]);
+        dst[k] = make_float4(c[0], c[1], c[2], c[3]);
+      }
+    }
+  };
+
+  setCurveKeyAttribute(m_vertexColor, "vertex.color", true);
+  setCurveKeyAttribute(m_vertexAttribute0, "vertex.attribute0", false);
+  setCurveKeyAttribute(m_vertexAttribute1, "vertex.attribute1", false);
+  setCurveKeyAttribute(m_vertexAttribute2, "vertex.attribute2", false);
+  setCurveKeyAttribute(m_vertexAttribute3, "vertex.attribute3", false);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Geometry definitions ///////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -642,6 +897,8 @@ Geometry *Geometry::createInstance(std::string_view type, CyclesGlobalState *s)
     return new Quad(s);
   else if (type == "sphere")
     return new Sphere(s);
+  else if (type == "curve")
+    return new Curve(s);
   else
     return new UnknownGeometry(type, s);
 }

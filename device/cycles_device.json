@@ -16,6 +16,7 @@
       "anari_core_objects_base_1_0",
       "cycles_khr_camera_orthographic",
       "cycles_khr_camera_perspective",
+      "cycles_khr_geometry_curve",
       "cycles_khr_geometry_quad",
       "cycles_khr_geometry_sphere",
       "cycles_khr_geometry_triangle",
