@@ -25,6 +25,13 @@ struct Camera : public Object {
   anari_vec::float3 m_pos;
   anari_vec::float3 m_dir;
   anari_vec::float3 m_up;
+
+  // KHR_CAMERA_DEPTH_OF_FIELD
+  float m_apertureRadius{0.f};
+  float m_focusDistance{1.f};
+  // Cycles vendor extensions: polygonal bokeh
+  int m_apertureBlades{0};
+  float m_apertureRotation{0.f};
 };
 
 }  // namespace anari_cycles

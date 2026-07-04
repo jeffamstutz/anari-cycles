@@ -1,0 +1,58 @@
+{
+ "info": {
+  "name": "KHR_CAMERA_DEPTH_OF_FIELD",
+  "type": "extension",
+  "dependencies": [],
+  "comment": "Local copy of the ANARI registry extension. The registry file attaches these parameters to an ANARI_CAMERA named 'default', which the query codegen would append as a bogus 'default' camera subtype; instead they are declared here on the camera subtypes this device actually exposes. Keep info.name equal to the official extension name so introspection still advertises it."
+ },
+ "objects": [
+  {
+   "type": "ANARI_CAMERA",
+   "name": "perspective",
+   "parameters": [
+    {
+     "name": "apertureRadius",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 0,
+     "description": "aperture radius"
+    },
+    {
+     "name": "focusDistance",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 1,
+     "description": "focus distance"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_CAMERA",
+   "name": "orthographic",
+   "parameters": [
+    {
+     "name": "apertureRadius",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 0,
+     "description": "aperture radius"
+    },
+    {
+     "name": "focusDistance",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": 1,
+     "description": "focus distance"
+    }
+   ]
+  }
+ ]
+}
