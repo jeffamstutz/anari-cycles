@@ -72,6 +72,8 @@ void MatteMaterial::finalize()
       m_opacityAttr,
       m_opacity,
       m_opacitySampler.get(),
+      m_colorAttr,
+      m_colorSampler.get(),
       m_mode,
       m_alphaCutoff);
 
@@ -287,6 +289,8 @@ void PhysicallyBasedMaterial::finalize()
       m_opacityAttr,
       m_opacity,
       m_opacitySampler.get(),
+      m_colorAttr,
+      m_colorSampler.get(),
       m_mode,
       m_alphaCutoff);
 
@@ -546,6 +550,29 @@ void Material::makeGraph()
   m_attributeNodes.attr2_sc = attr2_sc->output("Red");
   m_attributeNodes.attr3_sc = attr3_sc->output("Red");
   m_attributeNodes.attrPid_sc = attrPid->output("Fac");
+  m_attributeNodes.attrC_a = vertexColor->output("Alpha");
+  m_attributeNodes.attr0_a = attr0->output("Alpha");
+  m_attributeNodes.attr1_a = attr1->output("Alpha");
+  m_attributeNodes.attr2_a = attr2->output("Alpha");
+  m_attributeNodes.attr3_a = attr3->output("Alpha");
+}
+
+// The 4th (alpha) component of an attribute source, or nullptr when it is
+// the constant 1 (constant colors, scalar attributes like primitiveId).
+ccl::ShaderOutput *Material::attributeAlphaOutput(
+    const std::string &attributeSource)
+{
+  if (attributeSource == "color")
+    return m_attributeNodes.attrC_a;
+  if (attributeSource == "attribute0")
+    return m_attributeNodes.attr0_a;
+  if (attributeSource == "attribute1")
+    return m_attributeNodes.attr1_a;
+  if (attributeSource == "attribute2")
+    return m_attributeNodes.attr2_a;
+  if (attributeSource == "attribute3")
+    return m_attributeNodes.attr3_a;
+  return nullptr;
 }
 
 void Material::connectAttributes(ccl::ShaderNode *bsdf,
@@ -568,9 +595,11 @@ void Material::connectAttributes(ccl::ShaderNode *bsdf,
 }
 
 void Material::connectAlpha(ccl::ShaderNode *bsdf,
-    const std::string &attributeSource,
+    const std::string &opacityAttribute,
     float opacity,
-    Sampler *sampler,
+    Sampler *opacitySampler,
+    const std::string &colorAttribute,
+    Sampler *colorSampler,
     helium::AlphaMode mode,
     float cutoff)
 {
@@ -579,28 +608,62 @@ void Material::connectAlpha(ccl::ShaderNode *bsdf,
     return;
   }
 
+  // Alpha (4th) component of the color source; nullptr when it is the
+  // constant 1 (verified against helide: alpha = color.w * opacity before
+  // the alphaMode/alphaCutoff adjustment).
+  ccl::ShaderOutput *colorAlpha = nullptr;
+  if (colorSampler)
+    colorAlpha = getSamplerOutputs(colorSampler).alphaOutput;
+  else
+    colorAlpha = attributeAlphaOutput(colorAttribute);
+
+  const bool opacityDynamic =
+      opacitySampler || isAttributeSource(opacityAttribute);
+
+  if (!opacityDynamic && !colorAlpha) { // fully constant
+    const float a = mode == helium::AlphaMode::MASK
+        ? (opacity >= cutoff ? 1.f : 0.f)
+        : opacity;
+    connectAttributes(bsdf, "", "Alpha", a);
+    return;
+  }
+
+  // alpha = opacity * colorAlpha as graph nodes
+  ccl::ShaderOutput *alphaOut = nullptr;
+  if (opacityDynamic || opacity != 1.f) {
+    auto *mult = m_graph->create_node<ccl::MathNode>();
+    mult->set_math_type(ccl::NODE_MATH_MULTIPLY);
+    connectAttributes(mult, opacityAttribute, "Value1", opacity, opacitySampler);
+    if (colorAlpha)
+      m_graph->connect(colorAlpha, mult->input("Value2"));
+    else
+      mult->input("Value2")->set(1.f);
+    alphaOut = mult->output("Value");
+  } else {
+    alphaOut = colorAlpha; // opacity is the constant 1
+  }
+
   if (mode == helium::AlphaMode::MASK) {
-    if (sampler || isAttributeSource(attributeSource)) {
-      // Threshold non-constant opacity in the graph, exactly matching the
-      // constant branch below (keep when alpha >= cutoff):
-      // less_than(alpha, cutoff) marks discards, then 1 - that keeps the rest.
-      auto *discard = m_graph->create_node<ccl::MathNode>();
-      discard->set_math_type(ccl::NODE_MATH_LESS_THAN);
-      connectAttributes(discard, attributeSource, "Value1", opacity, sampler);
-      discard->input("Value2")->set(cutoff);
-      auto *keep = m_graph->create_node<ccl::MathNode>();
-      keep->set_math_type(ccl::NODE_MATH_SUBTRACT);
-      keep->input("Value1")->set(1.f);
-      m_graph->connect(discard->output("Value"), keep->input("Value2"));
-      m_graph->connect(keep->output("Value"), bsdf->input("Alpha"));
-    } else {
-      connectAttributes(bsdf, "", "Alpha", opacity >= cutoff ? 1.f : 0.f);
-    }
+    // Threshold in the graph, matching the constant branch above (keep when
+    // alpha >= cutoff): less_than(alpha, cutoff) marks discards, then
+    // 1 - that keeps the rest.
+    auto *discard = m_graph->create_node<ccl::MathNode>();
+    discard->set_math_type(ccl::NODE_MATH_LESS_THAN);
+    m_graph->connect(alphaOut, discard->input("Value1"));
+    discard->input("Value2")->set(cutoff);
+    auto *keep = m_graph->create_node<ccl::MathNode>();
+    keep->set_math_type(ccl::NODE_MATH_SUBTRACT);
+    keep->input("Value1")->set(1.f);
+    m_graph->connect(discard->output("Value"), keep->input("Value2"));
+    m_graph->connect(keep->output("Value"), bsdf->input("Alpha"));
     return;
   }
 
   // AlphaMode::BLEND
-  connectAttributes(bsdf, attributeSource, "Alpha", opacity, sampler);
+  auto *shaderInput = bsdf->input("Alpha");
+  if (shaderInput->link)
+    m_graph->disconnect(shaderInput);
+  m_graph->connect(alphaOut, shaderInput);
 }
 
 Sampler::SamplerOutputs Material::getSamplerOutputs(Sampler *sampler)
@@ -615,7 +678,7 @@ Sampler::SamplerOutputs Material::getSamplerOutputs(Sampler *sampler)
   }
 
   // Create new outputs using the sampler's node graph
-  auto outputs = sampler->createNodeGraph(m_graph, m_attributeNodes.attr0);
+  auto outputs = sampler->createNodeGraph(m_graph);
 
   // Cache the outputs
   m_samplerOutputs[sampler] = {outputs, true};

@@ -7,6 +7,9 @@
       "copies in device/json/ (see CMakeLists.txt JSON_ROOT_LOCATION).",
       "They advertise the official KHR extension names but omit registry",
       "parameters this device does not implement yet.",
+      "khr_sampler_image3d is intentionally absent: Cycles has no dense 3D",
+      "image textures (creating an 'image3D' sampler warns and yields an",
+      "invalid object).",
       "khr_frame_channel_object_id must stay listed after",
       "khr_volume_transfer_function1d: its anonymous ANARI_VOLUME 'id' entry",
       "only merges into subtypes that already exist."
@@ -25,6 +28,9 @@
       "cycles_khr_instance_transform",
       "cycles_khr_instance_transform_array",
       "cycles_khr_sampler_image1d",
+      "cycles_khr_sampler_image2d",
+      "khr_sampler_primitive",
+      "khr_sampler_transform",
       "khr_device_synchronization",
       "khr_frame_accumulation",
       "khr_frame_channel_albedo",
@@ -39,7 +45,6 @@
       "cycles_khr_material_physically_based",
       "khr_renderer_background_color",
       "khr_renderer_denoise",
-      "khr_sampler_image2d",
       "khr_spatial_field_structured_regular",
       "khr_volume_transfer_function1d",
       "khr_frame_channel_object_id"

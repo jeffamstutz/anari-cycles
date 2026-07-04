@@ -83,8 +83,6 @@ static std::vector<anari_vec::float4> convertToFloat4(const Array1D &array)
 // Write one ANARI attribute array into 'attrs' under its channel's canonical
 // name. 'count' is the Cycles element count for 'element'; srcIndex(i) maps
 // Cycles element i to an index into 'array' (clamped to the array bounds).
-// The color channel is stored as a Cycles color (float3, matching what
-// material graphs consume); other channels keep all four components.
 template <typename IndexFn>
 static void writeAttributeArray(ccl::AttributeSet &attrs,
     int channel,
@@ -102,23 +100,17 @@ static void writeAttributeArray(ccl::AttributeSet &attrs,
   const auto converted = convertToFloat4(array);
   const size_t maxIdx = converted.size() - 1;
 
-  if (channel == CH_COLOR) {
-    Attribute *attr = attrs.add(name, ccl::TypeColor, element);
-    float3 *dst = attr->data_float3_for_write();
-    for (size_t i = 0; i < count; i++) {
-      const auto &c = converted[std::min<size_t>(srcIndex(i), maxIdx)];
-      dst[i] = make_float3(c[0], c[1], c[2]);
-    }
-    attr->modified = true;
-  } else {
-    Attribute *attr = attrs.add(name, ccl::TypeFloat4, element);
-    float4 *dst = attr->data_float4_for_write();
-    for (size_t i = 0; i < count; i++) {
-      const auto &c = converted[std::min<size_t>(srcIndex(i), maxIdx)];
-      dst[i] = make_float4(c[0], c[1], c[2], c[3]);
-    }
-    attr->modified = true;
+  // All channels (including color) keep all four components: the alpha (4th)
+  // component of the color source participates in the material's effective
+  // opacity (see Material::connectAlpha). AttributeNode reads float4
+  // attributes fine, exposing xyz as 'Color' and w as 'Alpha'.
+  Attribute *attr = attrs.add(name, ccl::TypeFloat4, element);
+  float4 *dst = attr->data_float4_for_write();
+  for (size_t i = 0; i < count; i++) {
+    const auto &c = converted[std::min<size_t>(srcIndex(i), maxIdx)];
+    dst[i] = make_float4(c[0], c[1], c[2], c[3]);
   }
+  attr->modified = true;
 }
 
 // Write a constant (uniform) attribute channel value as a per-geometry
@@ -128,15 +120,9 @@ static void writeAttributeConstant(
     ccl::AttributeSet &attrs, int channel, const anari_vec::float4 &v)
 {
   const ustring name(CHANNEL_CYCLES_NAME[channel]);
-  if (channel == CH_COLOR) {
-    Attribute *attr = attrs.add(name, ccl::TypeColor, ATTR_ELEMENT_MESH);
-    attr->data_float3_for_write()[0] = make_float3(v[0], v[1], v[2]);
-    attr->modified = true;
-  } else {
-    Attribute *attr = attrs.add(name, ccl::TypeFloat4, ATTR_ELEMENT_MESH);
-    attr->data_float4_for_write()[0] = make_float4(v[0], v[1], v[2], v[3]);
-    attr->modified = true;
-  }
+  Attribute *attr = attrs.add(name, ccl::TypeFloat4, ATTR_ELEMENT_MESH);
+  attr->data_float4_for_write()[0] = make_float4(v[0], v[1], v[2], v[3]);
+  attr->modified = true;
 }
 
 // The ANARI 'primitiveId' attribute: primitive.id[prim] when the parameter is

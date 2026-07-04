@@ -31,8 +31,13 @@ class SamplerImageLoader : public ccl::ImageLoader
   virtual bool is_vdb_loader() const override;
 
  private:
-  Array1D *m_array1d{nullptr};
-  Array2D *m_array2d{nullptr};
+  // The loader can outlive the sampler that created it (it is owned by the
+  // Cycles image slot, and ImageManager::add_image() dedupes new images
+  // against every live slot via equals()). Pin the source array so the
+  // pointer identity that equals() relies on stays valid -- otherwise a
+  // freed array reallocated at the same address dedupes onto a stale image.
+  helium::IntrusivePtr<Array1D> m_array1d;
+  helium::IntrusivePtr<Array2D> m_array2d;
 
   anari::DataType m_dataType{ANARI_UNKNOWN};
   uint3 m_dims{1, 1, 1};
