@@ -168,10 +168,14 @@ Light::Light(CyclesGlobalState *s, ccl::Light *light)
 
 Light::~Light()
 {
-  if (m_cyclesLight)
-    deviceState()->scene->delete_node(m_cyclesLight);
+  // Object release can happen while the render thread reads the scene, and
+  // scene->objects may still reference the light node -- defer its deletion.
+  CyclesGlobalState::SceneLock sceneLock(*deviceState());
+  deviceState()->retireGeometry(m_cyclesLight);
   if (m_cyclesShader) {
     m_cyclesShader->dereference();
+    // delete_node(Shader*) only clears the reference count; Cycles never
+    // frees shaders before the scene itself is destroyed.
     deviceState()->scene->delete_node(m_cyclesShader);
   }
 }

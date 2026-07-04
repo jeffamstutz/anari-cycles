@@ -145,6 +145,8 @@ ANARIInstance CyclesDevice::newInstance(const char * /*subtype*/)
 ANARILight CyclesDevice::newLight(const char *subtype)
 {
   initDevice();
+  // Light constructors create scene nodes -- guard against the render thread.
+  CyclesGlobalState::SceneLock sceneLock(*deviceState());
   return getHandleForAPI<ANARILight>(
       Light::createInstance(subtype, deviceState()));
 }
@@ -185,6 +187,9 @@ ANARISurface CyclesDevice::newSurface()
 ANARIVolume CyclesDevice::newVolume(const char *subtype)
 {
   initDevice();
+  // Volume constructors create scene shaders -- guard against the render
+  // thread.
+  CyclesGlobalState::SceneLock sceneLock(*deviceState());
   return getHandleForAPI<ANARIVolume>(
       Volume::createInstance(subtype, deviceState()));
 }
@@ -238,6 +243,11 @@ int CyclesDevice::getProperty(ANARIObject object,
   if (mask == ANARI_WAIT) {
     auto lock = scopeLockObject();
     deviceState()->waitOnCurrentFrame();
+    // helium::BaseDevice::getProperty() flushes the commit buffer on
+    // ANARI_WAIT, which mutates the Cycles scene. Do that flush here under
+    // the scene lock instead (the base class flush is then a no-op).
+    CyclesGlobalState::SceneLock sceneLock(*deviceState());
+    deviceState()->commitBuffer.flush();
   }
 
   return helium::BaseDevice::getProperty(object, name, type, mem, size, mask);

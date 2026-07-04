@@ -9,7 +9,12 @@ Frame::Frame(CyclesGlobalState *s) : helium::BaseFrame(s) {}
 
 Frame::~Frame()
 {
-  wait();
+  // No wait() here: the output driver retains the frame while it is in
+  // flight, so reaching this destructor means the frame cannot be rendering.
+  // Waiting on the (shared) output driver could deadlock -- e.g. when this
+  // frame is destroyed by the commit-buffer flush inside another frame's
+  // renderFrame(), after renderBegin() already marked that frame in-flight
+  // (and while the scene lock is held).
 }
 
 bool Frame::isValid() const
@@ -79,8 +84,10 @@ bool Frame::getProperty(const std::string_view &name,
     helium::writeToVoidP(ptr, int(deviceState()->sessionSamples));
     return true;
   } else if (type == ANARI_BOOL && name == "nextFrameReset") {
-    if (ready())
+    if (ready()) {
+      CyclesGlobalState::SceneLock lock(*deviceState());
       deviceState()->commitBuffer.flush();
+    }
     bool doReset = resetAccumulationNextFrame();
     helium::writeToVoidP(ptr, doReset);
     return true;
@@ -96,45 +103,56 @@ void Frame::renderFrame()
 
   bool currentFrameChanged = state.output_driver->renderBegin(this);
 
-  state.commitBuffer.flush();
+  // Everything from the commit-buffer flush through session reset/sample
+  // setup mutates the Cycles scene, which the render session thread reads
+  // under scene->mutex -- hold it for the whole section (see SceneLock docs).
+  // The lock must be released before any wait on the render thread below.
+  {
+    CyclesGlobalState::SceneLock sceneLock(state);
 
-  if (!isValid()) {
-    reportMessage(
-        ANARI_SEVERITY_ERROR, "skipping render of incomplete frame object");
-    std::fill(m_pixelBuffer.begin(), m_pixelBuffer.end(), 0);
-    state.output_driver->renderEnd(); // cycles render thread not going to run
-    return;
+    state.commitBuffer.flush();
+
+    if (!isValid()) {
+      reportMessage(
+          ANARI_SEVERITY_ERROR, "skipping render of incomplete frame object");
+      std::fill(m_pixelBuffer.begin(), m_pixelBuffer.end(), 0);
+      state.output_driver->renderEnd(); // cycles render thread not going to run
+      return;
+    }
+
+    if (m_worldLastChanged < state.objectUpdates.lastSceneChange) {
+      reportMessage(ANARI_SEVERITY_DEBUG, "frame -- updating world");
+      m_world->setCyclesWorldObjects();
+      // scene->objects no longer references retired nodes -- safe to delete
+      state.purgeRetiredGeometry();
+      m_worldLastChanged = helium::newTimeStamp();
+    }
+
+    if (currentFrameChanged || resetAccumulationNextFrame()) {
+      reportMessage(ANARI_SEVERITY_DEBUG, "frame -- resetting accumulation");
+
+      state.objectUpdates.lastAccumulationReset = helium::newTimeStamp();
+
+      m_camera->setCameraCurrent(m_frameData.size.x, m_frameData.size.y);
+      m_renderer->makeRendererCurrent();
+
+      state.buffer_params.width = m_frameData.size.x;
+      state.buffer_params.height = m_frameData.size.y;
+      state.buffer_params.full_width = m_frameData.size.x;
+      state.buffer_params.full_height = m_frameData.size.y;
+
+      // The sample target must be in the (delayed) reset params -- a later
+      // set_samples() would be clobbered when the reset is applied on the
+      // render thread (Session::delayed_reset_buffer_params()).
+      state.session_params.samples = m_renderer->pixelSamples();
+      state.session->reset(state.session_params, state.buffer_params);
+      state.sessionSamples = 0;
+    }
+
+    state.sessionSamples += m_renderer->pixelSamples();
+    state.session->set_samples(state.sessionSamples);
   }
 
-  if (m_worldLastChanged < state.objectUpdates.lastSceneChange) {
-    reportMessage(ANARI_SEVERITY_DEBUG, "frame -- updating world");
-    m_world->setCyclesWorldObjects();
-    m_worldLastChanged = helium::newTimeStamp();
-  }
-
-  if (currentFrameChanged || resetAccumulationNextFrame()) {
-    reportMessage(ANARI_SEVERITY_DEBUG, "frame -- resetting accumulation");
-
-    state.objectUpdates.lastAccumulationReset = helium::newTimeStamp();
-
-    m_camera->setCameraCurrent(m_frameData.size.x, m_frameData.size.y);
-    m_renderer->makeRendererCurrent();
-
-    state.buffer_params.width = m_frameData.size.x;
-    state.buffer_params.height = m_frameData.size.y;
-    state.buffer_params.full_width = m_frameData.size.x;
-    state.buffer_params.full_height = m_frameData.size.y;
-
-    // The sample target must be in the (delayed) reset params -- a later
-    // set_samples() would be clobbered when the reset is applied on the
-    // render thread (Session::delayed_reset_buffer_params()).
-    state.session_params.samples = m_renderer->pixelSamples();
-    state.session->reset(state.session_params, state.buffer_params);
-    state.sessionSamples = 0;
-  }
-
-  state.sessionSamples += m_renderer->pixelSamples();
-  state.session->set_samples(state.sessionSamples);
   state.session->start();
 
   // NOTE(jda): Everything is still implemented as asynchronous, but on some

@@ -90,8 +90,11 @@ void Surface::warnIfUnknownObject() const
 void Surface::cleanupCyclesNode()
 {
   auto &state = *deviceState();
-  if (auto *cg = cyclesGeometry(); cg != nullptr)
-    state.scene->delete_node(cg);
+  // Reached from ~Surface() on object release, which can happen while the
+  // render thread reads the scene (reentrant when called during finalize).
+  // Deletion is deferred: scene->objects may still reference the node.
+  CyclesGlobalState::SceneLock sceneLock(state);
+  state.retireGeometry(cyclesGeometry());
   m_cyclesGeometryNode = nullptr;
 }
 
