@@ -136,10 +136,11 @@ ANARIGroup CyclesDevice::newGroup()
   return createObjectForAPI<Group, ANARIGroup>(deviceState());
 }
 
-ANARIInstance CyclesDevice::newInstance(const char * /*subtype*/)
+ANARIInstance CyclesDevice::newInstance(const char *subtype)
 {
   initDevice();
-  return createObjectForAPI<Instance, ANARIInstance>(deviceState());
+  return getHandleForAPI<ANARIInstance>(
+      Instance::createInstance(subtype, deviceState()));
 }
 
 ANARILight CyclesDevice::newLight(const char *subtype)

@@ -44,13 +44,19 @@ struct Omnidirectional : public Camera
   void setCameraCurrent(int width, int height) override;
 
  protected:
-  ccl::Transform getMatrix() const override;
+  ccl::Transform matrixCorrection() const override;
   bool usesNativeStereo() const override;
 };
 
 // Camera definitions /////////////////////////////////////////////////////////
 
-Camera::Camera(CyclesGlobalState *s) : Object(ANARI_CAMERA, s) {}
+Camera::Camera(CyclesGlobalState *s)
+    : Object(ANARI_CAMERA, s),
+      m_motionTransform(this),
+      m_motionScale(this),
+      m_motionRotation(this),
+      m_motionTranslation(this)
+{}
 
 Camera::~Camera() = default;
 
@@ -134,6 +140,37 @@ void Camera::commitParameters()
     m_stereoMode = StereoMode::NONE;
   }
   m_interpupillaryDistance = getParam<float>("interpupillaryDistance", 0.0635f);
+
+  // KHR_CAMERA_MOTION_TRANSFORMATION -- a time-varying camera-to-world
+  // transform that overrides 'position'/'direction'/'up'. 'motion.transform'
+  // keys take precedence over the scale/rotation/translation key arrays.
+  m_motionTransform = getParamObject<Array1D>("motion.transform");
+  m_motionScale = getParamObject<Array1D>("motion.scale");
+  m_motionRotation = getParamObject<Array1D>("motion.rotation");
+  m_motionTranslation = getParamObject<Array1D>("motion.translation");
+  m_motion = MotionTrack();
+  m_motion.matrix = readMotionKeys<math::mat4>(
+      this, m_motionTransform.get(), ANARI_FLOAT32_MAT4, "motion.transform");
+  if (m_motion.matrix.empty()) {
+    m_motion.scale = readMotionKeys<math::float3>(
+        this, m_motionScale.get(), ANARI_FLOAT32_VEC3, "motion.scale");
+    m_motion.rotation = readMotionKeys<math::float4>(this,
+        m_motionRotation.get(),
+        ANARI_FLOAT32_QUAT_IJKW,
+        "motion.rotation");
+    m_motion.translation = readMotionKeys<math::float3>(this,
+        m_motionTranslation.get(),
+        ANARI_FLOAT32_VEC3,
+        "motion.translation");
+  }
+  m_motion.time = getParam<helium::box1>("time", helium::box1{0.f, 1.f});
+  if (!m_motion.empty() && m_motion.time.upper < m_motion.time.lower) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "invalid 'time' interval [%f, %f] (upper < lower) -- all motion "
+        "keys collapse to the first key",
+        m_motion.time.lower,
+        m_motion.time.upper);
+  }
 }
 
 void Camera::finalize()
@@ -141,10 +178,53 @@ void Camera::finalize()
   Object::finalize();
 }
 
+helium::box1 Camera::shutter() const
+{
+  if (m_shutter.upper < m_shutter.lower)
+    return helium::box1{m_shutter.lower, m_shutter.lower};
+  return m_shutter;
+}
+
 void Camera::setCameraCurrent(int width, int height)
 {
   auto &state = *deviceState();
-  state.scene->camera->set_matrix(getMatrix());
+
+  // KHR_CAMERA_MOTION_TRANSFORMATION: bake the motion track onto the shutter
+  // interval (same resampling contract as instance motion, MotionTrack.h).
+  // Each baked key maps the canonical camera frame -- origin, direction
+  // (0,0,-1), up (0,1,0) -- to world space, so the world matrix for step i is
+  // key_i * poseMatrix(canonical); poseMatrix() keeps the stereo eye offset
+  // and any subtype correction inside the moving frame. A degenerate shutter
+  // or a track that does not move collapses to a static pose at the shutter
+  // start (MOTION_POSITION_START contract), leaving motion blur off.
+  ccl::array<ccl::Transform> cameraMotion;
+  ccl::Transform matrix;
+  state.cameraHasMotion = false;
+  if (m_motion.empty())
+    matrix = getMatrix();
+  else {
+    const helium::box1 shutterInterval = shutter();
+    const ccl::Transform canonical = poseMatrix(
+        anari_vec::float3{0.f, 0.f, 0.f},
+        anari_vec::float3{0.f, 0.f, -1.f},
+        anari_vec::float3{0.f, 1.f, 0.f});
+    const auto steps = bakeMotionOnShutter(m_motion, shutterInterval);
+    if (steps.empty()) {
+      matrix =
+          mat4ToCycles(m_motion.sample(shutterInterval.lower)) * canonical;
+    } else {
+      cameraMotion.resize(steps.size());
+      for (size_t i = 0; i < steps.size(); i++)
+        cameraMotion[i] = steps[i] * canonical;
+      matrix = cameraMotion[0]; // MOTION_POSITION_START: pose at shutter start
+      state.cameraHasMotion = true;
+    }
+  }
+  state.scene->camera->set_matrix(matrix);
+  // Also clears stale motion from a previous frame when empty.
+  state.scene->camera->set_motion(cameraMotion);
+  state.syncIntegratorMotionBlur();
+
   state.scene->camera->set_full_width(width);
   state.scene->camera->set_full_height(height);
   state.scene->camera->set_aperturesize(std::max(m_apertureRadius, 0.f));
@@ -153,11 +233,11 @@ void Camera::setCameraCurrent(int width, int height)
       static_cast<unsigned int>(std::max(m_apertureBlades, 0)));
   state.scene->camera->set_bladesrotation(m_apertureRotation);
 
-  // KHR_CAMERA_SHUTTER -> Cycles mapping (latent until motion blur, task 14,
-  // enables integrator motion_blur -- without it Cycles forces kernel
-  // shuttertime to -1, i.e. all rays at time 0.5, so these sockets are inert
-  // for static scenes). The contract chosen here, which task 14 MUST honor
-  // when baking motion keys:
+  // KHR_CAMERA_SHUTTER -> Cycles mapping (only active when motion exists:
+  // instance/camera motion enables integrator motion_blur -- without it
+  // Cycles forces kernel shuttertime to -1, i.e. all rays at time 0.5, so
+  // these sockets are inert for static scenes). The contract, honored by all
+  // motion-key baking (MotionTrack.h bakeMotionOnShutter()):
   //   * Cycles' kernel ray->time domain [0,1] (uniform via the default flat
   //     shutter curve) corresponds exactly to the ANARI shutter interval
   //     [s0,s1]; Cycles motion step i of N is sampled at ANARI frame time
@@ -225,13 +305,16 @@ float Camera::stereoEyeOffset() const
       * m_interpupillaryDistance;
 }
 
-ccl::Transform Camera::getMatrix() const
+ccl::Transform Camera::poseMatrix(const anari_vec::float3 &position,
+    const anari_vec::float3 &direction,
+    const anari_vec::float3 &upvec) const
 {
   ccl::Transform retval;
 
-  auto dir = normalize(ccl::make_float3(m_dir[0], m_dir[1], m_dir[2]));
-  auto pos = ccl::make_float3(m_pos[0], m_pos[1], m_pos[2]);
-  auto up = normalize(ccl::make_float3(m_up[0], m_up[1], m_up[2]));
+  auto dir =
+      normalize(ccl::make_float3(direction[0], direction[1], direction[2]));
+  auto pos = ccl::make_float3(position[0], position[1], position[2]);
+  auto up = normalize(ccl::make_float3(upvec[0], upvec[1], upvec[2]));
 
   const auto s = ccl::normalize(ccl::cross(dir, up));
   const auto u = ccl::normalize(ccl::cross(s, dir));
@@ -252,7 +335,17 @@ ccl::Transform Camera::getMatrix() const
   retval.x[3] = pos.x;
   retval.y[3] = pos.y;
   retval.z[3] = pos.z;
-  return retval;
+  return retval * matrixCorrection();
+}
+
+ccl::Transform Camera::getMatrix() const
+{
+  return poseMatrix(m_pos, m_dir, m_up);
+}
+
+ccl::Transform Camera::matrixCorrection() const
+{
+  return ccl::transform_identity();
 }
 
 // Perspective definitions ////////////////////////////////////////////////////
@@ -357,7 +450,7 @@ bool Omnidirectional::usesNativeStereo() const
   return true;
 }
 
-ccl::Transform Omnidirectional::getMatrix() const
+ccl::Transform Omnidirectional::matrixCorrection() const
 {
   // Cycles' equirectangular kernel mapping (kernel/camera/projection.h,
   // equirectangular_range_to_direction with the default longitude/latitude
@@ -369,11 +462,10 @@ ccl::Transform Omnidirectional::getMatrix() const
   // image center looks along 'direction', the top pole is '+up' (and
   // left/right of the image are the viewer's left/right).
   // clang-format off
-  return Camera::getMatrix()
-      * ccl::make_transform(
-          0.f, -1.f, 0.f, 0.f,
-          0.f,  0.f, 1.f, 0.f,
-          1.f,  0.f, 0.f, 0.f);
+  return ccl::make_transform(
+      0.f, -1.f, 0.f, 0.f,
+      0.f,  0.f, 1.f, 0.f,
+      1.f,  0.f, 0.f, 0.f);
   // clang-format on
 }
 

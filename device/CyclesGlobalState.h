@@ -89,6 +89,18 @@ struct CyclesGlobalState : public helium::BaseGlobalDeviceState
   void retireGeometry(ccl::Geometry *g);
   void purgeRetiredGeometry(); // only right after rebuilding scene->objects
 
+  // Motion blur //
+
+  // Motion blur is pay-for-what-you-use: the integrator's motion_blur flag
+  // is the OR of these two, maintained by World::setCyclesWorldObjects()
+  // (instance motion baked into scene objects) and Camera::setCameraCurrent()
+  // (camera motion). Both call syncIntegratorMotionBlur() (under SceneLock)
+  // after updating their flag; scenes without motion keep the integrator
+  // flag off and render exactly as before.
+  bool objectsHaveMotion{false};
+  bool cameraHasMotion{false};
+  void syncIntegratorMotionBlur();
+
   // Helper methods //
 
   CyclesGlobalState(ANARIDevice d);

@@ -23,11 +23,23 @@ void Group::commitParameters()
   m_lightData = getParamObject<ObjectArray>("light");
 }
 
-void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm) const
+void Group::addGroupToCurrentCyclesScene(
+    const math::mat4 &xfm, const std::vector<ccl::Transform> *motion) const
 {
   auto &state = *deviceState();
 
   auto cxfm = mat4ToCycles(xfm);
+
+  // Object::set_motion() steals the array, so every object needs its own
+  // copy of the baked motion steps.
+  auto setMotion = [&](ccl::Object *o) {
+    if (!motion || motion->size() < 2)
+      return;
+    ccl::array<ccl::Transform> steps;
+    steps.resize(motion->size());
+    std::copy(motion->begin(), motion->end(), steps.data());
+    o->set_motion(steps);
+  };
 
   if (m_surfaceData) {
     auto **surfacesBegin = (Surface **)m_surfaceData->handlesBegin();
@@ -43,6 +55,7 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm) const
       auto *o = state.scene->create_node<ccl::Object>();
       o->set_geometry(s->cyclesGeometry());
       o->set_tfm(cxfm);
+      setMotion(o);
       o->set_pass_id(s->id());
     });
   }
@@ -61,6 +74,7 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm) const
       auto *o = state.scene->create_node<ccl::Object>();
       o->set_geometry(v->cyclesGeometry());
       o->set_tfm(cxfm);
+      setMotion(o);
       o->set_pass_id(v->id());
     });
   }
@@ -68,6 +82,12 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm) const
   if (m_lightData) {
     auto **lightsBegin = (Light **)m_lightData->handlesBegin();
     auto **lightsEnd = (Light **)m_lightData->handlesEnd();
+
+    if (motion && motion->size() > 1 && lightsBegin != lightsEnd) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "lights in a motion instance do not motion blur (unsupported by "
+          "Cycles) -- placing them at the shutter-start pose");
+    }
 
     std::for_each(lightsBegin, lightsEnd, [&](Light *l) {
       if (!l->isValid()) {
