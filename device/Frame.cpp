@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Frame.h"
+// cycles
+#include "scene/background.h"
 // std
 #include <algorithm>
 
@@ -189,8 +191,32 @@ void Frame::renderFrame()
       // its shader shows a solid color to camera rays that must track this
       // renderer's 'background' parameter (no-op otherwise). The pointer is
       // cached during the world rebuild above.
-      if (Light *hdri = m_world->backgroundHdriLight())
+      Light *hdri = m_world->backgroundHdriLight();
+      if (hdri)
         hdri->setCameraBackgroundColor(m_renderer->backgroundColor());
+
+      // Background alpha/image (KHR_RENDERER_BACKGROUND_{COLOR,IMAGE}): when
+      // camera rays see the renderer background (no camera-visible HDRI)
+      // and it is an image or a color with alpha < 1, render on a
+      // transparent film -- camera-path background writes then leave only
+      // coverage in the combined pass's alpha -- and have the output driver
+      // composite the background (with its alpha) underneath. A visible
+      // HDRI keeps the film opaque (the HDRI overrides the renderer
+      // background; alpha is 1 everywhere), and so does an opaque
+      // background color (the background shader renders it directly and
+      // alpha is already 1 everywhere, matching the spec). Non-camera rays
+      // are unaffected either way: the ambient dome / HDRI environment
+      // keeps illuminating the scene.
+      const bool compositeBackground = (!hdri || !hdri->visibleToCamera())
+          && m_renderer->backgroundNeedsCompositing();
+      auto *background = state.scene->background;
+      if (background->get_transparent() != compositeBackground) {
+        background->set_transparent(compositeBackground);
+        background->tag_update(state.scene);
+      }
+      m_bgComposite.enabled = compositeBackground;
+      m_bgComposite.color = m_renderer->backgroundColorAndAlpha();
+      m_bgComposite.image = m_renderer->backgroundImage();
 
       state.buffer_params.width = m_frameData.size.x;
       state.buffer_params.height = m_frameData.size.y;

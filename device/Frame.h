@@ -9,12 +9,27 @@
 // helium
 #include "helium/BaseFrame.h"
 // std
+#include <memory>
 #include <vector>
 
 namespace anari_cycles {
 
 struct Frame : public helium::BaseFrame
 {
+  // Renderer-background compositing snapshot for the most recent render of
+  // this frame (taken in renderFrame() before the session starts; read by
+  // the output driver when the tile arrives). 'enabled' mirrors the Cycles
+  // film's transparent flag: the combined pass then holds premultiplied
+  // color with coverage alpha, and the output driver composites the
+  // background color/image (with its alpha) underneath -- see
+  // FrameOutputDriver::extractColorPass().
+  struct BackgroundComposite
+  {
+    bool enabled{false};
+    math::float4 color{0.f, 0.f, 0.f, 1.f};
+    std::shared_ptr<const Renderer::BackgroundImage> image; // null -> color
+  };
+
   Frame(CyclesGlobalState *s);
   ~Frame() override;
 
@@ -77,6 +92,8 @@ struct Frame : public helium::BaseFrame
   std::vector<uint32_t> m_objectIdBuffer;
   std::vector<uint32_t> m_primitiveIdBuffer;
   std::vector<uint32_t> m_instanceIdBuffer;
+
+  BackgroundComposite m_bgComposite;
 
   // KHR_FRAME_COMPLETION_CALLBACK: invoked by the FrameOutputDriver's
   // callback thread after each render of this frame finishes.
