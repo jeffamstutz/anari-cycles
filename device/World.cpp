@@ -15,7 +15,8 @@ World::World(CyclesGlobalState *s)
     : Object(ANARI_WORLD, s),
       m_zeroSurfaceData(this),
       m_zeroLightData(this),
-      m_zeroVolumeData(this)
+      m_zeroVolumeData(this),
+      m_instanceData(this)
 {
   m_zeroGroup = new Group(s);
   m_zeroInstance = new Instance(s);

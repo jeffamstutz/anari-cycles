@@ -148,6 +148,15 @@ void Camera::commitParameters()
   m_motionScale = getParamObject<Array1D>("motion.scale");
   m_motionRotation = getParamObject<Array1D>("motion.rotation");
   m_motionTranslation = getParamObject<Array1D>("motion.translation");
+  m_time = getParam<helium::box1>("time", helium::box1{0.f, 1.f});
+}
+
+void Camera::finalize()
+{
+  // Motion key *contents* are (re)read here rather than in
+  // commitParameters(): array changes (new data via map/unmap or a new
+  // 'region' -- KHR_ARRAY1D_REGION) notify change observers, which re-runs
+  // finalize() only.
   m_motion = MotionTrack();
   m_motion.matrix = readMotionKeys<math::mat4>(
       this, m_motionTransform.get(), ANARI_FLOAT32_MAT4, "motion.transform");
@@ -163,7 +172,7 @@ void Camera::commitParameters()
         ANARI_FLOAT32_VEC3,
         "motion.translation");
   }
-  m_motion.time = getParam<helium::box1>("time", helium::box1{0.f, 1.f});
+  m_motion.time = m_time;
   if (!m_motion.empty() && m_motion.time.upper < m_motion.time.lower) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "invalid 'time' interval [%f, %f] (upper < lower) -- all motion "
@@ -171,10 +180,7 @@ void Camera::commitParameters()
         m_motion.time.lower,
         m_motion.time.upper);
   }
-}
 
-void Camera::finalize()
-{
   Object::finalize();
 }
 

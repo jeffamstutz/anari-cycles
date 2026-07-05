@@ -43,13 +43,17 @@ struct Geometry : public Object
   // ANARI_FLOAT32_VEC3 as the spec requires.
   helium::IntrusivePtr<Array1D> validatedVertexPosition(const char *subtype);
 
-  std::array<helium::IntrusivePtr<Array1D>, NUM_ATTRIBUTE_CHANNELS>
+  // Attribute arrays are held through ChangeObserverPtr so committing a
+  // change on the array itself (new data via map/unmap, or a new 'region' --
+  // KHR_ARRAY1D_REGION) re-finalizes this geometry and, through its own
+  // change observers, the surfaces that sync it to Cycles.
+  std::array<helium::ChangeObserverPtr<Array1D>, NUM_ATTRIBUTE_CHANNELS>
       m_vertexAttr;
-  std::array<helium::IntrusivePtr<Array1D>, NUM_ATTRIBUTE_CHANNELS>
+  std::array<helium::ChangeObserverPtr<Array1D>, NUM_ATTRIBUTE_CHANNELS>
       m_primitiveAttr;
   std::array<std::optional<anari_vec::float4>, NUM_ATTRIBUTE_CHANNELS>
       m_uniformAttr;
-  helium::IntrusivePtr<Array1D> m_primitiveId;
+  helium::ChangeObserverPtr<Array1D> m_primitiveId;
 };
 
 } // namespace anari_cycles

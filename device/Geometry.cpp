@@ -71,7 +71,7 @@ static constexpr anari_vec::float4 DEFAULT_COLOR = {1.f, 1.f, 1.f, 1.f};
 static std::vector<anari_vec::float4> convertToFloat4(const Array1D &array)
 {
   std::vector<anari_vec::float4> out(array.size());
-  const void *src = array.data();
+  const void *src = array.begin(); // region-aware (KHR_ARRAY1D_REGION)
   const anari::DataType type = array.elementType();
   for (size_t i = 0; i < out.size(); i++) {
     out[i] = anari::anariTypeInvoke<anari_vec::float4, convert_toFloat4>(
@@ -230,12 +230,12 @@ struct Mesh : public Geometry
 
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
-  helium::IntrusivePtr<Array1D> m_vertexNormal;
-  helium::IntrusivePtr<Array1D> m_vertexTangent;
-  std::array<helium::IntrusivePtr<Array1D>, NUM_ATTRIBUTE_CHANNELS>
+  helium::ChangeObserverPtr<Array1D> m_vertexNormal;
+  helium::ChangeObserverPtr<Array1D> m_vertexTangent;
+  std::array<helium::ChangeObserverPtr<Array1D>, NUM_ATTRIBUTE_CHANNELS>
       m_faceVaryingAttr;
-  helium::IntrusivePtr<Array1D> m_faceVaryingNormal;
-  helium::IntrusivePtr<Array1D> m_faceVaryingTangent;
+  helium::ChangeObserverPtr<Array1D> m_faceVaryingNormal;
+  helium::ChangeObserverPtr<Array1D> m_faceVaryingTangent;
   bool m_quads{false};
   const char *m_subtype{"triangle"};
 };
@@ -244,6 +244,11 @@ Mesh::Mesh(CyclesGlobalState *s, bool quads, const char *subtype)
     : Geometry(s),
       m_index(this),
       m_vertexPosition(this),
+      m_vertexNormal(this),
+      m_vertexTangent(this),
+      m_faceVaryingAttr{{{this}, {this}, {this}, {this}, {this}}},
+      m_faceVaryingNormal(this),
+      m_faceVaryingTangent(this),
       m_quads(quads),
       m_subtype(subtype)
 {}
@@ -387,9 +392,9 @@ void Mesh::setPrimitiveIndex(ccl::Mesh *mesh) const
   if (m_index) {
     if (m_index->elementType() == ANARI_UINT64_VEC3
         || m_index->elementType() == ANARI_UINT64_VEC4)
-      idx64 = (const uint64_t *)m_index->data();
+      idx64 = (const uint64_t *)m_index->begin();
     else
-      idx32 = (const uint32_t *)m_index->data();
+      idx32 = (const uint32_t *)m_index->begin();
   }
   auto vertIdx = [&](size_t prim, int c) -> uint32_t {
     if (idx64)
@@ -461,7 +466,7 @@ void Mesh::setAttributes(ccl::Mesh *mesh) const
     }
   }
 
-  writePrimitiveId(attrs, ATTR_ELEMENT_FACE, nTris, m_primitiveId.ptr, triPrim);
+  writePrimitiveId(attrs, ATTR_ELEMENT_FACE, nTris, m_primitiveId.get(), triPrim);
 }
 
 void Mesh::setNormals(ccl::Mesh *mesh) const
@@ -510,7 +515,7 @@ void Mesh::setTangents(ccl::Mesh *mesh) const
   // attributes in Cycles, so vertex tangents replicate through the triangle
   // index.
   const Array1D *src =
-      m_faceVaryingTangent ? m_faceVaryingTangent.ptr : m_vertexTangent.ptr;
+      m_faceVaryingTangent ? m_faceVaryingTangent.get() : m_vertexTangent.get();
   if (!src || src->size() == 0) {
     mesh->attributes.remove(ATTR_STD_UV_TANGENT);
     mesh->attributes.remove(ATTR_STD_UV_TANGENT_SIGN);
@@ -560,12 +565,12 @@ struct Sphere : public Geometry
 
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
-  helium::IntrusivePtr<Array1D> m_vertexRadius;
+  helium::ChangeObserverPtr<Array1D> m_vertexRadius;
   float m_radius{1.f};
 };
 
 Sphere::Sphere(CyclesGlobalState *s)
-    : Geometry(s), m_index(this), m_vertexPosition(this)
+    : Geometry(s), m_index(this), m_vertexPosition(this), m_vertexRadius(this)
 {}
 
 Sphere::~Sphere() = default;
@@ -723,7 +728,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
   }
 
   writePrimitiveId(
-      attrs, ATTR_ELEMENT_VERTEX, numSpheres, m_primitiveId.ptr, identity);
+      attrs, ATTR_ELEMENT_VERTEX, numSpheres, m_primitiveId.get(), identity);
 }
 
 // Curve definitions //////////////////////////////////////////////////////////
@@ -762,12 +767,12 @@ struct Curve : public Geometry
 
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
-  helium::IntrusivePtr<Array1D> m_vertexRadius;
+  helium::ChangeObserverPtr<Array1D> m_vertexRadius;
   float m_radius{1.f};
 };
 
 Curve::Curve(CyclesGlobalState *s)
-    : Geometry(s), m_index(this), m_vertexPosition(this)
+    : Geometry(s), m_index(this), m_vertexPosition(this), m_vertexRadius(this)
 {}
 
 Curve::~Curve() = default;
@@ -984,7 +989,7 @@ void Curve::setAttributes(ccl::Hair *hair,
   }
 
   writePrimitiveId(
-      attrs, ATTR_ELEMENT_CURVE, curvePrim.size(), m_primitiveId.ptr, primOf);
+      attrs, ATTR_ELEMENT_CURVE, curvePrim.size(), m_primitiveId.get(), primOf);
 }
 
 // Cone/Cylinder definitions (tessellated tube meshes) ////////////////////////
@@ -1041,8 +1046,8 @@ struct Tube : public Geometry
 
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
-  helium::IntrusivePtr<Array1D> m_radiusArray; // primitive.radius/vertex.radius
-  helium::IntrusivePtr<Array1D> m_vertexCap;
+  helium::ChangeObserverPtr<Array1D> m_radiusArray; // primitive.radius/vertex.radius
+  helium::ChangeObserverPtr<Array1D> m_vertexCap;
   float m_radius{1.f};
   std::string m_caps{"none"};
   RadiusSource m_radiusSource{RadiusSource::PER_PRIMITIVE};
@@ -1053,6 +1058,8 @@ Tube::Tube(CyclesGlobalState *s, RadiusSource radiusSource, const char *subtype)
     : Geometry(s),
       m_index(this),
       m_vertexPosition(this),
+      m_radiusArray(this),
+      m_vertexCap(this),
       m_radiusSource(radiusSource),
       m_subtype(subtype)
 {}
@@ -1172,7 +1179,7 @@ void Tube::syncCyclesNode(ccl::Geometry *node) const
     }
   }
 
-  writePrimitiveId(attrs, ATTR_ELEMENT_FACE, numTris, m_primitiveId.ptr, primOf);
+  writePrimitiveId(attrs, ATTR_ELEMENT_FACE, numTris, m_primitiveId.get(), primOf);
 }
 
 box3 Tube::bounds() const
@@ -1208,9 +1215,9 @@ size_t Tube::forEachSegment(F &&f) const
   const uint64_t *idx64 = nullptr;
   if (m_index) {
     if (m_index->elementType() == ANARI_UINT64_VEC2)
-      idx64 = (const uint64_t *)m_index->data();
+      idx64 = (const uint64_t *)m_index->begin();
     else // ANARI_UINT32_VEC2
-      idx32 = (const uint32_t *)m_index->data();
+      idx32 = (const uint32_t *)m_index->begin();
   }
 
   const float *radiusArray =
@@ -1425,7 +1432,12 @@ struct UnknownGeometry : public Geometry
   std::string m_subtype;
 };
 
-Geometry::Geometry(CyclesGlobalState *s) : Object(ANARI_GEOMETRY, s) {}
+Geometry::Geometry(CyclesGlobalState *s)
+    : Object(ANARI_GEOMETRY, s),
+      m_vertexAttr{{{this}, {this}, {this}, {this}, {this}}},
+      m_primitiveAttr{{{this}, {this}, {this}, {this}, {this}}},
+      m_primitiveId(this)
+{}
 
 Geometry::~Geometry() = default;
 

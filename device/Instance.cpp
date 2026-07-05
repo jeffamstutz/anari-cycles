@@ -70,40 +70,47 @@ void Instance::commitParameters()
   m_motionScale = nullptr;
   m_motionRotation = nullptr;
   m_motionTranslation = nullptr;
-  m_motion = MotionTrack();
 
   if (m_subtype == Subtype::MOTION_TRANSFORM) {
     m_motionTransform = getParamObject<Array1D>("motion.transform");
-    m_motion.matrix = readMotionKeys<math::mat4>(this,
-        m_motionTransform.get(),
-        ANARI_FLOAT32_MAT4,
-        "motion.transform");
   } else if (m_subtype == Subtype::MOTION_SRT) {
     m_motionScale = getParamObject<Array1D>("motion.scale");
     m_motionRotation = getParamObject<Array1D>("motion.rotation");
     m_motionTranslation = getParamObject<Array1D>("motion.translation");
-    m_motion.scale = readMotionKeys<math::float3>(
-        this, m_motionScale.get(), ANARI_FLOAT32_VEC3, "motion.scale");
-    m_motion.rotation = readMotionKeys<math::float4>(this,
-        m_motionRotation.get(),
-        ANARI_FLOAT32_QUAT_IJKW,
-        "motion.rotation");
-    m_motion.translation = readMotionKeys<math::float3>(this,
-        m_motionTranslation.get(),
-        ANARI_FLOAT32_VEC3,
-        "motion.translation");
   }
 
   if (isMotionSubtype()) {
-    m_motion.time = getParam<helium::box1>("time", helium::box1{0.f, 1.f});
-    if (m_motion.time.upper < m_motion.time.lower) {
+    m_time = getParam<helium::box1>("time", helium::box1{0.f, 1.f});
+    if (m_time.upper < m_time.lower) {
       reportMessage(ANARI_SEVERITY_WARNING,
           "invalid 'time' interval [%f, %f] (upper < lower) -- all motion "
           "keys collapse to the first key",
-          m_motion.time.lower,
-          m_motion.time.upper);
+          m_time.lower,
+          m_time.upper);
     }
   }
+}
+
+void Instance::finalize()
+{
+  // Motion key *contents* are (re)read here rather than in
+  // commitParameters(): array changes (new data via map/unmap or a new
+  // 'region' -- KHR_ARRAY1D_REGION) notify change observers, which re-runs
+  // finalize() only.
+  m_motion = MotionTrack();
+  m_motion.matrix = readMotionKeys<math::mat4>(
+      this, m_motionTransform.get(), ANARI_FLOAT32_MAT4, "motion.transform");
+  m_motion.scale = readMotionKeys<math::float3>(
+      this, m_motionScale.get(), ANARI_FLOAT32_VEC3, "motion.scale");
+  m_motion.rotation = readMotionKeys<math::float4>(
+      this, m_motionRotation.get(), ANARI_FLOAT32_QUAT_IJKW, "motion.rotation");
+  m_motion.translation = readMotionKeys<math::float3>(this,
+      m_motionTranslation.get(),
+      ANARI_FLOAT32_VEC3,
+      "motion.translation");
+  m_motion.time = m_time;
+
+  Object::finalize();
 }
 
 Group *Instance::group() const

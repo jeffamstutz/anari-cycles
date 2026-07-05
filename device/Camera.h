@@ -79,7 +79,8 @@ struct Camera : public Object {
   helium::ChangeObserverPtr<Array1D> m_motionScale;
   helium::ChangeObserverPtr<Array1D> m_motionRotation;
   helium::ChangeObserverPtr<Array1D> m_motionTranslation;
-  MotionTrack m_motion;
+  helium::box1 m_time{0.f, 1.f};
+  MotionTrack m_motion; // rebuilt from the arrays in finalize()
 };
 
 }  // namespace anari_cycles
