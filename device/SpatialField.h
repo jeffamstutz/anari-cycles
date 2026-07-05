@@ -8,6 +8,8 @@
 // cycles
 #include "scene/image.h"
 #include "scene/shader_graph.h"
+// std
+#include <vector>
 
 namespace anari_cycles {
 
@@ -31,6 +33,19 @@ struct SpatialField : public Object
 
   // Suggested object-space ray marching step size.
   virtual float stepSize() const = 0;
+
+  // Dense scalar grid access for isosurface extraction: fills 'dims',
+  // 'origin' and 'spacing' and writes dims.x*dims.y*dims.z voxel values
+  // (normalized to float, x fastest) into 'voxels'. Returns false when this
+  // field cannot provide a dense grid (the isosurface geometry then extracts
+  // an empty mesh).
+  virtual bool getDenseVoxelGrid(std::vector<float> &voxels,
+      anari_vec::uint3 &dims,
+      anari_vec::float3 &origin,
+      anari_vec::float3 &spacing) const
+  {
+    return false;
+  }
 };
 
 // Subtypes ///////////////////////////////////////////////////////////////////
@@ -48,6 +63,11 @@ struct StructuredRegularField : public SpatialField
   box3 bounds() const override;
   float stepSize() const override;
   bool isValid() const override;
+
+  bool getDenseVoxelGrid(std::vector<float> &voxels,
+      anari_vec::uint3 &dims,
+      anari_vec::float3 &origin,
+      anari_vec::float3 &spacing) const override;
 
  private:
   anari_vec::uint3 m_dims{0u};

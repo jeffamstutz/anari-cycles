@@ -9,6 +9,16 @@
 
 namespace anari_cycles {
 
+// Scalar voxel conversion shared by VolumeImageLoader and dense-grid access
+// (isosurface extraction): 'true' when 'type' is a voxel type this device can
+// normalize to float.
+bool voxelToFloatSupported(ANARIDataType type);
+
+// Convert 'n' scalar voxels starting at element 'offset' of 'src' into
+// normalized floats (UFIXED/FIXED types map to [0,1]/[-1,1]).
+void convertVoxelsToFloat(
+    ANARIDataType type, const void *src, size_t offset, float *dst, size_t n);
+
 // Loads the voxels of a structuredRegular spatial field as a tiled 2D float
 // atlas (one Z slice per tile). Cycles removed dense 3D image textures and
 // this build has no NanoVDB/OpenVDB support, so the shader graph built by

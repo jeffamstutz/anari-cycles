@@ -38,6 +38,7 @@ PRIVATE
   Instance.cpp
   Library.cpp
   Light.cpp
+  MarchingCubes.cpp
   Material.cpp
   Object.cpp
   Renderer.cpp

@@ -29,6 +29,7 @@
       "cycles_khr_geometry_cone",
       "cycles_khr_geometry_curve",
       "cycles_khr_geometry_cylinder",
+      "cycles_khr_geometry_isosurface",
       "cycles_khr_geometry_quad",
       "cycles_khr_geometry_sphere",
       "cycles_khr_geometry_triangle",
