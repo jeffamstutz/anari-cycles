@@ -1,0 +1,32 @@
+{
+ "info": {
+  "name": "KHR_RENDERER_BACKGROUND_COLOR",
+  "type": "extension",
+  "comment": "Local copy of the ANARI registry extension; parameters are identical, the description documents this device's background alpha semantics.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_RENDERER",
+   "name": "default",
+   "parameters": [
+    {
+     "name": "background",
+     "types": [
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "tags": [
+      "color"
+     ],
+     "default": [
+      0,
+      0,
+      0,
+      1
+     ],
+     "description": "background color and alpha; camera rays that miss all geometry write this color and alpha into channel.color (alpha < 1 renders on a transparent film and composites color over coverage in the output driver: alpha = coverage + (1-coverage)*background.a); a camera-visible HDRI light overrides the background entirely (alpha stays 1)"
+    }
+   ]
+  }
+ ]
+}

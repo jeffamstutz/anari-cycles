@@ -3,6 +3,8 @@
 
 #include "FrameOutputDriver.h"
 #include "Frame.h"
+// helium
+#include "helium/helium_math.h"
 // std
 #include <algorithm>
 #include <chrono>
@@ -264,6 +266,57 @@ bool FrameOutputDriver::ready() const
   return m_impl->renderFinished;
 }
 
+// Bilinearly sample the baked background image at continuous screen
+// coordinates (u, v) in [0, 1], texel-centered and clamped at the edges --
+// the KHR_RENDERER_BACKGROUND_IMAGE "image stretched over the frame"
+// semantics (mirrors helide's backgroundColorFromImage()).
+static math::float4 sampleBackgroundImage(
+    const Renderer::BackgroundImage &img, float u, float v)
+{
+  const auto ix = helium::getInterpolant(u, img.width, true);
+  const auto iy = helium::getInterpolant(v, img.height, true);
+  auto texel = [&](int32_t x, int32_t y) {
+    x = std::clamp(x, 0, int32_t(img.width) - 1);
+    y = std::clamp(y, 0, int32_t(img.height) - 1);
+    return img.texels[size_t(y) * img.width + size_t(x)];
+  };
+  const auto v0 = linalg::lerp(
+      texel(ix.lower, iy.lower), texel(ix.lower, iy.upper), iy.frac);
+  const auto v1 = linalg::lerp(
+      texel(ix.upper, iy.lower), texel(ix.upper, iy.upper), iy.frac);
+  return linalg::lerp(v0, v1, ix.frac);
+}
+
+// Composite the renderer background under the transparent-film combined
+// pass (Frame::m_bgComposite documents when this is enabled). The pass is
+// premultiplied with alpha = surface coverage, so
+//   out.rgb = render.rgb + (1 - coverage) * bg.rgb
+//   out.a   = coverage   + (1 - coverage) * bg.a
+// which yields exactly (bg.rgb, bg.a) at misses -- the ANARI-specified
+// "background alpha is written to channel.color" behavior -- and leaves
+// fully covered pixels untouched. Rows run bottom-up in both the tile and
+// the (already linear) baked image.
+static void compositeBackground(
+    const Frame::BackgroundComposite &bg, float *rgba, int width, int height)
+{
+  const auto *img = bg.image.get();
+  parallel_for(0, height, [&](int y) {
+    float *px = rgba + size_t(y) * width * 4;
+    const float v = (y + 0.5f) / height;
+    for (int x = 0; x < width; x++, px += 4) {
+      const float t = 1.f - std::clamp(px[3], 0.f, 1.f);
+      if (t == 0.f)
+        continue; // fully covered -- skip the sample (common interior case)
+      const math::float4 b =
+          img ? sampleBackgroundImage(*img, (x + 0.5f) / width, v) : bg.color;
+      px[0] += t * b.x;
+      px[1] += t * b.y;
+      px[2] += t * b.z;
+      px[3] += t * b.w;
+    }
+  });
+}
+
 void FrameOutputDriver::extractColorPass(const Tile &tile)
 {
   const auto format = m_impl->frame->m_colorType;
@@ -283,6 +336,9 @@ void FrameOutputDriver::extractColorPass(const Tile &tile)
   if (!tile.get_pass_pixels("combined", 4, dst))
     m_impl->frame->reportMessage(
         ANARI_SEVERITY_ERROR, "Failed to read 'combined' pass");
+
+  if (m_impl->frame->m_bgComposite.enabled)
+    compositeBackground(m_impl->frame->m_bgComposite, dst, width, height);
 
   if (!isFloat) {
     auto *transformDst = (uint32_t *)m_impl->frame->m_pixelBuffer.data();
