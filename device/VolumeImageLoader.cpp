@@ -11,9 +11,6 @@
 
 namespace anari_cycles {
 
-namespace {
-
-// Convert a single voxel to float. Returns false for unsupported types.
 bool voxelToFloatSupported(ANARIDataType type)
 {
   switch (type) {
@@ -29,7 +26,7 @@ bool voxelToFloatSupported(ANARIDataType type)
   }
 }
 
-void convertSliceRow(
+void convertVoxelsToFloat(
     ANARIDataType type, const void *src, size_t offset, float *dst, size_t n)
 {
   switch (type) {
@@ -70,8 +67,6 @@ void convertSliceRow(
     break;
   }
 }
-
-} // namespace
 
 VolumeImageLoader::VolumeImageLoader(
     Array3D *data, uint32_t tilesX, uint32_t tilesY)
@@ -137,7 +132,7 @@ bool VolumeImageLoader::load_pixels(const ccl::ImageMetaData &, void *pixels)
     for (size_t y = 0; y < ny; ++y) {
       const size_t srcOffset = (z * ny + y) * nx;
       float *dstRow = dst + (ty * ny + y) * atlasW + tx * nx;
-      convertSliceRow(type, src, srcOffset, dstRow, nx);
+      convertVoxelsToFloat(type, src, srcOffset, dstRow, nx);
     }
   }
 

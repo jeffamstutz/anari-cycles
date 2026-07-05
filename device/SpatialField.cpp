@@ -281,6 +281,34 @@ float StructuredRegularField::stepSize() const
       {std::abs(m_spacing[0]), std::abs(m_spacing[1]), std::abs(m_spacing[2])});
 }
 
+bool StructuredRegularField::getDenseVoxelGrid(std::vector<float> &voxels,
+    anari_vec::uint3 &dims,
+    anari_vec::float3 &origin,
+    anari_vec::float3 &spacing) const
+{
+  // Dimensions come from the data array itself, NOT from m_dims: m_dims is
+  // only established by finalize(), and a consumer's finalize can run before
+  // this field's within one commit flush (both are priority-0 objects), so a
+  // stale m_dims could disagree with a freshly committed 'data' array and
+  // over-read it. The consumer is re-finalized after the field either way
+  // (change observation), converging on the same result.
+  if (!m_data || !voxelToFloatSupported(m_data->elementType()))
+    return false;
+
+  dims = m_data->size();
+  if (dims[0] == 0 || dims[1] == 0 || dims[2] == 0)
+    return false;
+
+  origin = m_origin;
+  spacing = m_spacing;
+
+  const size_t n = size_t(dims[0]) * dims[1] * dims[2];
+  voxels.resize(n);
+  convertVoxelsToFloat(
+      m_data->elementType(), m_data->data(), 0, voxels.data(), n);
+  return true;
+}
+
 } // namespace anari_cycles
 
 CYCLES_ANARI_TYPEFOR_DEFINITION(anari_cycles::SpatialField *);
