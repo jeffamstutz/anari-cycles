@@ -37,6 +37,8 @@ struct Surface : public Object
   uint32_t m_id{~0u};
   bool m_geometryHandleChanged{false};
   bool m_materialHandleChanged{false};
+  // one warning per geometry/material pairing (see finalize())
+  bool m_warnedPointInteriorVolume{false};
 };
 
 } // namespace anari_cycles

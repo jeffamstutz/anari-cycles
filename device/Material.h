@@ -27,6 +27,11 @@ struct Material : public Object
 
   ccl::Shader *cyclesShader();
 
+  // True when the material graph drives the shader's Volume output (interior
+  // absorption from PBR thickness/attenuation*). Surfaces use this to warn
+  // about geometry that cannot form a closed volume (see Surface::finalize).
+  bool hasInteriorVolume() const;
+
  protected:
   virtual void makeGraph();
   void connectAttributes(ccl::ShaderNode *bsdf,
@@ -69,6 +74,7 @@ struct Material : public Object
   // connected after it would not be accounted for.
   std::unique_ptr<ccl::ShaderGraph> m_graphOwned;
   ccl::ShaderGraph *m_graph{nullptr};
+  bool m_hasInteriorVolume{false}; // set by subtypes that wire a Volume output
   struct AttributeNodes
   {
     ccl::ShaderOutput *attrC{nullptr};
