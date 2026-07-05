@@ -397,6 +397,9 @@ void PhysicallyBasedMaterial::finalize()
       absorption->set_density(density);
       m_graph->connect(
           absorption->output("Volume"), m_graph->output()->input("Volume"));
+      // Interior volumes only work on closed (mesh-backed) geometry; see the
+      // point-cloud limitation warning in Surface::finalize().
+      m_hasInteriorVolume = true;
     }
   }
 
@@ -486,9 +489,15 @@ ccl::Shader *Material::cyclesShader()
   return m_shader;
 }
 
+bool Material::hasInteriorVolume() const
+{
+  return m_hasInteriorVolume;
+}
+
 void Material::makeGraph()
 {
   m_samplerOutputs.clear();
+  m_hasInteriorVolume = false;
 
   if (!m_shader)
     m_shader = deviceState()->scene->create_node<ccl::Shader>();

@@ -563,6 +563,21 @@ struct Sphere : public Geometry
   void setSpheres(ccl::PointCloud *pc) const;
   void setAttributes(ccl::PointCloud *pc) const;
 
+  // Maps the i'th sphere to its 'vertex.*' array index through the optional
+  // 'primitive.index' array (identity when absent). Shared by setSpheres(),
+  // setAttributes() and bounds() so they can never disagree on the layout.
+  struct VertexIndexer
+  {
+    const uint32_t *idx32{nullptr};
+    const uint64_t *idx64{nullptr};
+    size_t operator()(size_t i) const
+    {
+      return idx64 ? size_t(idx64[i]) : (idx32 ? size_t(idx32[i]) : i);
+    }
+  };
+  VertexIndexer vertexIndexer() const;
+  size_t numSpheres() const;
+
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
   helium::ChangeObserverPtr<Array1D> m_vertexRadius;
@@ -623,16 +638,49 @@ void Sphere::syncCyclesNode(ccl::Geometry *node) const
   setAttributes(pc);
 }
 
+Sphere::VertexIndexer Sphere::vertexIndexer() const
+{
+  VertexIndexer indexer;
+  if (m_index) {
+    if (m_index->elementType() == ANARI_UINT64)
+      indexer.idx64 = m_index->beginAs<uint64_t>();
+    else
+      indexer.idx32 = m_index->beginAs<uint32_t>();
+  }
+  return indexer;
+}
+
+size_t Sphere::numSpheres() const
+{
+  if (!m_vertexPosition)
+    return 0;
+  return m_index ? m_index->size() : m_vertexPosition->size();
+}
+
 box3 Sphere::bounds() const
 {
   box3 b = empty_box3();
   if (!m_vertexPosition)
     return b;
-  std::for_each(m_vertexPosition->beginAs<anari_vec::float3>(),
-      m_vertexPosition->endAs<anari_vec::float3>(),
-      [&](const anari_vec::float3 &v) {
-        extend(b, make_float3(v[0], v[1], v[2]));
-      });
+
+  // Bounds must cover the sphere surfaces, not just their centers: consumers
+  // (e.g. the CTS and anariRenderTests) place cameras from the world bounds,
+  // so center-only bounds put the camera too close -- or, for a single
+  // sphere, inside it. Only spheres referenced by 'primitive.index' count
+  // (unused vertices must not inflate the bounds), mirroring Curve::bounds().
+  const size_t n = numSpheres();
+  const auto vertexOf = vertexIndexer();
+  const auto *srcPoint = m_vertexPosition->beginAs<anari_vec::float3>();
+  const float *srcRadius =
+      m_vertexRadius ? m_vertexRadius->beginAs<float>() : nullptr;
+
+  for (size_t i = 0; i < n; i++) {
+    const size_t idx = vertexOf(i);
+    const auto &v = srcPoint[idx];
+    const float r = srcRadius ? srcRadius[idx] : m_radius;
+    extend(b, make_float3(v[0] - r, v[1] - r, v[2] - r));
+    extend(b, make_float3(v[0] + r, v[1] + r, v[2] + r));
+  }
   return b;
 }
 
@@ -642,13 +690,11 @@ void Sphere::setSpheres(ccl::PointCloud *pc) const
   ccl::array<float> radius;
   ccl::array<int> shader;
 
-  const size_t numSpheres = m_vertexPosition
-      ? (m_index ? m_index->size() : m_vertexPosition->size())
-      : 0;
+  const size_t n = numSpheres();
 
-  auto *dstPoint = (ccl::float3 *)points.resize(numSpheres);
-  auto *dstRadius = (float *)radius.resize(numSpheres);
-  auto *dstShader = (int *)shader.resize(numSpheres);
+  auto *dstPoint = (ccl::float3 *)points.resize(n);
+  auto *dstRadius = (float *)radius.resize(n);
+  auto *dstShader = (int *)shader.resize(n);
 
   const auto *srcPoint = m_vertexPosition
       ? m_vertexPosition->beginAs<anari_vec::float3>()
@@ -657,17 +703,9 @@ void Sphere::setSpheres(ccl::PointCloud *pc) const
   if (m_vertexRadius)
     srcRadius = m_vertexRadius->beginAs<float>();
 
-  const uint32_t *idx32 = nullptr;
-  const uint64_t *idx64 = nullptr;
-  if (m_index) {
-    if (m_index->elementType() == ANARI_UINT64)
-      idx64 = m_index->beginAs<uint64_t>();
-    else
-      idx32 = m_index->beginAs<uint32_t>();
-  }
-
-  for (size_t i = 0; i < numSpheres; i++) {
-    const size_t idx = idx64 ? size_t(idx64[i]) : (idx32 ? size_t(idx32[i]) : i);
+  const auto vertexOf = vertexIndexer();
+  for (size_t i = 0; i < n; i++) {
+    const size_t idx = vertexOf(i);
     const auto &pt = srcPoint[idx];
     dstPoint[i] = make_float3(pt[0], pt[1], pt[2]);
     dstRadius[i] = srcRadius ? srcRadius[idx] : m_radius;
@@ -686,38 +724,21 @@ void Sphere::setSpheres(ccl::PointCloud *pc) const
 void Sphere::setAttributes(ccl::PointCloud *pc) const
 {
   auto &attrs = pc->attributes;
-  const size_t numSpheres = m_vertexPosition
-      ? (m_index ? m_index->size() : m_vertexPosition->size())
-      : 0;
-
-  const uint32_t *idx32 = nullptr;
-  const uint64_t *idx64 = nullptr;
-  if (m_index) {
-    if (m_index->elementType() == ANARI_UINT64)
-      idx64 = m_index->beginAs<uint64_t>();
-    else
-      idx32 = m_index->beginAs<uint32_t>();
-  }
+  const size_t n = numSpheres();
 
   // Each Cycles point is one ANARI primitive, so both vertex-rate (indexed
   // through 'primitive.index') and primitive-rate (direct) attributes land on
   // the per-point element.
-  auto vertexOf = [&](size_t i) -> size_t {
-    return idx64 ? size_t(idx64[i]) : (idx32 ? size_t(idx32[i]) : i);
-  };
+  const auto vertexOf = vertexIndexer();
   auto identity = [](size_t i) { return i; };
 
   for (int c = 0; c < NUM_ATTRIBUTE_CHANNELS; c++) {
     if (m_vertexAttr[c]) {
       writeAttributeArray(
-          attrs, c, ATTR_ELEMENT_VERTEX, numSpheres, *m_vertexAttr[c], vertexOf);
+          attrs, c, ATTR_ELEMENT_VERTEX, n, *m_vertexAttr[c], vertexOf);
     } else if (m_primitiveAttr[c]) {
-      writeAttributeArray(attrs,
-          c,
-          ATTR_ELEMENT_VERTEX,
-          numSpheres,
-          *m_primitiveAttr[c],
-          identity);
+      writeAttributeArray(
+          attrs, c, ATTR_ELEMENT_VERTEX, n, *m_primitiveAttr[c], identity);
     } else if (m_uniformAttr[c]) {
       writeAttributeConstant(attrs, c, *m_uniformAttr[c]);
     } else if (c == CH_COLOR) {
@@ -727,8 +748,7 @@ void Sphere::setAttributes(ccl::PointCloud *pc) const
     }
   }
 
-  writePrimitiveId(
-      attrs, ATTR_ELEMENT_VERTEX, numSpheres, m_primitiveId.get(), identity);
+  writePrimitiveId(attrs, ATTR_ELEMENT_VERTEX, n, m_primitiveId.get(), identity);
 }
 
 // Curve definitions //////////////////////////////////////////////////////////

@@ -41,8 +41,27 @@ void Surface::finalize()
       ccl::array<ccl::Node *> used_shaders;
       used_shaders.push_back_slow(m_material->cyclesShader());
       m_cyclesGeometryNode->set_used_shaders(used_shaders);
+      m_warnedPointInteriorVolume = false;
     }
     m_cyclesGeometryNode->tag_update(state->scene, true);
+
+    // Known limitation: Cycles point primitives (sphere geometry) are always
+    // backface-culled in the kernel (point_intersect_test), so rays inside a
+    // sphere never hit its far side and the volume stack cannot record an
+    // exit event. Interior absorption (PBR thickness/attenuationColor/
+    // attenuationDistance) therefore has no effect inside point spheres
+    // (only rim artifacts appear); mesh-backed geometry is unaffected.
+    // Best effort: material-only re-commits do not re-run this finalize, so
+    // a material that gains an interior volume later warns only once the
+    // surface (or its geometry) is touched again.
+    if (!m_warnedPointInteriorVolume && m_cyclesGeometryNode->is_pointcloud()
+        && m_material->hasInteriorVolume()) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "material interior absorption (thickness/attenuation*) is not "
+          "supported on 'sphere' geometry: Cycles point primitives are "
+          "backface-culled and cannot form a closed volume");
+      m_warnedPointInteriorVolume = true;
+    }
   }
 
   m_geometryHandleChanged = false;
