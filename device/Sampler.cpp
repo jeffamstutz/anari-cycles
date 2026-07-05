@@ -300,19 +300,20 @@ void Image2D::commitParameters()
 
 void Image2D::finalize()
 {
-  if (!isValid())
-    return;
-
-  auto &state = *deviceState();
-  auto loader = std::make_unique<SamplerImageLoader>(m_image.ptr);
-  ccl::ImageParams params;
-  params.alpha_type = IMAGE_ALPHA_AUTO;
-  params.colorspace = imageColorspace(m_image->elementType());
-  params.extension = baseExtension();
-  params.interpolation =
-      m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
-  m_handle =
-      state.scene->image_manager->add_image(std::move(loader), params, false);
+  if (isValid()) {
+    auto &state = *deviceState();
+    auto loader = std::make_unique<SamplerImageLoader>(m_image.ptr);
+    ccl::ImageParams params;
+    params.alpha_type = IMAGE_ALPHA_AUTO;
+    params.colorspace = imageColorspace(m_image->elementType());
+    params.extension = baseExtension();
+    params.interpolation =
+        m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
+    m_handle =
+        state.scene->image_manager->add_image(std::move(loader), params, false);
+  }
+  // notify observing materials so they rebuild their graphs on the new handle
+  Object::finalize();
 }
 
 Sampler::SamplerOutputs Image2D::createNodeGraph(ccl::ShaderGraph *graph)
@@ -363,12 +364,14 @@ struct Image1D : public Sampler
   SamplerOutputs createNodeGraph(ccl::ShaderGraph *graph) override;
 
  private:
-  helium::IntrusivePtr<Array1D> m_image;
+  // Observed so committing a change on the array (new data or a new
+  // 'region' -- KHR_ARRAY1D_REGION) re-finalizes this sampler.
+  helium::ChangeObserverPtr<Array1D> m_image;
   helium::WrapMode m_wrapMode{helium::WrapMode::DEFAULT};
   bool m_linearFilter{true};
 };
 
-Image1D::Image1D(CyclesGlobalState *d) : Sampler(d) {}
+Image1D::Image1D(CyclesGlobalState *d) : Sampler(d), m_image(this) {}
 
 bool Image1D::isValid() const
 {
@@ -387,19 +390,20 @@ void Image1D::commitParameters()
 
 void Image1D::finalize()
 {
-  if (!isValid())
-    return;
-
-  auto &state = *deviceState();
-  auto loader = std::make_unique<SamplerImageLoader>(m_image.ptr);
-  ccl::ImageParams params;
-  params.alpha_type = IMAGE_ALPHA_AUTO;
-  params.colorspace = imageColorspace(m_image->elementType());
-  params.extension = cyclesExtension(m_wrapMode);
-  params.interpolation =
-      m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
-  m_handle =
-      state.scene->image_manager->add_image(std::move(loader), params, false);
+  if (isValid()) {
+    auto &state = *deviceState();
+    auto loader = std::make_unique<SamplerImageLoader>(m_image.get());
+    ccl::ImageParams params;
+    params.alpha_type = IMAGE_ALPHA_AUTO;
+    params.colorspace = imageColorspace(m_image->elementType());
+    params.extension = cyclesExtension(m_wrapMode);
+    params.interpolation =
+        m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
+    m_handle =
+        state.scene->image_manager->add_image(std::move(loader), params, false);
+  }
+  // notify observing materials so they rebuild their graphs on the new handle
+  Object::finalize();
 }
 
 Sampler::SamplerOutputs Image1D::createNodeGraph(ccl::ShaderGraph *graph)
@@ -462,7 +466,7 @@ struct TransformSampler : public Sampler
 // lookups are exact only for primitiveId + inOffset < 2^24.
 struct PrimitiveSampler : public Sampler
 {
-  PrimitiveSampler(CyclesGlobalState *d) : Sampler(d) {}
+  PrimitiveSampler(CyclesGlobalState *d) : Sampler(d), m_array(this) {}
 
   bool isValid() const override
   {
@@ -479,18 +483,20 @@ struct PrimitiveSampler : public Sampler
 
   void finalize() override
   {
-    if (!isValid())
-      return;
-
-    auto &state = *deviceState();
-    auto loader = std::make_unique<SamplerImageLoader>(m_array.ptr);
-    ccl::ImageParams params;
-    params.alpha_type = IMAGE_ALPHA_AUTO;
-    params.colorspace = imageColorspace(m_array->elementType());
-    params.extension = EXTENSION_EXTEND; // clamp out-of-range indices
-    params.interpolation = INTERPOLATION_CLOSEST;
-    m_handle =
-        state.scene->image_manager->add_image(std::move(loader), params, false);
+    if (isValid()) {
+      auto &state = *deviceState();
+      auto loader = std::make_unique<SamplerImageLoader>(m_array.get());
+      ccl::ImageParams params;
+      params.alpha_type = IMAGE_ALPHA_AUTO;
+      params.colorspace = imageColorspace(m_array->elementType());
+      params.extension = EXTENSION_EXTEND; // clamp out-of-range indices
+      params.interpolation = INTERPOLATION_CLOSEST;
+      m_handle = state.scene->image_manager->add_image(
+          std::move(loader), params, false);
+    }
+    // notify observing materials so they rebuild their graphs on the new
+    // handle
+    Object::finalize();
   }
 
   SamplerOutputs createNodeGraph(ccl::ShaderGraph *graph) override
@@ -524,7 +530,9 @@ struct PrimitiveSampler : public Sampler
   }
 
  private:
-  helium::IntrusivePtr<Array1D> m_array;
+  // Observed so committing a change on the array (new data or a new
+  // 'region' -- KHR_ARRAY1D_REGION) re-finalizes this sampler.
+  helium::ChangeObserverPtr<Array1D> m_array;
   uint64_t m_offset{0};
 };
 

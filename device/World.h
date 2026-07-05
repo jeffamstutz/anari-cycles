@@ -48,7 +48,10 @@ struct World : public Object
   helium::IntrusivePtr<Group> m_zeroGroup;
   helium::IntrusivePtr<Instance> m_zeroInstance;
 
-  helium::IntrusivePtr<ObjectArray> m_instanceData;
+  // Observed so committing a change on the instance array (new handles or a
+  // new 'region' -- KHR_ARRAY1D_REGION) re-finalizes the world and rebuilds
+  // the scene objects.
+  helium::ChangeObserverPtr<ObjectArray> m_instanceData;
 
   helium::IntrusivePtr<Light> m_backgroundHdriLight;
 

@@ -9,6 +9,21 @@
 
 namespace anari_cycles {
 
+// A single flush() advances change-observer chains by only one hop:
+// notifications issued during a flush land in the buffer's staging area for
+// the *next* flush. Dependency chains span several hops (e.g. a committed
+// array region change -- KHR_ARRAY1D_REGION -- re-finalizes the observing
+// geometry, which re-finalizes the observing surface, which re-syncs the
+// Cycles node), so drain the buffer until stable. The observer graph mirrors
+// the acyclic scene graph, so this terminates. Callers must hold the scene
+// lock.
+static void drainCommitBuffer(CyclesGlobalState &state)
+{
+  do {
+    state.commitBuffer.flush();
+  } while (!state.commitBuffer.empty());
+}
+
 Frame::Frame(CyclesGlobalState *s) : helium::BaseFrame(s) {}
 
 Frame::~Frame()
@@ -132,7 +147,7 @@ bool Frame::getProperty(const std::string_view &name,
   } else if (type == ANARI_BOOL && name == "nextFrameReset") {
     if (ready()) {
       CyclesGlobalState::SceneLock lock(*deviceState());
-      deviceState()->commitBuffer.flush();
+      drainCommitBuffer(*deviceState());
     }
     bool doReset = resetAccumulationNextFrame();
     helium::writeToVoidP(ptr, doReset);
@@ -156,7 +171,7 @@ void Frame::renderFrame()
   {
     CyclesGlobalState::SceneLock sceneLock(state);
 
-    state.commitBuffer.flush();
+    drainCommitBuffer(state);
 
     if (!isValid()) {
       reportMessage(

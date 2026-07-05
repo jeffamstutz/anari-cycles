@@ -95,6 +95,11 @@ struct Light : public Object
 
   ccl::Light *m_cyclesLight{nullptr};
   ccl::Shader *m_cyclesShader{nullptr};
+  // The 'intensityDistribution' array (1D or 2D), observed so committing a
+  // change on the array (new data or a new 'region' -- KHR_ARRAY1D_REGION)
+  // re-finalizes the light; subtypes re-read the contents in finalize() via
+  // getIntensityDistributionParam().
+  helium::ChangeObserverPtr<> m_intensityDistributionArray;
   // Whether m_cyclesShader currently carries an intensityDistribution graph
   // (so removing the parameter restores the plain unit-emission graph), and
   // the applied graph's inputs (to skip no-op rebuilds on re-commit).

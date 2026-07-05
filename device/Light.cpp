@@ -227,7 +227,9 @@ struct UnknownLight : public Light
 // Light definitions //////////////////////////////////////////////////////////
 
 Light::Light(CyclesGlobalState *s, ccl::Light *light)
-    : Object(ANARI_LIGHT, s), m_cyclesLight(light)
+    : Object(ANARI_LIGHT, s),
+      m_cyclesLight(light),
+      m_intensityDistributionArray(this)
 {}
 
 Light::~Light()
@@ -359,14 +361,18 @@ float Light::photometricRadiance(float area)
 Light::IntensityDistribution Light::getIntensityDistributionParam()
 {
   IntensityDistribution dist;
-  if (!hasParam("intensityDistribution"))
+  if (!hasParam("intensityDistribution")) {
+    m_intensityDistributionArray = nullptr;
     return dist;
+  }
 
   const float *data = nullptr;
   size_t nV = 0, nC = 1;
   ANARIDataType elementType = ANARI_UNKNOWN;
   auto a1 = getParamObject<Array1D>("intensityDistribution");
   auto a2 = getParamObject<Array2D>("intensityDistribution");
+  m_intensityDistributionArray =
+      a1 ? (helium::BaseObject *)a1 : (helium::BaseObject *)a2;
   if (a1) {
     elementType = a1->elementType();
     data = a1->beginAs<float>();
@@ -966,12 +972,15 @@ void Ring::commitParameters()
   m_effectiveRadius = m_radius > 0.f ? m_radius : g_minRingRadius;
   m_radiance =
       photometricRadiance(float(M_PI) * m_effectiveRadius * m_effectiveRadius);
-  m_distribution = getIntensityDistributionParam();
   m_c0 = getParam<math::float3>("c0", {1.f, 0.f, 0.f});
 }
 
 void Ring::finalize()
 {
+  // Re-read the distribution *contents* here: a change committed on the
+  // array itself (new data or region) re-runs finalize() only.
+  m_distribution = getIntensityDistributionParam();
+
   if (m_radius <= 0.f) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "ring light radius is 0; using a tiny disc (radius %g) instead",
@@ -1091,11 +1100,14 @@ void QuadLight::commitParameters()
     m_area = 0.f;
   m_radiance = photometricRadiance(m_area);
   m_side = getParamString("side", "front");
-  m_distribution = getIntensityDistributionParam();
 }
 
 void QuadLight::finalize()
 {
+  // Re-read the distribution *contents* here: a change committed on the
+  // array itself (new data or region) re-runs finalize() only.
+  m_distribution = getIntensityDistributionParam();
+
   if (m_area <= 0.f) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "quad light 'edge1'/'edge2' span zero area (degenerate or "

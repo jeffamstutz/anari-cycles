@@ -17,6 +17,7 @@
     "dependencies": [
       "anari_core_1_0",
       "anari_core_objects_base_1_0",
+      "khr_array1d_region",
       "cycles_khr_camera_omnidirectional",
       "cycles_khr_camera_orthographic",
       "cycles_khr_camera_perspective",

@@ -87,9 +87,10 @@ void expandTexels(const void *src_,
 SamplerImageLoader::SamplerImageLoader(Array1D *array) : m_array1d(array)
 {
   m_dataType = array->elementType();
-  m_dims[0] = uint32_t(array->totalSize());
+  // region-aware (KHR_ARRAY1D_REGION): only [begin, end) becomes the image
+  m_dims[0] = uint32_t(array->size());
   m_dims[1] = 1;
-  m_pixels = array->data();
+  m_pixels = array->begin();
 }
 
 SamplerImageLoader::SamplerImageLoader(Array2D *array) : m_array2d(array)
@@ -188,9 +189,14 @@ bool SamplerImageLoader::equals(const ccl::ImageLoader &_other) const
   const auto *other = dynamic_cast<const SamplerImageLoader *>(&_other);
   if (!other)
     return false;
+  // m_dims/m_pixels participate so a re-finalized sampler whose source array
+  // changed its 'region' (KHR_ARRAY1D_REGION) does not dedupe onto the image
+  // built from the old region.
   return m_array1d.ptr == other->m_array1d.ptr
       && m_array2d.ptr == other->m_array2d.ptr
-      && m_dataType == other->m_dataType;
+      && m_dataType == other->m_dataType && m_dims[0] == other->m_dims[0]
+      && m_dims[1] == other->m_dims[1] && m_dims[2] == other->m_dims[2]
+      && m_pixels == other->m_pixels;
 }
 
 void SamplerImageLoader::cleanup()

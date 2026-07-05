@@ -27,6 +27,7 @@ generate_export_header(${PROJECT_NAME}
 
 target_sources(${PROJECT_NAME}
 PRIVATE
+  Array.cpp
   CyclesGlobalState.cpp
   Camera.cpp
   Device.cpp
