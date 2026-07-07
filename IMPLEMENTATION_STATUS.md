@@ -242,8 +242,26 @@ Materials/shading:
   spec PBR has none — `EXT` territory).
 - Principled volume material for `transferFunction1D`-adjacent emission/scatter control.
 - Emission strength on matte/PBR beyond `emissive` color.
-- **OSL shader material** (`OSLNode`) — a `CYCLES_MATERIAL_OSL` vendor subtype accepting
-  shader source strings; niche but very differentiating (CPU/OptiX only).
+- **OSL shader material** — **DONE (fallback verified; OSL path untested)** as
+  `CYCLES_MATERIAL_OSL` (json/cycles_ext_material_osl.json, OSLMaterial in
+  Material.cpp): 'osl' material subtype with `source` (STRING, OSL source
+  compiled with oslc at commit time, cached in the temp dir by content hash)
+  or `bytecode` (STRING, precompiled .oso text; takes precedence). Compiled
+  shader inputs are settable via equally named ANARI parameters by socket
+  type (FLOAT32/INT32/FLOAT32_VEC3/STRING); the first closure output drives
+  the surface (surface shaders only). The Cycles shading system is global per
+  session, so builds with `WITH_CYCLES_OSL=ON` switch the whole session to
+  `SHADINGSYSTEM_OSL` at device init when the render device supports it
+  (CPU/OptiX; Cycles compiles regular node graphs through OSL too, so other
+  subtypes keep working). **Gap:** the dev environment has no OSL toolchain
+  (no oslc/liboslexec, no flex/bison to build one), so `WITH_CYCLES_OSL`
+  stays OFF and the `#ifdef WITH_OSL` code path (Material.cpp, Device.cpp)
+  compiles against the documented Cycles 5.2 API but has never been built or
+  rendered — re-verify in an OSL-enabled build. The required graceful error
+  path is verified behaviorally (task 30 osl_test.c): committing an 'osl'
+  material in a non-OSL build warns once ("requires ... WITH_CYCLES_OSL=ON"),
+  the material reports invalid, its surfaces are skipped, and rendering does
+  not crash.
 - Toon/hair BSDF material subtypes.
 - Procedural sky (SkyTextureNode) as an `EXT` light subtype (sun+sky in one).
 

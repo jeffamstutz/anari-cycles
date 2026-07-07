@@ -67,6 +67,7 @@
       "cycles_ext_light_linking",
       "cycles_ext_lightgroups",
       "cycles_ext_geometry_subdivision",
+      "cycles_ext_material_osl",
       "khr_spatial_field_structured_regular",
       "khr_volume_transfer_function1d",
       "khr_frame_channel_object_id"
