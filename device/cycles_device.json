@@ -58,6 +58,10 @@
       "cycles_khr_renderer_ambient_light",
       "khr_material_matte",
       "cycles_khr_material_physically_based",
+      "cycles_ext_material_subsurface",
+      "cycles_ext_material_emissive_strength",
+      "cycles_ext_material_toon",
+      "cycles_ext_material_hair",
       "cycles_khr_renderer_background_color",
       "cycles_khr_renderer_background_image",
       "khr_renderer_denoise",
@@ -70,6 +74,7 @@
       "cycles_ext_material_osl",
       "khr_spatial_field_structured_regular",
       "khr_volume_transfer_function1d",
+      "cycles_ext_volume_principled",
       "khr_frame_channel_object_id"
     ]
   },

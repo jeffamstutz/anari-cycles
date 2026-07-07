@@ -1,0 +1,139 @@
+{
+ "info": {
+  "name": "CYCLES_MATERIAL_HAIR",
+  "type": "extension",
+  "comment": [
+   "Cycles vendor extension: 'hair' material subtype wrapping Cycles'",
+   "Principled Hair BSDF, intended for 'curve' geometry. 'colorMode' selects",
+   "how the fiber absorption is parametrized: 'color' (direct reflectance",
+   "from 'color'), 'melanin' ('melanin'/'melaninRedness'/'tint') or",
+   "'absorption' ('absorptionCoefficient'). 'model' picks the scattering",
+   "model: 'huang' (far-field, supports elliptical cross sections via",
+   "'aspectRatio') or 'chiang' (near-field, circular). All defaults equal",
+   "the Cycles socket defaults."
+  ],
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_MATERIAL",
+   "name": "hair",
+   "description": "physically based hair material (Cycles Principled Hair BSDF)",
+   "parameters": [
+    {
+     "name": "name",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "description": "optional object name"
+    },
+    {
+     "name": "colorMode",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "values": ["color", "melanin", "absorption"],
+     "default": "color",
+     "description": "fiber color parametrization"
+    },
+    {
+     "name": "model",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "values": ["huang", "chiang"],
+     "default": "huang",
+     "description": "hair scattering model"
+    },
+    {
+     "name": "color",
+     "types": ["ANARI_FLOAT32_VEC3", "ANARI_SAMPLER", "ANARI_STRING"],
+     "tags": ["attribute", "color"],
+     "default": [0.017513, 0.005763, 0.002059],
+     "description": "fiber reflectance (colorMode 'color')"
+    },
+    {
+     "name": "melanin",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.8,
+     "description": "melanin concentration [0, 1] (colorMode 'melanin')"
+    },
+    {
+     "name": "melaninRedness",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 1.0,
+     "description": "pheomelanin/eumelanin ratio [0, 1] (colorMode 'melanin')"
+    },
+    {
+     "name": "tint",
+     "types": ["ANARI_FLOAT32_VEC3"],
+     "tags": [],
+     "default": [1.0, 1.0, 1.0],
+     "description": "dye color applied on top of melanin (colorMode 'melanin')"
+    },
+    {
+     "name": "absorptionCoefficient",
+     "types": ["ANARI_FLOAT32_VEC3"],
+     "tags": [],
+     "default": [0.245531, 0.52, 1.365],
+     "description": "fiber interior absorption coefficient (colorMode 'absorption')"
+    },
+    {
+     "name": "roughness",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.3,
+     "description": "longitudinal roughness"
+    },
+    {
+     "name": "radialRoughness",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.3,
+     "description": "azimuthal roughness (chiang model only)"
+    },
+    {
+     "name": "coat",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.0,
+     "description": "reduced roughness for the first (shiny undercoat) bounce [0, 1]"
+    },
+    {
+     "name": "ior",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 1.55,
+     "description": "fiber index of refraction"
+    },
+    {
+     "name": "offset",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.034906585,
+     "description": "cuticle scale tilt angle in radians"
+    },
+    {
+     "name": "randomColor",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.0,
+     "description": "per-curve randomization of the melanin concentration [0, 1]"
+    },
+    {
+     "name": "randomRoughness",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.0,
+     "description": "per-curve randomization of the roughness [0, 1]"
+    },
+    {
+     "name": "aspectRatio",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.85,
+     "description": "elliptical cross-section aspect ratio (huang model only)"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,29 @@
+{
+ "info": {
+  "name": "CYCLES_MATERIAL_EMISSIVE_STRENGTH",
+  "type": "extension",
+  "comment": [
+   "Cycles vendor extension: 'emissiveStrength' on the 'physicallyBased'",
+   "material scales the 'emissive' color (Cycles Principled BSDF 'Emission",
+   "Strength' socket), allowing emitted radiance beyond [0,1] colors --",
+   "mirrors glTF KHR_materials_emissive_strength. Default 1.0 keeps the KHR",
+   "spec behavior of 'emissive' alone."
+  ],
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_MATERIAL",
+   "name": "physicallyBased",
+   "parameters": [
+    {
+     "name": "emissiveStrength",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 1.0,
+     "description": "scale factor applied to the 'emissive' color"
+    }
+   ]
+  }
+ ]
+}

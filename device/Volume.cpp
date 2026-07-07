@@ -43,27 +43,29 @@ Volume *Volume::createInstance(std::string_view subtype, CyclesGlobalState *s)
 {
   if (subtype == "transferFunction1D")
     return new TransferFunction1D(s);
+  else if (subtype == "principled")
+    return new PrincipledVolume(s);
   else
     return (Volume *)new UnknownObject(ANARI_VOLUME, subtype, s);
 }
 
-// Subtypes ///////////////////////////////////////////////////////////////////
+// FieldVolume ////////////////////////////////////////////////////////////////
 
-TransferFunction1D::TransferFunction1D(CyclesGlobalState *s)
-    : Volume(s), m_field(this), m_colorData(this), m_opacityData(this)
+FieldVolume::FieldVolume(CyclesGlobalState *s, const char *shaderName)
+    : Volume(s)
 {
   auto &state = *deviceState();
 
   // create_node also sets the node's owner to the scene, which delete_node
   // asserts on
   m_shader = state.scene->create_node<ccl::Shader>();
-  m_shader->name = ccl::ustring("ANARI TransferFunction1D");
+  m_shader->name = ccl::ustring(shaderName);
 
   m_shader->set_graph(std::make_unique<ccl::ShaderGraph>());
   m_shader->tag_update(state.scene);
 }
 
-TransferFunction1D::~TransferFunction1D()
+FieldVolume::~FieldVolume()
 {
   auto &state = *deviceState();
   // Object release can happen while the render thread reads the scene, and
@@ -74,6 +76,111 @@ TransferFunction1D::~TransferFunction1D()
   // outright would leave a dangling used_shaders entry on the retired mesh.
   state.scene->delete_node(m_shader);
 }
+
+ccl::Geometry *FieldVolume::cyclesGeometry() const
+{
+  return m_mesh;
+}
+
+box3 FieldVolume::bounds() const
+{
+  return m_bounds;
+}
+
+void FieldVolume::retireMesh()
+{
+  deviceState()->retireGeometry(m_mesh);
+  m_mesh = nullptr;
+}
+
+void FieldVolume::applyVolumeStepRate(const SpatialField *field)
+{
+  const float3 boundsSize = make_float3(m_bounds.upper[0] - m_bounds.lower[0],
+      m_bounds.upper[1] - m_bounds.lower[1],
+      m_bounds.upper[2] - m_bounds.lower[2]);
+  const float fallbackStep =
+      0.1f * ((boundsSize.x + boundsSize.y + boundsSize.z) / 3.f);
+  const float desiredStep = field->stepSize();
+  if (fallbackStep > 0.f && desiredStep > 0.f) {
+    m_shader->set_volume_step_rate(
+        ccl::clamp(desiredStep / fallbackStep, 1e-3f, 1.f));
+  }
+}
+
+void FieldVolume::syncCyclesMesh()
+{
+  auto &state = *deviceState();
+
+  if (!m_mesh) {
+    m_mesh = state.scene->create_node<ccl::Mesh>();
+    m_mesh->name = ccl::ustring("ANARI Volume");
+  }
+
+  m_mesh->clear(true);
+
+  const auto lo = make_float3(m_bounds.lower[0], m_bounds.lower[1], m_bounds.lower[2]);
+  const auto hi = make_float3(m_bounds.upper[0], m_bounds.upper[1], m_bounds.upper[2]);
+
+  const std::vector<float3> vertices{make_float3(lo.x, lo.y, hi.z),
+      make_float3(hi.x, lo.y, hi.z),
+      make_float3(lo.x, hi.y, hi.z),
+      make_float3(hi.x, hi.y, hi.z),
+      make_float3(lo.x, lo.y, lo.z),
+      make_float3(hi.x, lo.y, lo.z),
+      make_float3(lo.x, hi.y, lo.z),
+      make_float3(hi.x, hi.y, lo.z)};
+
+  const std::vector<int3> faces{make_int3(0, 1, 2),
+      make_int3(2, 1, 3),
+      make_int3(1, 5, 3),
+      make_int3(3, 5, 7),
+      make_int3(5, 4, 7),
+      make_int3(7, 4, 6),
+      make_int3(4, 0, 6),
+      make_int3(6, 0, 2),
+      make_int3(2, 3, 6),
+      make_int3(6, 3, 7),
+      make_int3(5, 4, 1),
+      make_int3(1, 4, 0)};
+
+  ccl::array<ccl::float3> P;
+  P.resize(vertices.size());
+  std::copy(vertices.cbegin(), vertices.cend(), P.begin());
+  m_mesh->set_verts(P);
+
+  m_mesh->resize_mesh(int(vertices.size()), int(faces.size()));
+  auto *triangles = m_mesh->get_triangles().data();
+  auto *shader = m_mesh->get_shader().data();
+  auto *smooth = m_mesh->get_smooth().data();
+  for (size_t i = 0; i < faces.size(); ++i) {
+    const auto &f = faces[i];
+    triangles[3 * i + 0] = f.x;
+    triangles[3 * i + 1] = f.y;
+    triangles[3 * i + 2] = f.z;
+    shader[i] = 0;
+    smooth[i] = false;
+  }
+  m_mesh->tag_triangles_modified();
+  m_mesh->tag_shader_modified();
+  m_mesh->tag_smooth_modified();
+
+  ccl::array<ccl::Node *> used_shaders;
+  used_shaders.push_back_slow(m_shader);
+  m_mesh->set_used_shaders(used_shaders);
+
+  m_mesh->tag_update(state.scene, true);
+}
+
+// TransferFunction1D /////////////////////////////////////////////////////////
+
+TransferFunction1D::TransferFunction1D(CyclesGlobalState *s)
+    : FieldVolume(s, "ANARI TransferFunction1D"),
+      m_field(this),
+      m_colorData(this),
+      m_opacityData(this)
+{}
+
+TransferFunction1D::~TransferFunction1D() = default;
 
 bool TransferFunction1D::isValid() const
 {
@@ -105,12 +212,8 @@ void TransferFunction1D::commitParameters()
 
 void TransferFunction1D::finalize()
 {
-  auto &state = *deviceState();
-
   if (!isValid()) {
-    // deletion is deferred: scene->objects may still reference the mesh
-    state.retireGeometry(m_mesh);
-    m_mesh = nullptr;
+    retireMesh();
     Volume::finalize();
     return;
   }
@@ -214,95 +317,126 @@ void TransferFunction1D::rebuildCyclesShaderGraph()
   }
 
   m_shader->set_graph(std::move(graph));
-
-  // Scale ray marching steps to roughly the field's voxel size: without voxel
-  // grid attributes Cycles falls back to 1/10th of the object bounds.
-  const float3 boundsSize = make_float3(m_bounds.upper[0] - m_bounds.lower[0],
-      m_bounds.upper[1] - m_bounds.lower[1],
-      m_bounds.upper[2] - m_bounds.lower[2]);
-  const float fallbackStep =
-      0.1f * ((boundsSize.x + boundsSize.y + boundsSize.z) / 3.f);
-  const float desiredStep = m_field->stepSize();
-  if (fallbackStep > 0.f && desiredStep > 0.f) {
-    m_shader->set_volume_step_rate(
-        ccl::clamp(desiredStep / fallbackStep, 1e-3f, 1.f));
-  }
-
+  applyVolumeStepRate(m_field.get());
   m_shader->tag_update(state.scene);
 }
 
-void TransferFunction1D::syncCyclesMesh()
+// PrincipledVolume ///////////////////////////////////////////////////////////
+
+PrincipledVolume::PrincipledVolume(CyclesGlobalState *s)
+    : FieldVolume(s, "ANARI PrincipledVolume"),
+      m_field(this),
+      m_temperatureField(this)
+{}
+
+PrincipledVolume::~PrincipledVolume() = default;
+
+bool PrincipledVolume::isValid() const
+{
+  return m_field && m_field->isValid();
+}
+
+void PrincipledVolume::commitParameters()
+{
+  m_field = getParamObject<SpatialField>("value");
+  m_densityScale = getParam<float>("densityScale", 1.f);
+  m_color = getParam<float3>("color", make_float3(0.5f, 0.5f, 0.5f));
+  m_anisotropy = getParam<float>("anisotropy", 0.f);
+  m_absorptionColor = getParam<float3>("absorptionColor", zero_float3());
+  m_emissionStrength = getParam<float>("emissionStrength", 0.f);
+  m_emissionColor =
+      getParam<float3>("emissionColor", make_float3(1.f, 1.f, 1.f));
+  m_blackbodyIntensity = getParam<float>("blackbodyIntensity", 0.f);
+  m_blackbodyTint =
+      getParam<float3>("blackbodyTint", make_float3(1.f, 1.f, 1.f));
+  m_temperatureField = getParamObject<SpatialField>("temperature");
+  m_temperature = getParam<float>("temperature", 1000.f);
+  m_id = getParam<uint32_t>("id", ~0u);
+
+  if (!m_field) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "no spatial field provided to principled volume ('value' parameter)");
+  }
+}
+
+void PrincipledVolume::finalize()
+{
+  if (!isValid()) {
+    retireMesh();
+    Volume::finalize();
+    return;
+  }
+
+  m_bounds = m_field->bounds();
+
+  rebuildCyclesShaderGraph();
+  syncCyclesMesh();
+
+  Volume::finalize();
+}
+
+void PrincipledVolume::rebuildCyclesShaderGraph()
 {
   auto &state = *deviceState();
 
-  if (!m_mesh) {
-    m_mesh = state.scene->create_node<ccl::Mesh>();
-    m_mesh->name = ccl::ustring("ANARI Volume");
+  auto graph = std::make_unique<ccl::ShaderGraph>();
+
+  auto *fieldValue = m_field->createCyclesSamplingNodes(graph.get());
+  if (fieldValue) {
+    auto *volumeNode = graph->create_node<ccl::PrincipledVolumeNode>();
+    // The density/color/temperature sockets are driven by links (or
+    // constants), not by named voxel grid attributes.
+    volumeNode->set_density_attribute(ustring());
+    volumeNode->set_color_attribute(ustring());
+    volumeNode->set_temperature_attribute(ustring());
+
+    volumeNode->set_color(m_color);
+    volumeNode->set_anisotropy(m_anisotropy);
+    volumeNode->set_absorption_color(m_absorptionColor);
+    volumeNode->set_emission_strength(m_emissionStrength);
+    volumeNode->set_emission_color(m_emissionColor);
+    volumeNode->set_blackbody_intensity(m_blackbodyIntensity);
+    volumeNode->set_blackbody_tint(m_blackbodyTint);
+
+    // density = fieldValue * densityScale
+    if (m_densityScale != 1.f) {
+      auto *scale = graph->create_node<ccl::MathNode>();
+      scale->set_math_type(ccl::NODE_MATH_MULTIPLY);
+      scale->set_value2(m_densityScale);
+      graph->connect(fieldValue, scale->input("Value1"));
+      graph->connect(scale->output("Value"), volumeNode->input("Density"));
+    } else {
+      graph->connect(fieldValue, volumeNode->input("Density"));
+    }
+
+    // Blackbody temperature (K): either a second spatial field (fire) or a
+    // constant. An invalid field falls back to the constant with a warning.
+    if (m_temperatureField && m_temperatureField->isValid()) {
+      auto *temperatureValue =
+          m_temperatureField->createCyclesSamplingNodes(graph.get());
+      if (temperatureValue)
+        graph->connect(temperatureValue, volumeNode->input("Temperature"));
+      else
+        volumeNode->set_temperature(m_temperature);
+    } else {
+      if (m_temperatureField) {
+        reportMessage(ANARI_SEVERITY_WARNING,
+            "invalid 'temperature' spatial field on principled volume; "
+            "using the constant 'temperature' value instead");
+      }
+      volumeNode->set_temperature(m_temperature);
+    }
+
+    graph->connect(
+        volumeNode->output("Volume"), graph->output()->input("Volume"));
+  } else {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "principled volume could not create field sampling nodes");
   }
 
-  m_mesh->clear(true);
-
-  const auto lo = make_float3(m_bounds.lower[0], m_bounds.lower[1], m_bounds.lower[2]);
-  const auto hi = make_float3(m_bounds.upper[0], m_bounds.upper[1], m_bounds.upper[2]);
-
-  const std::vector<float3> vertices{make_float3(lo.x, lo.y, hi.z),
-      make_float3(hi.x, lo.y, hi.z),
-      make_float3(lo.x, hi.y, hi.z),
-      make_float3(hi.x, hi.y, hi.z),
-      make_float3(lo.x, lo.y, lo.z),
-      make_float3(hi.x, lo.y, lo.z),
-      make_float3(lo.x, hi.y, lo.z),
-      make_float3(hi.x, hi.y, lo.z)};
-
-  const std::vector<int3> faces{make_int3(0, 1, 2),
-      make_int3(2, 1, 3),
-      make_int3(1, 5, 3),
-      make_int3(3, 5, 7),
-      make_int3(5, 4, 7),
-      make_int3(7, 4, 6),
-      make_int3(4, 0, 6),
-      make_int3(6, 0, 2),
-      make_int3(2, 3, 6),
-      make_int3(6, 3, 7),
-      make_int3(5, 4, 1),
-      make_int3(1, 4, 0)};
-
-  ccl::array<ccl::float3> P;
-  P.resize(vertices.size());
-  std::copy(vertices.cbegin(), vertices.cend(), P.begin());
-  m_mesh->set_verts(P);
-
-  m_mesh->resize_mesh(int(vertices.size()), int(faces.size()));
-  auto *triangles = m_mesh->get_triangles().data();
-  auto *shader = m_mesh->get_shader().data();
-  auto *smooth = m_mesh->get_smooth().data();
-  for (size_t i = 0; i < faces.size(); ++i) {
-    const auto &f = faces[i];
-    triangles[3 * i + 0] = f.x;
-    triangles[3 * i + 1] = f.y;
-    triangles[3 * i + 2] = f.z;
-    shader[i] = 0;
-    smooth[i] = false;
-  }
-  m_mesh->tag_triangles_modified();
-  m_mesh->tag_shader_modified();
-  m_mesh->tag_smooth_modified();
-
-  ccl::array<ccl::Node *> used_shaders;
-  used_shaders.push_back_slow(m_shader);
-  m_mesh->set_used_shaders(used_shaders);
-
-  m_mesh->tag_update(state.scene, true);
-}
-
-ccl::Geometry *TransferFunction1D::cyclesGeometry() const
-{
-  return m_mesh;
-}
-
-box3 TransferFunction1D::bounds() const
-{
-  return m_bounds;
+  m_shader->set_graph(std::move(graph));
+  applyVolumeStepRate(m_field.get());
+  m_shader->tag_update(state.scene);
 }
 
 } // namespace anari_cycles

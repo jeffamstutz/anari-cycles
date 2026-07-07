@@ -238,10 +238,36 @@ Geometry:
 - **Point clouds** (Cycles `PointCloud`) as a faster `sphere` geometry backend.
 
 Materials/shading:
-- Subsurface scattering params on physicallyBased (Cycles has full random-walk SSS;
-  spec PBR has none — `EXT` territory).
-- Principled volume material for `transferFunction1D`-adjacent emission/scatter control.
-- Emission strength on matte/PBR beyond `emissive` color.
+- **Subsurface scattering** — **DONE** as `CYCLES_MATERIAL_SUBSURFACE`
+  (json/cycles_ext_material_subsurface.json): `subsurface` weight
+  (FLOAT32/sampler/attribute), `subsurfaceRadius` (VEC3 per-channel mean free
+  path), `subsurfaceScale`, `subsurfaceIor`, `subsurfaceAnisotropy` on
+  physicallyBased → Cycles Principled `Subsurface *` sockets (random-walk
+  method, the Cycles default). The subsurface albedo is `baseColor` — Cycles
+  4+ has no separate subsurface color socket, so no `subsurfaceColor` param.
+  Defaults equal the Cycles socket defaults, weight 0 keeps the plain diffuse
+  lobe. Caveat documented in the JSON: the registry's `metallic` default of
+  1.0 suppresses the diffuse/subsurface lobe, so SSS users must set
+  metallic=0. Verified behaviorally (sphere renders, SSS on/off differ).
+- **Principled volume** — **DONE** as `CYCLES_VOLUME_PRINCIPLED`
+  (json/cycles_ext_volume_principled.json): new ANARI *Volume* subtype
+  `principled` (volumes are not surfaces, so a Volume subtype rather than a
+  Material) driving Cycles' PrincipledVolumeNode: `value` (SPATIAL_FIELD)
+  × `densityScale` → Density, plus `color` (scatter albedo), `anisotropy`,
+  `absorptionColor`, `emissionStrength`/`emissionColor` and blackbody fire
+  (`blackbodyIntensity`/`blackbodyTint` with `temperature` accepting a
+  constant FLOAT32 or a second SPATIAL_FIELD sampled per point), `id` for
+  channel.objectId. Shares the box-proxy-mesh + shader machinery with
+  transferFunction1D via a new FieldVolume base (Volume.h/.cpp). Verified
+  behaviorally: lit scattering blob visible, emission adds light, hot
+  (6500 K) temperature field glows ≫ cool (1500 K), zero density renders
+  black; SDK render tests confirm transferFunction1D unaffected.
+- **Emission strength** — **DONE** as `CYCLES_MATERIAL_EMISSIVE_STRENGTH`
+  (json/cycles_ext_material_emissive_strength.json): `emissiveStrength`
+  (FLOAT32, default 1) on physicallyBased scales `emissive` via the
+  Principled `Emission Strength` socket (mirrors glTF
+  KHR_materials_emissive_strength). Verified: 4× strength ≈ 4× luminance,
+  0 kills emission. Not on matte (no emission lobe there).
 - **OSL shader material** — **DONE (fallback verified; OSL path untested)** as
   `CYCLES_MATERIAL_OSL` (json/cycles_ext_material_osl.json, OSLMaterial in
   Material.cpp): 'osl' material subtype with `source` (STRING, OSL source
@@ -262,7 +288,20 @@ Materials/shading:
   material in a non-OSL build warns once ("requires ... WITH_CYCLES_OSL=ON"),
   the material reports invalid, its surfaces are skipped, and rendering does
   not crash.
-- Toon/hair BSDF material subtypes.
+- **Toon/hair BSDF material subtypes** — **DONE** as `CYCLES_MATERIAL_TOON`
+  (json/cycles_ext_material_toon.json) and `CYCLES_MATERIAL_HAIR`
+  (json/cycles_ext_material_hair.json). `toon`: Cycles ToonBsdfNode with
+  `color` (attribute/sampler capable), `component` (diffuse/glossy), `size`,
+  `smooth`; no opacity/alphaMode (the BSDF has no Alpha input). `hair`:
+  Cycles PrincipledHairBsdfNode (pairs with KHR_GEOMETRY_CURVE) with
+  `colorMode` (color/melanin/absorption → parametrization enum), `model`
+  (huang/chiang), `color`, `melanin`/`melaninRedness`/`tint`,
+  `absorptionCoefficient`, `roughness`/`radialRoughness`/`randomRoughness`,
+  `coat`, `ior`, `offset` (radians), `randomColor`, `aspectRatio`; defaults
+  equal the Cycles socket defaults. Verified behaviorally: toon
+  diffuse/glossy render distinctly; hair on curve strands renders, and a
+  low-melanin (blond) setting is measurably brighter than the default dark
+  fibers.
 - Procedural sky (SkyTextureNode) as an `EXT` light subtype (sun+sky in one).
 
 Frame channels:

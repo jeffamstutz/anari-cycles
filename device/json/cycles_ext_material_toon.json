@@ -1,0 +1,58 @@
+{
+ "info": {
+  "name": "CYCLES_MATERIAL_TOON",
+  "type": "extension",
+  "comment": [
+   "Cycles vendor extension: 'toon' material subtype wrapping Cycles' Toon",
+   "BSDF (cel-shading lobe with a hard light/dark transition). 'component'",
+   "selects the diffuse or glossy variant; 'size' [0,1] sets the angular",
+   "extent of the lit region and 'smooth' the softness of its boundary.",
+   "The BSDF has no alpha input, so opacity/alphaMode are not offered."
+  ],
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_MATERIAL",
+   "name": "toon",
+   "description": "cel-shading material (Cycles Toon BSDF)",
+   "parameters": [
+    {
+     "name": "name",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "description": "optional object name"
+    },
+    {
+     "name": "color",
+     "types": ["ANARI_FLOAT32_VEC3", "ANARI_SAMPLER", "ANARI_STRING"],
+     "tags": ["attribute", "color"],
+     "default": [0.8, 0.8, 0.8],
+     "description": "surface color"
+    },
+    {
+     "name": "component",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "values": ["diffuse", "glossy"],
+     "default": "diffuse",
+     "description": "toon lobe variant"
+    },
+    {
+     "name": "size",
+     "types": ["ANARI_FLOAT32", "ANARI_SAMPLER", "ANARI_STRING"],
+     "tags": ["attribute"],
+     "default": 0.5,
+     "description": "angular size of the lit region [0, 1]"
+    },
+    {
+     "name": "smooth",
+     "types": ["ANARI_FLOAT32", "ANARI_SAMPLER", "ANARI_STRING"],
+     "tags": ["attribute"],
+     "default": 0.0,
+     "description": "softness of the light/dark boundary [0, 1]"
+    }
+   ]
+  }
+ ]
+}
