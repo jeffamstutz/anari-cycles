@@ -1,0 +1,85 @@
+{
+ "info": {
+  "name": "CYCLES_SURFACE_COMPOSITING",
+  "type": "extension",
+  "comment": "Cycles vendor extension: per-surface ray-visibility flags plus holdout / shadow-catcher compositing controls, mapping onto Cycles Object sockets. Each 'visible.*' flag defaults to the core 'visible' parameter, so 'visible' toggles all ray types at once while individual flags override it (e.g. visible=false + visible.shadow=true keeps only the shadows). Instanced surfaces share their ANARI Surface, so these flags apply identically to every instance.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_SURFACE",
+   "parameters": [
+    {
+     "name": "visible.camera",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "description": "surface is visible to camera (primary) rays; defaults to 'visible'"
+    },
+    {
+     "name": "visible.diffuse",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "description": "surface is visible to diffuse reflection rays; defaults to 'visible'"
+    },
+    {
+     "name": "visible.glossy",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "description": "surface is visible to glossy/specular reflection rays; defaults to 'visible'"
+    },
+    {
+     "name": "visible.transmission",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "description": "surface is visible to transmission (refraction) rays; defaults to 'visible'"
+    },
+    {
+     "name": "visible.shadow",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "description": "surface casts shadows (visible to shadow rays); defaults to 'visible'"
+    },
+    {
+     "name": "visible.volumeScatter",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "description": "surface is visible to volume scattering rays; defaults to 'visible'"
+    },
+    {
+     "name": "holdout",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      false
+     ],
+     "description": "render the surface as a holdout matte: it cuts a hole (zero alpha over a transparent background) in the frame while still blocking and reflecting light in the rest of the scene"
+    },
+    {
+     "name": "shadowCatcher",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      false
+     ],
+     "description": "render the surface as a shadow catcher: it is transparent except where it catches shadows from other objects, for compositing renders over live footage (pair with a transparent 'background')"
+    }
+   ]
+  }
+ ]
+}

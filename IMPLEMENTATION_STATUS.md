@@ -176,10 +176,19 @@ Still-unexposed renderer candidates:
   (checkpoint-style rendering).
 
 Object/scene-level:
-- **Per-surface visibility flags** (camera/diffuse/glossy/transmission/shadow/scatter) —
-  Cycles `Object::visibility`; also gives `KHR`'s surface `visible` param for free.
-- **Holdout** and **shadow catcher** flags (compositing workflows; shadow catcher pass
-  exists in Cycles).
+- Per-surface visibility flags, **holdout** and **shadow catcher** — **DONE** as
+  `CYCLES_SURFACE_COMPOSITING` (json/cycles_ext_surface_compositing.json): Surface
+  `visible.camera/diffuse/glossy/transmission/shadow/volumeScatter` (each defaulting to
+  the core `visible` param, which is now honored too) map to `Object::visibility`
+  PATH_RAY_* bits; `holdout` → `Object::use_holdout`; `shadowCatcher` →
+  `Object::is_shadow_catcher` with Film `use_approximate_shadow_catcher` enabled so
+  caught shadows composite into `channel.color` alpha (light objects get
+  `is_shadow_catcher=true` like Blender so the unshadowed reference sub-path is lit,
+  and World re-tags `Scene::tag_shadow_catcher_modified()` on rebuilds since the device
+  bypasses `Object::tag_update()`). Flags live on the ANARI Surface, so all instances
+  of a surface share them. Not exposed on volumes (core has no Volume `visible`).
+  Still-unexposed candidates: shadow-terminator offsets, per-object `ao_distance`,
+  caustics caster/receiver.
 - **Light linking / shadow linking** sets (Object::receiver_light_set etc.).
 - **Lightgroups** (per-light-group AOV outputs).
 - Per-object `color`/`alpha` (already partially there via instance color plumbing).
@@ -235,7 +244,8 @@ Device/session:
     completion callback, renderProgress property, KHR_FRAME_ACCUMULATION.
 11. **Cycles vendor extensions** (§4.2) in whatever order serves users: renderer sampling
     controls (DONE: `CYCLES_RENDERER_SAMPLING_CONTROLS`) + denoise first, then
-    visibility/holdout/shadow-catcher, subdivision, passes.
+    visibility/holdout/shadow-catcher (DONE: `CYCLES_SURFACE_COMPOSITING`),
+    subdivision, passes.
 
 ## Appendix: how things were tested
 ```sh

@@ -300,6 +300,11 @@ void Renderer::pushSamplingState()
   integrator->set_adaptive_min_samples(sp.adaptiveMinSamples);
 
   film->set_exposure(sp.exposure);
+  // CYCLES_SURFACE_COMPOSITING 'shadowCatcher': composite the shadow-catcher
+  // matte into the combined pass so caught shadows show up directly in
+  // 'channel.color' (alpha holds the shadow over a transparent background).
+  // Only has an effect when the scene contains a shadow-catcher object.
+  film->set_use_approximate_shadow_catcher(true);
   ccl::FilterType filterType = ccl::FILTER_BOX;
   if (sp.pixelFilter == "gaussian")
     filterType = ccl::FILTER_GAUSSIAN;

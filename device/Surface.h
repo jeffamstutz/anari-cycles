@@ -22,6 +22,12 @@ struct Surface : public Object
   const Material *material() const;
   uint32_t id() const;
 
+  // Cycles ray-visibility bitmask (PATH_RAY_*) from the core 'visible'
+  // parameter and the CYCLES_SURFACE_COMPOSITING per-ray-type flags.
+  uint32_t visibilityMask() const;
+  bool holdout() const;
+  bool shadowCatcher() const;
+
   ccl::Geometry *cyclesGeometry() const;
 
   bool isValid() const override;
@@ -35,6 +41,9 @@ struct Surface : public Object
 
   ccl::Geometry *m_cyclesGeometryNode{nullptr};
   uint32_t m_id{~0u};
+  uint32_t m_visibilityMask{~0u};
+  bool m_holdout{false};
+  bool m_shadowCatcher{false};
   bool m_geometryHandleChanged{false};
   bool m_materialHandleChanged{false};
   // one warning per geometry/material pairing (see finalize())

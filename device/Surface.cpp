@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Surface.h"
+// cycles
+#include "kernel/types.h"
 
 namespace anari_cycles {
 
@@ -23,6 +25,41 @@ void Surface::commitParameters()
   m_id = getParam<uint32_t>("id", ~0u);
   m_geometryHandleChanged = prevGeometry != m_geometry.get();
   m_materialHandleChanged = prevMaterial != m_material.ptr;
+
+  // Core 'visible' plus the CYCLES_SURFACE_COMPOSITING per-ray-type flags.
+  // Each 'visible.*' flag defaults to 'visible', so visible=false hides the
+  // surface from every ray type while e.g. visible.shadow=true keeps its
+  // shadows. Only the named PATH_RAY_* bits are raised (mirroring Blender's
+  // object_ray_visibility()): ray/object visibility is an AND-nonzero test,
+  // so stray extra bits (e.g. PATH_RAY_TRANSPARENT, carried by continuation
+  // rays alongside their original type) must stay clear or a "fully
+  // invisible" object would still be hit. Fully-visible surfaces keep the
+  // Cycles socket default (~0u) so the setter no-ops.
+  const bool visible = getParam<bool>("visible", true);
+  const bool visCamera = getParam<bool>("visible.camera", visible);
+  const bool visDiffuse = getParam<bool>("visible.diffuse", visible);
+  const bool visGlossy = getParam<bool>("visible.glossy", visible);
+  const bool visTransmission = getParam<bool>("visible.transmission", visible);
+  const bool visShadow = getParam<bool>("visible.shadow", visible);
+  const bool visVolumeScatter =
+      getParam<bool>("visible.volumeScatter", visible);
+  if (visCamera && visDiffuse && visGlossy && visTransmission && visShadow
+      && visVolumeScatter) {
+    m_visibilityMask = ~0u;
+  } else {
+    uint32_t mask = 0;
+    mask |= visCamera ? ccl::PATH_RAY_CAMERA : 0;
+    mask |= visDiffuse ? ccl::PATH_RAY_DIFFUSE : 0;
+    // sharp specular rays carry GLOSSY|SINGULAR, so raise both
+    mask |= visGlossy ? (ccl::PATH_RAY_GLOSSY | ccl::PATH_RAY_SINGULAR) : 0;
+    mask |= visTransmission ? ccl::PATH_RAY_TRANSMIT : 0;
+    mask |= visShadow ? ccl::PATH_RAY_SHADOW : 0;
+    mask |= visVolumeScatter ? ccl::PATH_RAY_VOLUME_SCATTER : 0;
+    m_visibilityMask = mask;
+  }
+
+  m_holdout = getParam<bool>("holdout", false);
+  m_shadowCatcher = getParam<bool>("shadowCatcher", false);
 }
 
 void Surface::finalize()
@@ -85,6 +122,21 @@ const Material *Surface::material() const
 uint32_t Surface::id() const
 {
   return m_id;
+}
+
+uint32_t Surface::visibilityMask() const
+{
+  return m_visibilityMask;
+}
+
+bool Surface::holdout() const
+{
+  return m_holdout;
+}
+
+bool Surface::shadowCatcher() const
+{
+  return m_shadowCatcher;
 }
 
 ccl::Geometry *Surface::cyclesGeometry() const
