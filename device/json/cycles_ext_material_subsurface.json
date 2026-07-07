@@ -1,0 +1,63 @@
+{
+ "info": {
+  "name": "CYCLES_MATERIAL_SUBSURFACE",
+  "type": "extension",
+  "comment": [
+   "Cycles vendor extension: random-walk subsurface scattering on the",
+   "'physicallyBased' material (the KHR PBR material has no SSS).",
+   "'subsurface' blends between the diffuse lobe and a subsurface lobe whose",
+   "albedo is 'baseColor' (Cycles' Principled BSDF has no separate subsurface",
+   "color socket). 'subsurfaceRadius' is the per-channel mean free path in",
+   "object-space units, scaled uniformly by 'subsurfaceScale'.",
+   "'subsurfaceIor' and 'subsurfaceAnisotropy' control the random-walk",
+   "refraction and phase function. Note that 'metallic' (default 1.0 per the",
+   "ANARI registry) suppresses the diffuse/subsurface lobe entirely, so SSS",
+   "materials should set metallic to 0. All defaults equal the Cycles",
+   "Principled BSDF socket defaults."
+  ],
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_MATERIAL",
+   "name": "physicallyBased",
+   "parameters": [
+    {
+     "name": "subsurface",
+     "types": ["ANARI_FLOAT32", "ANARI_SAMPLER", "ANARI_STRING"],
+     "tags": ["attribute"],
+     "default": 0.0,
+     "description": "subsurface scattering weight (blend between diffuse and subsurface lobes)"
+    },
+    {
+     "name": "subsurfaceRadius",
+     "types": ["ANARI_FLOAT32_VEC3"],
+     "tags": [],
+     "default": [0.1, 0.1, 0.1],
+     "description": "per-channel subsurface mean free path (object-space units)"
+    },
+    {
+     "name": "subsurfaceScale",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.1,
+     "description": "uniform scale applied to subsurfaceRadius"
+    },
+    {
+     "name": "subsurfaceIor",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 1.4,
+     "description": "index of refraction used by the random-walk subsurface scattering"
+    },
+    {
+     "name": "subsurfaceAnisotropy",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.0,
+     "description": "Henyey-Greenstein phase anisotropy of the subsurface scattering [-1, 1]"
+    }
+   ]
+  }
+ ]
+}

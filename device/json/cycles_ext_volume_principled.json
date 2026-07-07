@@ -1,0 +1,110 @@
+{
+ "info": {
+  "name": "CYCLES_VOLUME_PRINCIPLED",
+  "type": "extension",
+  "comment": [
+   "Cycles vendor extension: 'principled' volume subtype driving Cycles'",
+   "Principled Volume closure (scatter + absorption + emission/blackbody)",
+   "with the density sampled from a spatial field -- richer than",
+   "transferFunction1D for smoke and fire. The field value times",
+   "'densityScale' is the extinction density sigma_t; 'color' is the",
+   "single-scattering albedo, 'absorptionColor' tints the extinction, and",
+   "emission comes from 'emissionColor' * 'emissionStrength' plus blackbody",
+   "radiation ('blackbodyIntensity'/'blackbodyTint') at 'temperature' Kelvin",
+   "-- either a constant or a second spatial field (fire). The 'id'",
+   "parameter feeds 'channel.objectId' like on transferFunction1D. All",
+   "shading defaults equal the Cycles Principled Volume socket defaults."
+  ],
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_VOLUME",
+   "name": "principled",
+   "description": "principled volume (Cycles Principled Volume closure)",
+   "parameters": [
+    {
+     "name": "name",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "description": "optional object name"
+    },
+    {
+     "name": "value",
+     "types": ["ANARI_SPATIAL_FIELD"],
+     "tags": ["required"],
+     "description": "spatial field providing the volume density"
+    },
+    {
+     "name": "densityScale",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 1.0,
+     "description": "scale applied to the field value to get the extinction density"
+    },
+    {
+     "name": "color",
+     "types": ["ANARI_FLOAT32_VEC3"],
+     "tags": ["color"],
+     "default": [0.5, 0.5, 0.5],
+     "description": "single-scattering albedo"
+    },
+    {
+     "name": "anisotropy",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.0,
+     "description": "Henyey-Greenstein phase anisotropy [-1, 1]"
+    },
+    {
+     "name": "absorptionColor",
+     "types": ["ANARI_FLOAT32_VEC3"],
+     "tags": ["color"],
+     "default": [0.0, 0.0, 0.0],
+     "description": "tint of the volume extinction (light passing through takes this color)"
+    },
+    {
+     "name": "emissionStrength",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.0,
+     "description": "emitted radiance per unit distance"
+    },
+    {
+     "name": "emissionColor",
+     "types": ["ANARI_FLOAT32_VEC3"],
+     "tags": ["color"],
+     "default": [1.0, 1.0, 1.0],
+     "description": "color of the emitted radiance"
+    },
+    {
+     "name": "blackbodyIntensity",
+     "types": ["ANARI_FLOAT32"],
+     "tags": [],
+     "default": 0.0,
+     "description": "strength of the blackbody emission at 'temperature'"
+    },
+    {
+     "name": "blackbodyTint",
+     "types": ["ANARI_FLOAT32_VEC3"],
+     "tags": ["color"],
+     "default": [1.0, 1.0, 1.0],
+     "description": "tint applied to the blackbody emission"
+    },
+    {
+     "name": "temperature",
+     "types": ["ANARI_FLOAT32", "ANARI_SPATIAL_FIELD"],
+     "tags": [],
+     "default": 1000.0,
+     "description": "blackbody temperature in Kelvin: a constant or a spatial field (fire)"
+    },
+    {
+     "name": "id",
+     "types": ["ANARI_UINT32"],
+     "tags": [],
+     "description": "user id for objectId channel (KHR_FRAME_CHANNEL_OBJECT_ID; the registry's anonymous ANARI_VOLUME 'id' entry only merges into the first volume subtype)"
+    }
+   ]
+  }
+ ]
+}
