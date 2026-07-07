@@ -73,6 +73,13 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
       setMotion(o);
       setInstanceId(o);
       o->set_pass_id(s->id());
+      // Ray visibility / compositing flags live on the ANARI Surface, so
+      // every instance of a surface shares them (documented limitation of
+      // CYCLES_SURFACE_COMPOSITING). set_visibility() no-ops at the default
+      // mask (~0u).
+      o->set_visibility(s->visibilityMask());
+      o->set_use_holdout(s->holdout());
+      o->set_is_shadow_catcher(s->shadowCatcher());
     });
   }
 
@@ -115,6 +122,11 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
         auto *o = state.scene->create_node<ccl::Object>();
         o->set_geometry(cl);
         o->set_tfm(mat4ToCycles(math::mul(xfm, lightXfm)));
+        // On lights this flag only means "illuminates the shadow-catcher
+        // sub-path" (the unshadowed reference a 'shadowCatcher' surface is
+        // divided by). Blender sets it on every light by default; without it
+        // the sub-path sees no light and catchers record no shadows.
+        o->set_is_shadow_catcher(true);
         // KHR_AREA_LIGHTS 'visible': hide the light geometry from camera
         // rays (Cycles turns this into SHADER_EXCLUDE_CAMERA on the light);
         // illumination of the scene is unaffected.

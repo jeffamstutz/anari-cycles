@@ -114,6 +114,13 @@ void World::setCyclesWorldObjects(const helium::box1 &shutter)
   // Handle HDRI light management after objects are set up
   setupHDRIBackground();
 
+  // Scene::has_shadow_catcher() caches its object scan behind a dirty flag
+  // that only Object::tag_update() raises; objects here are created directly
+  // (and removed via delete_nodes()), so re-tag it whenever the object set
+  // changes or a 'shadowCatcher' surface added/removed after the first
+  // render would go unnoticed (stale passes/kernel features).
+  scene->tag_shadow_catcher_modified();
+
   scene->object_manager->tag_update(scene, ObjectManager::UPDATE_ALL);
   scene->geometry_manager->tag_update(scene, GeometryManager::UPDATE_ALL);
   scene->light_manager->tag_update(scene, ccl::LightManager::UPDATE_ALL);
