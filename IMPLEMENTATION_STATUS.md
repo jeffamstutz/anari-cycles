@@ -157,17 +157,23 @@ From a survey of `cycles/src/scene/` + `session/`. Ordered roughly by value/effo
 - **Denoise** → `KHR_RENDERER_DENOISE` (OIDN/OptiX; needs the build to enable one).
 
 ### 4.2 Vendor extension candidates (`CYCLES_`/`EXT_` namespace)
-Renderer parameters (all are simple `Integrator`/`Session` sockets):
-- Bounce controls: `maxBounce`, per-type diffuse/glossy/transmission/volume bounces,
-  transparency depth.
-- **Adaptive sampling** (`use_adaptive_sampling`, threshold, min samples) — currently
-  explicitly disabled in Device.cpp:344.
-- Sample clamp (direct/indirect), firefly suppression — would likely fix the red fireflies
-  seen in `test_pbr_spheres`.
-- **Path guiding** (`use_guiding`), **light tree** toggle (`use_light_tree`), caustics
-  (reflective/refractive, `filter_glossy`), fast GI/AO approximation (`ao_bounces`,
-  `ao_factor`, `ao_distance`), time limit, sample offset/subset (checkpoint-style rendering).
-- Pixel filter type/width; exposure (Film).
+Renderer parameters — **DONE** as `CYCLES_RENDERER_SAMPLING_CONTROLS`
+(json/cycles_ext_renderer_sampling_controls.json, Renderer::pushSamplingState()):
+bounce controls (`maxBounce` + per-type diffuse/glossy/transmission/volume/transparency),
+sample clamping (`clampDirect`/`clampIndirect` — tames indirect fireflies), light tree
+toggle + `lightSamplingThreshold`, caustics toggles + `filterGlossy`, fast-GI
+(`aoBounces`/`aoFactor`/`aoDistance`), adaptive sampling
+(`adaptiveSampling`/`adaptiveThreshold`/`adaptiveMinSamples` — verified to interoperate
+with the per-frame accumulation model: Cycles still delivers the render tile when pixels
+converge early, so frames complete normally), and Film `exposure` +
+`pixelFilter`/`pixelFilterWidth`. All defaults equal the Cycles socket defaults, and the
+state is pushed with change-detecting Cycles setters, so unset parameters change nothing.
+
+Still-unexposed renderer candidates:
+- **Path guiding** (`use_guiding`) — not compiled in (needs OpenPGL/WITH_PATH_GUIDING);
+  expose once the build enables it.
+- Session-level `time_limit`, `pixel_size`, `threads`, sample offset/subset
+  (checkpoint-style rendering).
 
 Object/scene-level:
 - **Per-surface visibility flags** (camera/diffuse/glossy/transmission/shadow/scatter) —
@@ -228,7 +234,8 @@ Device/session:
 10. **Frame completion**: declare existing channels, add primitiveId/instanceId,
     completion callback, renderProgress property, KHR_FRAME_ACCUMULATION.
 11. **Cycles vendor extensions** (§4.2) in whatever order serves users: renderer sampling
-    controls + denoise first, then visibility/holdout/shadow-catcher, subdivision, passes.
+    controls (DONE: `CYCLES_RENDERER_SAMPLING_CONTROLS`) + denoise first, then
+    visibility/holdout/shadow-catcher, subdivision, passes.
 
 ## Appendix: how things were tested
 ```sh

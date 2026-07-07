@@ -6,6 +6,7 @@
 #include "helium/helium_math.h"
 // cycles
 #include "scene/background.h"
+#include "scene/film.h"
 #include "scene/integrator.h"
 #include "scene/pass.h"
 #include "scene/shader_graph.h"
@@ -111,6 +112,48 @@ void Renderer::commitParameters()
   auto denoise = getParam<bool>("denoise", false);
   m_needsUpdateStatus.denoise |= (m_denoise != denoise);
   m_denoise = denoise;
+
+  // Vendor sampling/integrator controls -- no change tracking needed here:
+  // any parameter change resets accumulation, which re-runs
+  // makeRendererCurrent()/pushSamplingState(), and the Cycles socket setters
+  // themselves no-op when the value is unchanged.
+  auto &sp = m_sampling;
+  sp.maxBounce = std::max(0, getParam<int>("maxBounce", 7));
+  sp.maxDiffuseBounce = std::max(0, getParam<int>("maxDiffuseBounce", 7));
+  sp.maxGlossyBounce = std::max(0, getParam<int>("maxGlossyBounce", 7));
+  sp.maxTransmissionBounce =
+      std::max(0, getParam<int>("maxTransmissionBounce", 7));
+  sp.maxVolumeBounce = std::max(0, getParam<int>("maxVolumeBounce", 7));
+  sp.maxTransparencyBounce =
+      std::max(0, getParam<int>("maxTransparencyBounce", 7));
+  sp.clampDirect = std::max(0.f, getParam<float>("clampDirect", 0.f));
+  sp.clampIndirect = std::max(0.f, getParam<float>("clampIndirect", 10.f));
+  sp.lightTree = getParam<bool>("lightTree", true);
+  sp.lightSamplingThreshold =
+      std::max(0.f, getParam<float>("lightSamplingThreshold", 0.f));
+  sp.causticsReflective = getParam<bool>("causticsReflective", true);
+  sp.causticsRefractive = getParam<bool>("causticsRefractive", true);
+  sp.filterGlossy = std::max(0.f, getParam<float>("filterGlossy", 0.f));
+  sp.aoBounces = std::max(0, getParam<int>("aoBounces", 0));
+  sp.aoFactor = std::max(0.f, getParam<float>("aoFactor", 0.f));
+  sp.aoDistance =
+      std::max(0.f, getParam<float>("aoDistance", 3.402823466e38f));
+  sp.adaptiveSampling = getParam<bool>("adaptiveSampling", false);
+  sp.adaptiveThreshold =
+      std::max(0.f, getParam<float>("adaptiveThreshold", 0.01f));
+  sp.adaptiveMinSamples = std::max(0, getParam<int>("adaptiveMinSamples", 0));
+  sp.exposure = std::max(0.f, getParam<float>("exposure", 1.f));
+  sp.pixelFilter = getParamString("pixelFilter", "box");
+  if (sp.pixelFilter != "box" && sp.pixelFilter != "gaussian"
+      && sp.pixelFilter != "blackmanHarris") {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "renderer -- unknown 'pixelFilter' value '%s';"
+        " expected 'box', 'gaussian' or 'blackmanHarris' (using 'box')",
+        sp.pixelFilter.c_str());
+    sp.pixelFilter = "box";
+  }
+  sp.pixelFilterWidth =
+      std::max(0.01f, getParam<float>("pixelFilterWidth", 1.f));
 }
 
 void Renderer::rebuildDefaultBackgroundShader()
@@ -222,6 +265,48 @@ void Renderer::makeRendererCurrent()
         "renderer -- denoise requested but no denoiser compiled in");
   }
 #endif
+  pushSamplingState();
+}
+
+// Push the vendor sampling/integrator controls to the shared Cycles
+// Integrator/Film. Runs under the frame's SceneLock on every accumulation
+// reset; the Cycles setters only tag the nodes modified when a value
+// actually changed, so pushing unconditionally is free at defaults and also
+// handles switching between renderer objects with different settings.
+void Renderer::pushSamplingState()
+{
+  auto *integrator = deviceState()->scene->integrator;
+  auto *film = deviceState()->scene->film;
+  const auto &sp = m_sampling;
+
+  integrator->set_max_bounce(sp.maxBounce);
+  integrator->set_max_diffuse_bounce(sp.maxDiffuseBounce);
+  integrator->set_max_glossy_bounce(sp.maxGlossyBounce);
+  integrator->set_max_transmission_bounce(sp.maxTransmissionBounce);
+  integrator->set_max_volume_bounce(sp.maxVolumeBounce);
+  integrator->set_transparent_max_bounce(sp.maxTransparencyBounce);
+  integrator->set_sample_clamp_direct(sp.clampDirect);
+  integrator->set_sample_clamp_indirect(sp.clampIndirect);
+  integrator->set_use_light_tree(sp.lightTree);
+  integrator->set_light_sampling_threshold(sp.lightSamplingThreshold);
+  integrator->set_caustics_reflective(sp.causticsReflective);
+  integrator->set_caustics_refractive(sp.causticsRefractive);
+  integrator->set_filter_glossy(sp.filterGlossy);
+  integrator->set_ao_bounces(sp.aoBounces);
+  integrator->set_ao_factor(sp.aoFactor);
+  integrator->set_ao_distance(sp.aoDistance);
+  integrator->set_use_adaptive_sampling(sp.adaptiveSampling);
+  integrator->set_adaptive_threshold(sp.adaptiveThreshold);
+  integrator->set_adaptive_min_samples(sp.adaptiveMinSamples);
+
+  film->set_exposure(sp.exposure);
+  ccl::FilterType filterType = ccl::FILTER_BOX;
+  if (sp.pixelFilter == "gaussian")
+    filterType = ccl::FILTER_GAUSSIAN;
+  else if (sp.pixelFilter == "blackmanHarris")
+    filterType = ccl::FILTER_BLACKMAN_HARRIS;
+  film->set_filter_type(filterType);
+  film->set_filter_width(sp.pixelFilterWidth);
 }
 
 bool Renderer::runAsync() const
