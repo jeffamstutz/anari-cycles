@@ -1,0 +1,49 @@
+{
+ "info": {
+  "name": "CYCLES_MATERIAL_OSL",
+  "type": "extension",
+  "comment": [
+   "Cycles vendor extension: 'osl' material subtype accepting Open Shading",
+   "Language shaders. 'bytecode' holds precompiled .oso text and takes",
+   "precedence over 'source', which holds OSL source code compiled with oslc",
+   "at commit time. The compiled shader's input parameters become settable",
+   "via equally named ANARI parameters chosen by socket type: ANARI_FLOAT32",
+   "(float), ANARI_INT32 (int), ANARI_FLOAT32_VEC3 (color/point/vector/",
+   "normal) and ANARI_STRING (string); unset inputs keep the shader's",
+   "declared defaults. The shader's first closure output drives the surface",
+   "(surface shaders only). Requires a build with WITH_CYCLES_OSL=ON and a",
+   "render device supporting Cycles' OSL shading system (CPU or OptiX; the",
+   "shading system is global per session and is enabled at device init).",
+   "Otherwise committing warns and yields an invalid material, so surfaces",
+   "using it are skipped."
+  ],
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_MATERIAL",
+   "name": "osl",
+   "description": "material driven by an Open Shading Language shader",
+   "parameters": [
+    {
+     "name": "name",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "description": "optional object name"
+    },
+    {
+     "name": "source",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "description": "OSL shader source code, compiled with oslc at commit time"
+    },
+    {
+     "name": "bytecode",
+     "types": ["ANARI_STRING"],
+     "tags": [],
+     "description": "precompiled OSL shader bytecode (.oso text); takes precedence over 'source'"
+    }
+   ]
+  }
+ ]
+}

@@ -78,6 +78,15 @@ if(WITH_CYCLES_OPENSUBDIV)
   # degrade to linear dicing in a build without OpenSubdiv.
   target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPENSUBDIV)
 endif()
+if(WITH_CYCLES_OSL)
+  # Enables the CYCLES_MATERIAL_OSL runtime path ('osl' material subtype,
+  # OSLMaterial in Material.cpp) and the session-wide OSL shading system
+  # switch in Device.cpp. Without it the subtype warns and yields an
+  # invalid material.
+  target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OSL)
+  # scene/osl.h pulls in OSL (and its OpenImageIO/Imath) headers.
+  target_include_directories(${PROJECT_NAME} PRIVATE ${OSL_INCLUDE_DIR})
+endif()
 
 target_link_libraries(${PROJECT_NAME}
 PRIVATE

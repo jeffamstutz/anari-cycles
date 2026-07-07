@@ -363,6 +363,20 @@ void CyclesDevice::initDevice()
       "Using Cycles Device '%s'",
       ccl::Device::string_from_type(state.session_params.device.type).c_str());
 
+#ifdef WITH_OSL
+  // CYCLES_MATERIAL_OSL: the shading system is global per Cycles session, so
+  // it is switched to OSL up front whenever the render device supports it
+  // (CPU and OptiX only). Cycles compiles regular node graphs through OSL
+  // just the same, so all other material subtypes keep working; on devices
+  // without OSL support, committing an 'osl' material warns and yields an
+  // invalid material (see OSLMaterial::finalize()).
+  if (selectedDevice.type == ccl::DEVICE_CPU
+      || selectedDevice.type == ccl::DEVICE_OPTIX) {
+    state.scene_params.shadingsystem = ccl::SHADINGSYSTEM_OSL;
+    state.session_params.shadingsystem = ccl::SHADINGSYSTEM_OSL;
+  }
+#endif
+
   state.session =
       std::make_unique<ccl::Session>(state.session_params, state.scene_params);
   state.scene = state.session->scene.get();
