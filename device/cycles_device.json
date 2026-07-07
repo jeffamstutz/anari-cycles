@@ -63,6 +63,8 @@
       "khr_renderer_denoise",
       "cycles_ext_renderer_sampling_controls",
       "cycles_ext_surface_compositing",
+      "cycles_ext_light_linking",
+      "cycles_ext_lightgroups",
       "khr_spatial_field_structured_regular",
       "khr_volume_transfer_function1d",
       "khr_frame_channel_object_id"

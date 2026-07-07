@@ -80,6 +80,12 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
       o->set_visibility(s->visibilityMask());
       o->set_use_holdout(s->holdout());
       o->set_is_shadow_catcher(s->shadowCatcher());
+      // CYCLES_LIGHT_LINKING receiver/blocker set indices and the
+      // CYCLES_LIGHTGROUPS emission routing; all setters no-op at their
+      // defaults (0 / 0 / empty).
+      o->set_receiver_light_set(s->receiverLightSet());
+      o->set_blocker_shadow_set(s->blockerShadowSet());
+      o->set_lightgroup(OIIO::ustring(s->lightGroup()));
     });
   }
 
@@ -132,6 +138,13 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
         // illumination of the scene is unaffected.
         if (!l->visibleToCamera())
           o->set_visibility(o->get_visibility() & ~ccl::PATH_RAY_CAMERA);
+        // CYCLES_LIGHT_LINKING: which receiver sets this light illuminates
+        // and which blocker sets shadow it (default ~0 = all sets), plus the
+        // CYCLES_LIGHTGROUPS pass its emission accumulates into. Setters
+        // no-op at the defaults.
+        o->set_light_set_membership(l->lightSetMembership());
+        o->set_shadow_set_membership(l->shadowSetMembership());
+        o->set_lightgroup(OIIO::ustring(l->lightGroup()));
       };
       makeLightObject(l->cyclesLight(), l->xfm());
       // Second emitter for e.g. two-sided quad lights.

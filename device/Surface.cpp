@@ -60,6 +60,40 @@ void Surface::commitParameters()
 
   m_holdout = getParam<bool>("holdout", false);
   m_shadowCatcher = getParam<bool>("shadowCatcher", false);
+
+  // CYCLES_LIGHT_LINKING: 'receiverLightSet' names the light-link set this
+  // surface receives light from (it is then only lit by lights whose
+  // 'lightSet' names that set, plus all unlinked lights); 'shadowBlockerSet'
+  // names the blocker set this surface belongs to (it then only blocks
+  // lights whose 'shadowSet' names that set, plus all unlinked lights).
+  // Baked onto this surface's per-instance ccl::Objects at world-rebuild
+  // time (Group::addGroupToCurrentCyclesScene()).
+  auto *state = deviceState();
+  m_receiverLightSet =
+      getLinkSetIndexParam("receiverLightSet", state->lightLinkSets);
+  m_blockerShadowSet =
+      getLinkSetIndexParam("shadowBlockerSet", state->shadowLinkSets);
+  // CYCLES_LIGHTGROUPS: emission from this surface's material lands in the
+  // named lightgroup channel.
+  m_lightGroup = getParamString("lightGroup", "");
+}
+
+uint32_t Surface::getLinkSetIndexParam(
+    const char *name, CyclesGlobalState::LinkSetRegistry &reg)
+{
+  const std::string setName = getParamString(name, "");
+  if (setName.empty())
+    return 0;
+  const int idx = reg.resolve(setName);
+  if (idx < 0) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'%s' value '%s' ignored -- Cycles supports at most 63 distinct "
+        "link-set names per namespace",
+        name,
+        setName.c_str());
+    return 0;
+  }
+  return uint32_t(idx);
 }
 
 void Surface::finalize()
@@ -137,6 +171,21 @@ bool Surface::holdout() const
 bool Surface::shadowCatcher() const
 {
   return m_shadowCatcher;
+}
+
+uint32_t Surface::receiverLightSet() const
+{
+  return m_receiverLightSet;
+}
+
+uint32_t Surface::blockerShadowSet() const
+{
+  return m_blockerShadowSet;
+}
+
+const std::string &Surface::lightGroup() const
+{
+  return m_lightGroup;
 }
 
 ccl::Geometry *Surface::cyclesGeometry() const

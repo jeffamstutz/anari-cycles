@@ -543,6 +543,51 @@ void Light::commitParameters()
   m_color = getParam<anari_vec::float3>("color", {1.f, 1.f, 1.f});
   // KHR_AREA_LIGHTS: light geometry is visible to camera rays by default.
   m_visible = getParam<bool>("visible", true);
+  // CYCLES_LIGHT_LINKING: 'lightSet' restricts illumination to surfaces
+  // whose 'receiverLightSet' names the same set; 'shadowSet' restricts
+  // shadowing of this light to surfaces whose 'shadowBlockerSet' names the
+  // same set. Baked onto this light's per-instance ccl::Objects at
+  // world-rebuild time (Group::addGroupToCurrentCyclesScene()).
+  auto *state = deviceState();
+  m_lightSetMembership =
+      getLinkSetMembershipParam("lightSet", state->lightLinkSets);
+  m_shadowSetMembership =
+      getLinkSetMembershipParam("shadowSet", state->shadowLinkSets);
+  // CYCLES_LIGHTGROUPS
+  m_lightGroup = getParamString("lightGroup", "");
+}
+
+uint64_t Light::getLinkSetMembershipParam(
+    const char *name, CyclesGlobalState::LinkSetRegistry &reg)
+{
+  const std::string setName = getParamString(name, "");
+  if (setName.empty())
+    return ~uint64_t(0);
+  const int idx = reg.resolve(setName);
+  if (idx < 0) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'%s' value '%s' ignored -- Cycles supports at most 63 distinct "
+        "link-set names per namespace",
+        name,
+        setName.c_str());
+    return ~uint64_t(0);
+  }
+  return uint64_t(1) << uint64_t(idx);
+}
+
+uint64_t Light::lightSetMembership() const
+{
+  return m_lightSetMembership;
+}
+
+uint64_t Light::shadowSetMembership() const
+{
+  return m_shadowSetMembership;
+}
+
+const std::string &Light::lightGroup() const
+{
+  return m_lightGroup;
 }
 
 bool Light::visibleToCamera() const

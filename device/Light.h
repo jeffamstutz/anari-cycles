@@ -39,6 +39,16 @@ struct Light : public Object
   // KHR_AREA_LIGHTS 'visible': whether camera rays see the light geometry.
   bool visibleToCamera() const;
 
+  // CYCLES_LIGHT_LINKING: membership masks for the light's scene objects
+  // (Object::light_set_membership / shadow_set_membership). ~0 ("member of
+  // every set") when the 'lightSet'/'shadowSet' parameter is unset.
+  uint64_t lightSetMembership() const;
+  uint64_t shadowSetMembership() const;
+
+  // CYCLES_LIGHTGROUPS: name of the lightgroup AOV this light's emission is
+  // routed to (Object::lightgroup); empty when unset.
+  const std::string &lightGroup() const;
+
   // HDRI lights drive scene->background; when not 'visible' their shader
   // shows a solid color to camera rays which must track the active
   // renderer's 'background' parameter. No-op for all other subtypes.
@@ -109,6 +119,16 @@ struct Light : public Object
 
   anari_vec::float3 m_color;
   bool m_visible{true};
+  uint64_t m_lightSetMembership{~uint64_t(0)};
+  uint64_t m_shadowSetMembership{~uint64_t(0)};
+  std::string m_lightGroup;
+
+ private:
+  // Resolve a 'lightSet'/'shadowSet' set-name parameter into a one-bit
+  // membership mask via the device-wide registry; ~0 (all sets) when unset
+  // or when more than 63 distinct names exist (warned).
+  uint64_t getLinkSetMembershipParam(
+      const char *name, CyclesGlobalState::LinkSetRegistry &reg);
 };
 
 } // namespace anari_cycles

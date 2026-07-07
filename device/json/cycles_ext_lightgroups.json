@@ -1,0 +1,107 @@
+{
+ "info": {
+  "name": "CYCLES_LIGHTGROUPS",
+  "type": "extension",
+  "comment": "Cycles vendor extension: lightgroup AOVs. Lights (and emissive surfaces) tagged with a 'lightGroup' name route their contribution to the beauty image into a per-lightgroup combined pass, exposed as FRAME channels named 'channel.lightgroup.<name>' (set the channel parameter to ANARI_FLOAT32_VEC3 to enable; map returns RGB float pixels holding that group's direct+indirect contribution). An HDRI light's 'lightGroup' also captures the environment's contribution. Lightgroup channels are excluded from 'denoise' (Cycles lightgroup passes cannot be denoised). Untagged emitters contribute to no lightgroup channel; the sum of all lightgroup channels plus untagged emitters' contributions reconstructs 'channel.color' RGB.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_LIGHT",
+   "name": "directional",
+   "parameters": [
+    {
+     "name": "lightGroup",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the lightgroup frame channel ('channel.lightgroup.<name>') receiving this light's contribution"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "hdri",
+   "parameters": [
+    {
+     "name": "lightGroup",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the lightgroup frame channel ('channel.lightgroup.<name>') receiving this light's contribution"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "point",
+   "parameters": [
+    {
+     "name": "lightGroup",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the lightgroup frame channel ('channel.lightgroup.<name>') receiving this light's contribution"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "quad",
+   "parameters": [
+    {
+     "name": "lightGroup",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the lightgroup frame channel ('channel.lightgroup.<name>') receiving this light's contribution"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "ring",
+   "parameters": [
+    {
+     "name": "lightGroup",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the lightgroup frame channel ('channel.lightgroup.<name>') receiving this light's contribution"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "spot",
+   "parameters": [
+    {
+     "name": "lightGroup",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the lightgroup frame channel ('channel.lightgroup.<name>') receiving this light's contribution"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_SURFACE",
+   "parameters": [
+    {
+     "name": "lightGroup",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the lightgroup frame channel receiving this surface's material emission"
+    }
+   ]
+  }
+ ]
+}

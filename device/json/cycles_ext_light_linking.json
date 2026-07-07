@@ -1,0 +1,163 @@
+{
+ "info": {
+  "name": "CYCLES_LIGHT_LINKING",
+  "type": "extension",
+  "comment": "Cycles vendor extension: light and shadow linking via named link sets, mapping onto Cycles Object link-set sockets. Sets are identified by free-form strings; the device maintains two device-lifetime name-to-index registries (one for light sets shared by 'lightSet'/'receiverLightSet', one for shadow sets shared by 'shadowSet'/'shadowBlockerSet') with at most 63 distinct names each (Cycles LIGHT_LINK_SET_MAX = 64, index 0 is the implicit default set; further names warn and behave as unset). Semantics: a light with 'lightSet' = S illuminates only surfaces whose 'receiverLightSet' = S; a surface with 'receiverLightSet' = S is illuminated by lights linked to S plus all unlinked lights. A light with 'shadowSet' = S has its shadows blocked only by surfaces whose 'shadowBlockerSet' = S; such surfaces still block all unlinked lights. Instanced surfaces/lights share their ANARI object, so link sets apply identically to every instance. Emissive surface materials do not participate as emitters (linking is exposed on lights only), and volumes cannot be linked receivers/blockers.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_LIGHT",
+   "name": "directional",
+   "parameters": [
+    {
+     "name": "lightSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the light-link set this light illuminates exclusively; unset illuminates everything"
+    },
+    {
+     "name": "shadowSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the shadow-link set whose member surfaces are the only shadow blockers of this light; unset means all surfaces block"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "hdri",
+   "parameters": [
+    {
+     "name": "lightSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the light-link set this light illuminates exclusively; unset illuminates everything"
+    },
+    {
+     "name": "shadowSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the shadow-link set whose member surfaces are the only shadow blockers of this light; unset means all surfaces block"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "point",
+   "parameters": [
+    {
+     "name": "lightSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the light-link set this light illuminates exclusively; unset illuminates everything"
+    },
+    {
+     "name": "shadowSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the shadow-link set whose member surfaces are the only shadow blockers of this light; unset means all surfaces block"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "quad",
+   "parameters": [
+    {
+     "name": "lightSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the light-link set this light illuminates exclusively; unset illuminates everything"
+    },
+    {
+     "name": "shadowSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the shadow-link set whose member surfaces are the only shadow blockers of this light; unset means all surfaces block"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "ring",
+   "parameters": [
+    {
+     "name": "lightSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the light-link set this light illuminates exclusively; unset illuminates everything"
+    },
+    {
+     "name": "shadowSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the shadow-link set whose member surfaces are the only shadow blockers of this light; unset means all surfaces block"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
+   "name": "spot",
+   "parameters": [
+    {
+     "name": "lightSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the light-link set this light illuminates exclusively; unset illuminates everything"
+    },
+    {
+     "name": "shadowSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the shadow-link set whose member surfaces are the only shadow blockers of this light; unset means all surfaces block"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_SURFACE",
+   "parameters": [
+    {
+     "name": "receiverLightSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the light-link set this surface receives light from (lights linked to that set plus all unlinked lights); unset receives from unlinked lights only"
+    },
+    {
+     "name": "shadowBlockerSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the shadow-link set this surface blocks shadows for (lights linked to that set plus all unlinked lights); unset blocks unlinked lights only"
+    }
+   ]
+  }
+ ]
+}

@@ -11,6 +11,8 @@
 #include "session/session.h"
 // std
 #include <atomic>
+#include <map>
+#include <string>
 #include <thread>
 
 namespace ccl {
@@ -104,6 +106,23 @@ struct CyclesGlobalState : public helium::BaseGlobalDeviceState
   bool objectsHaveMotion{false};
   bool cameraHasMotion{false};
   void syncIntegratorMotionBlur();
+
+  // Light/shadow linking set names (CYCLES_LIGHT_LINKING) //
+
+  // Device-wide name -> Cycles link-set index maps: one namespace shared by
+  // Light 'lightSet' and Surface 'receiverLightSet', another shared by Light
+  // 'shadowSet' and Surface 'shadowBlockerSet'. Indices 1..63 are allocated
+  // on first use and never recycled for the lifetime of the device (Cycles
+  // supports LIGHT_LINK_SET_MAX = 64 sets; index 0 is the default set of all
+  // unlinked receivers/blockers). resolve() returns -1 when the registry is
+  // full -- callers warn and fall back to unlinked behavior.
+  struct LinkSetRegistry
+  {
+    std::map<std::string, uint32_t> indices;
+    int resolve(const std::string &name);
+  };
+  LinkSetRegistry lightLinkSets;
+  LinkSetRegistry shadowLinkSets;
 
   // Helper methods //
 
