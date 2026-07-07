@@ -293,27 +293,27 @@ void Frame::renderFrame()
       syncLightgroupPasses();
       syncAuxPasses();
 
-      // An HDRI light drives scene->background; when it is not 'visible',
-      // its shader shows a solid color to camera rays that must track this
-      // renderer's 'background' parameter (no-op otherwise). The pointer is
-      // cached during the world rebuild above.
-      Light *hdri = m_world->backgroundHdriLight();
-      if (hdri)
-        hdri->setCameraBackgroundColor(m_renderer->backgroundColor());
+      // A background-type light (hdri/sky) drives scene->background; when
+      // it is not 'visible', its shader shows a solid color to camera rays
+      // that must track this renderer's 'background' parameter (no-op
+      // otherwise). The pointer is cached during the world rebuild above.
+      Light *bgLight = m_world->backgroundLight();
+      if (bgLight)
+        bgLight->setCameraBackgroundColor(m_renderer->backgroundColor());
 
       // Background alpha/image (KHR_RENDERER_BACKGROUND_{COLOR,IMAGE}): when
-      // camera rays see the renderer background (no camera-visible HDRI)
-      // and it is an image or a color with alpha < 1, render on a
-      // transparent film -- camera-path background writes then leave only
-      // coverage in the combined pass's alpha -- and have the output driver
-      // composite the background (with its alpha) underneath. A visible
-      // HDRI keeps the film opaque (the HDRI overrides the renderer
-      // background; alpha is 1 everywhere), and so does an opaque
+      // camera rays see the renderer background (no camera-visible
+      // hdri/sky environment) and it is an image or a color with alpha < 1,
+      // render on a transparent film -- camera-path background writes then
+      // leave only coverage in the combined pass's alpha -- and have the
+      // output driver composite the background (with its alpha) underneath.
+      // A visible environment keeps the film opaque (it overrides the
+      // renderer background; alpha is 1 everywhere), and so does an opaque
       // background color (the background shader renders it directly and
       // alpha is already 1 everywhere, matching the spec). Non-camera rays
-      // are unaffected either way: the ambient dome / HDRI environment
-      // keeps illuminating the scene.
-      const bool compositeBackground = (!hdri || !hdri->visibleToCamera())
+      // are unaffected either way: the ambient dome / environment keeps
+      // illuminating the scene.
+      const bool compositeBackground = (!bgLight || !bgLight->visibleToCamera())
           && m_renderer->backgroundNeedsCompositing();
       auto *background = state.scene->background;
       if (background->get_transparent() != compositeBackground) {

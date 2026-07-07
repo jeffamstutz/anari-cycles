@@ -78,6 +78,20 @@
   },
   {
    "type": "ANARI_LIGHT",
+   "name": "sky",
+   "parameters": [
+    {
+     "name": "lightGroup",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the lightgroup frame channel ('channel.lightgroup.<name>') receiving this light's contribution"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
    "name": "spot",
    "parameters": [
     {

@@ -111,8 +111,8 @@ void World::setCyclesWorldObjects(const helium::box1 &shutter)
   state.syncIntegratorMotionBlur();
   m_bakedShutter = shutter;
 
-  // Handle HDRI light management after objects are set up
-  setupHDRIBackground();
+  // Handle background (hdri/sky) light management after objects are set up
+  setupBackground();
 
   // Scene::has_shadow_catcher() caches its object scan behind a dirty flag
   // that only Object::tag_update() raises; objects here are created directly
@@ -155,81 +155,76 @@ bool World::hasMotionInstances() const
   });
 }
 
-Light *World::findFirstHDRILight() const
+Light *World::findFirstBackgroundLight(size_t &backgroundLightCount) const
 {
-  // Check lights in the zero instance
-  if (m_zeroLightData) {
-    auto **lightsBegin = (Light **)m_zeroLightData->handlesBegin();
-    auto **lightsEnd = (Light **)m_zeroLightData->handlesEnd();
-
+  // Background-type lights (hdri/sky) are recognized by their Cycles light
+  // type (unknown light subtypes have no Cycles light at all).
+  Light *first = nullptr;
+  backgroundLightCount = 0;
+  auto scanLights = [&](const ObjectArray *lightData) {
+    if (!lightData)
+      return;
+    auto **lightsBegin = (Light **)lightData->handlesBegin();
+    auto **lightsEnd = (Light **)lightData->handlesEnd();
     for (Light **lightPtr = lightsBegin; lightPtr != lightsEnd; ++lightPtr) {
-      if (Light *light = *lightPtr; light && light->cyclesLight()) {
-        // Check if this is an HDRI light - we'll do this by checking the cycles
-        // light type (unknown light subtypes have no Cycles light at all)
-        if (light->cyclesLight()->get_light_type() == ccl::LIGHT_BACKGROUND) {
-          return light;
-        }
+      if (Light *light = *lightPtr; light && light->cyclesLight()
+          && light->cyclesLight()->get_light_type() == ccl::LIGHT_BACKGROUND) {
+        if (!first)
+          first = light;
+        backgroundLightCount++;
       }
     }
-  }
+  };
 
-  // Check lights in instances
+  // Lights in the zero instance, then in instanced groups.
+  scanLights(m_zeroLightData.get());
   if (m_instanceData) {
     auto **instancesBegin = (Instance **)m_instanceData->handlesBegin();
     auto **instancesEnd = (Instance **)m_instanceData->handlesEnd();
-
     for (auto **instPtr = instancesBegin; instPtr != instancesEnd; ++instPtr) {
       Instance *instance = *instPtr;
-      if (instance && instance->isValid() && instance->group()) {
-        auto *group = instance->group();
-        if (group->lightData()) {
-          auto **lightsBegin = (Light **)group->lightData()->handlesBegin();
-          auto **lightsEnd = (Light **)group->lightData()->handlesEnd();
-
-          for (Light **lightPtr = lightsBegin; lightPtr != lightsEnd;
-              ++lightPtr) {
-            if (Light *light = *lightPtr; light && light->cyclesLight()) {
-              // Check if this is an HDRI light - we'll do this by checking the
-              // cycles light type (unknown subtypes have no Cycles light)
-              if (light->cyclesLight()->get_light_type()
-                  == ccl::LIGHT_BACKGROUND) {
-                return light;
-              }
-            }
-          }
-        }
-      }
+      if (instance && instance->isValid() && instance->group())
+        scanLights(instance->group()->lightData());
     }
   }
 
-  return nullptr;
+  return first;
 }
 
-void World::setupHDRIBackground()
+void World::setupBackground()
 {
-  // Find first HDRI light from the world (cached so per-frame consumers do
-  // not re-walk every instance's light array; see backgroundHdriLight()).
-  Light *hdriLight = findFirstHDRILight();
-  m_backgroundHdriLight = hdriLight;
+  // Find the first background-type (hdri/sky) light in the world (cached so
+  // per-frame consumers do not re-walk every instance's light array; see
+  // backgroundLight()).
+  size_t backgroundLightCount = 0;
+  Light *bgLight = findFirstBackgroundLight(backgroundLightCount);
+  if (backgroundLightCount > 1) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "world contains %zu background-type ('hdri'/'sky') lights, but "
+        "Cycles has a single background slot; using the first one and "
+        "ignoring the rest",
+        backgroundLightCount);
+  }
+  m_backgroundLight = bgLight;
   auto *background = deviceState()->scene->background;
-  if (hdriLight) {
-    // Set the new HDRI background
-    background->set_shader(hdriLight->cyclesShader());
-    // CYCLES_LIGHTGROUPS: background-hit contributions of the HDRI go to its
-    // 'lightGroup' pass (its scene object routes light-tree samples there,
-    // but camera/escaped rays read Background::lightgroup instead).
-    background->set_lightgroup(OIIO::ustring(hdriLight->lightGroup()));
+  if (bgLight) {
+    // Set the new environment background
+    background->set_shader(bgLight->cyclesShader());
+    // CYCLES_LIGHTGROUPS: background-hit contributions of the environment go
+    // to its 'lightGroup' pass (its scene object routes light-tree samples
+    // there, but camera/escaped rays read Background::lightgroup instead).
+    background->set_lightgroup(OIIO::ustring(bgLight->lightGroup()));
     background->tag_update(deviceState()->scene);
   } else {
-    // Clear any existing HDRI background first
+    // Clear any existing environment background first
     background->set_shader(nullptr);
     background->set_lightgroup(OIIO::ustring());
   }
 }
 
-Light *World::backgroundHdriLight() const
+Light *World::backgroundLight() const
 {
-  return m_backgroundHdriLight.ptr;
+  return m_backgroundLight.ptr;
 }
 
 box3 World::bounds() const
