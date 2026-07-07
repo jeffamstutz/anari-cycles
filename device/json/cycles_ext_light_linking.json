@@ -118,6 +118,28 @@
   },
   {
    "type": "ANARI_LIGHT",
+   "name": "sky",
+   "parameters": [
+    {
+     "name": "lightSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the light-link set this light illuminates exclusively; unset illuminates everything"
+    },
+    {
+     "name": "shadowSet",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "name of the shadow-link set whose member surfaces are the only shadow blockers of this light; unset means all surfaces block"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_LIGHT",
    "name": "spot",
    "parameters": [
     {

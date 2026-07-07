@@ -1,0 +1,200 @@
+{
+ "info": {
+  "name": "CYCLES_LIGHT_SKY",
+  "type": "extension",
+  "comment": "Cycles vendor extension: 'sky' light subtype, a physically-based procedural sun+sky dome (Cycles SkyTextureNode, Nishita multiple-scattering model) that drives the scene background exactly like an 'hdri' light -- no HDRI image required. The dome is evaluated in world space with world +Z up; the horizon is the world XY plane and instance transforms do not reorient it. A world should contain at most one background-type light ('hdri' or 'sky'): Cycles has a single background slot, so only the first one found is used and any others are ignored with a warning. 'visible'=false shows the renderer 'background' to camera rays while the sky keeps illuminating the scene.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_LIGHT",
+   "name": "sky",
+   "description": "procedural sun+sky dome light (Nishita atmosphere model)",
+   "parameters": [
+    {
+     "name": "name",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "description": "optional object name"
+    },
+    {
+     "name": "color",
+     "types": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [
+      "color"
+     ],
+     "default": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "minimum": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "maximum": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "description": "tint multiplied into the whole sky dome (sun disc included)"
+    },
+    {
+     "name": "visible",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      true
+     ],
+     "description": "whether camera rays see the sky dome; when false they see the renderer 'background' instead while the sky keeps illuminating the scene"
+    },
+    {
+     "name": "scale",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "minimum": [
+      0.0
+     ],
+     "description": "overall intensity scale of the sky dome (sun disc included)"
+    },
+    {
+     "name": "sunDirection",
+     "types": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "tags": [
+      "direction"
+     ],
+     "default": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "description": "world-space direction pointing toward the sun (need not be normalized); z is 'up' -- negative z puts the sun below the horizon"
+    },
+    {
+     "name": "sunDisc",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      true
+     ],
+     "description": "render the sun disc itself in the sky dome"
+    },
+    {
+     "name": "sunSize",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.009512
+     ],
+     "minimum": [
+      0.0
+     ],
+     "maximum": [
+      3.141592653589793
+     ],
+     "description": "apparent (full) angular diameter of the sun disc in radians; default is the real sun (~0.545 degrees)"
+    },
+    {
+     "name": "sunIntensity",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "minimum": [
+      0.0
+     ],
+     "description": "multiplier on the sun disc's contribution"
+    },
+    {
+     "name": "altitude",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.0
+     ],
+     "minimum": [
+      0.0
+     ],
+     "maximum": [
+      60000.0
+     ],
+     "description": "altitude of the viewpoint above sea level in meters"
+    },
+    {
+     "name": "airDensity",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "minimum": [
+      0.0
+     ],
+     "maximum": [
+      10.0
+     ],
+     "description": "relative density of air molecules (Rayleigh scattering); higher values give a bluer sky"
+    },
+    {
+     "name": "dustDensity",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "minimum": [
+      0.0
+     ],
+     "maximum": [
+      10.0
+     ],
+     "description": "relative density of dust and water droplets (Mie scattering); higher values give a hazier sky"
+    },
+    {
+     "name": "ozoneDensity",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "minimum": [
+      0.0
+     ],
+     "maximum": [
+      10.0
+     ],
+     "description": "relative density of the ozone layer; higher values make the sky bluer around sunrise/sunset"
+    }
+   ]
+  }
+ ]
+}

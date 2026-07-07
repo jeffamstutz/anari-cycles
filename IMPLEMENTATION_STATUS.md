@@ -302,7 +302,27 @@ Materials/shading:
   diffuse/glossy render distinctly; hair on curve strands renders, and a
   low-melanin (blond) setting is measurably brighter than the default dark
   fibers.
-- Procedural sky (SkyTextureNode) as an `EXT` light subtype (sun+sky in one).
+- **DONE** Procedural sky as `CYCLES_LIGHT_SKY` (json/cycles_ext_light_sky.json):
+  'sky' light subtype backed by Cycles' SkyTextureNode (Nishita
+  multiple-scattering model) driving scene->background like an HDRI light —
+  a `BackgroundLight` whose shader graph is SkyTexture → (× scale·color) →
+  Background. Params: `sunDirection` (world-space, +Z up; mapped onto the
+  node's elevation/rotation sockets, accounting for the kernel's
+  clockwise-rotation convention), `sunDisc`, `sunSize` (full angular
+  diameter, radians), `sunIntensity`, `scale`, `altitude` (m),
+  `airDensity`/`dustDensity`/`ozoneDensity` (Nishita atmosphere, clamped to
+  the Blender UI ranges), plus base `color`/`visible` (an invisible sky shows
+  the renderer 'background' to camera rays while still lighting the scene,
+  same scheme as HDRI) and `lightSet`/`shadowSet`/`lightGroup`. Cycles has a
+  single background slot: the first background-type light (hdri or sky) wins
+  and additional ones warn and are ignored
+  (World::setupBackground()/findFirstBackgroundLight()). Verified
+  behaviorally: sky alone lights the scene blue-dominant at high sun,
+  warm/dim at 2° elevation; the sun disc appears exactly along
+  `sunDirection` and is ~4 orders of magnitude brighter than the sky;
+  an invisible sky shows the renderer background while still lighting a
+  ground plane; hdri-before-sky renders the HDRI and warns (once per world
+  rebuild).
 
 Frame channels:
 - **DONE** as `CYCLES_FRAME_CHANNELS` (json/cycles_ext_frame_channels.json):

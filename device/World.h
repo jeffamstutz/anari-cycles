@@ -30,18 +30,20 @@ struct World : public Object
   // interval.
   bool motionRequiresRebake(const helium::box1 &shutter);
 
-  Light *findFirstHDRILight() const;
+  // First background-type light (hdri/sky) in the world, also counting how
+  // many there are in total (Cycles has a single background slot).
+  Light *findFirstBackgroundLight(size_t &backgroundLightCount) const;
 
-  // The HDRI light currently driving scene->background (cached by
-  // setupHDRIBackground() during setCyclesWorldObjects()); nullptr when the
-  // world has none. Valid between world rebuilds because the world's light
-  // arrays keep the light alive.
-  Light *backgroundHdriLight() const;
+  // The background-type light (hdri/sky) currently driving
+  // scene->background (cached by setupBackground() during
+  // setCyclesWorldObjects()); nullptr when the world has none. Valid between
+  // world rebuilds because the world's light arrays keep the light alive.
+  Light *backgroundLight() const;
 
   box3 bounds() const override;
 
  private:
-  void setupHDRIBackground();
+  void setupBackground();
   helium::ChangeObserverPtr<ObjectArray> m_zeroSurfaceData;
   helium::ChangeObserverPtr<ObjectArray> m_zeroLightData;
   helium::ChangeObserverPtr<ObjectArray> m_zeroVolumeData;
@@ -53,7 +55,7 @@ struct World : public Object
   // the scene objects.
   helium::ChangeObserverPtr<ObjectArray> m_instanceData;
 
-  helium::IntrusivePtr<Light> m_backgroundHdriLight;
+  helium::IntrusivePtr<Light> m_backgroundLight;
 
   // Camera shutter interval the motion instances were last baked against
   // (kept on the world -- not per frame -- so multiple frames/cameras

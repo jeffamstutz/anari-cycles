@@ -54,6 +54,7 @@
       "cycles_khr_light_quad",
       "cycles_khr_light_ring",
       "khr_light_spot",
+      "cycles_ext_light_sky",
       "cycles_khr_area_lights",
       "cycles_khr_renderer_ambient_light",
       "khr_material_matte",
