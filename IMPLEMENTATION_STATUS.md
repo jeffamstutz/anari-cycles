@@ -331,8 +331,22 @@ Frame channels:
   estimate channel (`channel.colorVariance`-ish) from adaptive sampling buffers.
 
 Device/session:
-- Device selection extension: expose CPU/CUDA/OptiX/HIP/Metal/oneAPI choice + GPU index as
-  device parameters (currently auto OptiX→CUDA→CPU with `ANARI_CYCLES_FORCE_CPU` env only).
+- Device selection — **DONE** as `CYCLES_DEVICE_SELECTION`
+  (json/cycles_ext_device_selection.json, CyclesDevice::selectComputeDevice()):
+  ANARI_DEVICE parameters `computeDevice` (auto/cpu/cuda/optix/hip/metal/oneapi;
+  'hip' also matches HIP-RT devices) and `computeDeviceIndex` (per-backend index for
+  multi-GPU hosts), read once when the Cycles session is created on first use of the
+  device. Invalid/unavailable selections and out-of-range indices warn and fall back to
+  auto (OptiX→CUDA→CPU) / index 0; changing the parameters after the session exists
+  warns and is ignored. `ANARI_CYCLES_FORCE_CPU` still overrides both (warns if it
+  overrides an explicit non-cpu request). Read-only device properties: `computeDevices`
+  (STRING_LIST of available backends, queryable before first use) and
+  `computeDevice`/`computeDevice.size` (backend actually in use; forces session
+  creation). Behavioral test: /tmp/anari-cycles-rendertests/devsel_test.c (8-case
+  matrix: default/auto/cpu, unavailable cuda, bogus value, out-of-range index, env
+  override, late-change warning). Caveat: this build compiles only the CPU backend
+  (ANARI_CYCLES_USE_OPTIX=OFF), so GPU selection paths are exercised via their
+  warn-and-fallback branches only.
 - `pixelSize`, `threads`, progressive resolution divider for interactive use.
 
 ---

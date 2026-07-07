@@ -15,6 +15,9 @@
 
 #include "FrameOutputDriver.h"
 
+// std
+#include <cstring>
+
 namespace anari_cycles {
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -299,6 +302,49 @@ int CyclesDevice::deviceGetProperty(const char *name,
   } else if (prop == "cycles" && type == ANARI_BOOL) {
     helium::writeToVoidP(mem, true);
     return 1;
+  } else if (prop == "computeDevices" && type == ANARI_STRING_LIST) {
+    // CYCLES_DEVICE_SELECTION: backends usable as 'computeDevice' values,
+    // in auto-selection preference order (cached -- device enumeration is
+    // expensive and the set cannot change over the process lifetime).
+    if (m_availableBackendPtrs.empty()) {
+      static const std::pair<ccl::DeviceType, const char *> backends[] = {
+          {ccl::DEVICE_OPTIX, "optix"},
+          {ccl::DEVICE_CUDA, "cuda"},
+          {ccl::DEVICE_HIP, "hip"},
+          {ccl::DEVICE_METAL, "metal"},
+          {ccl::DEVICE_ONEAPI, "oneapi"},
+          {ccl::DEVICE_CPU, "cpu"},
+      };
+      auto devices = ccl::Device::available_devices();
+      for (const auto &b : backends) {
+        for (const ccl::DeviceInfo &info : devices) {
+          if (info.type == b.first) {
+            m_availableBackends.emplace_back(b.second);
+            break;
+          }
+        }
+      }
+      for (const std::string &s : m_availableBackends)
+        m_availableBackendPtrs.push_back(s.c_str());
+      m_availableBackendPtrs.push_back(nullptr);
+    }
+    helium::writeToVoidP(mem, m_availableBackendPtrs.data());
+    return 1;
+  } else if (prop == "computeDevice.size" && type == ANARI_UINT64) {
+    initDevice();
+    helium::writeToVoidP(mem, uint64_t(m_appliedComputeDevice.size() + 1));
+    return 1;
+  } else if (prop == "computeDevice" && type == ANARI_STRING) {
+    // The backend actually in use -- forces session creation so the reported
+    // value is final (mirrors what any object-creating call would do anyway).
+    initDevice();
+    if (size == 0)
+      return 0;
+    std::memset(mem, 0, size);
+    std::memcpy(mem,
+        m_appliedComputeDevice.data(),
+        std::min(uint64_t(m_appliedComputeDevice.size()), size - 1));
+    return 1;
   }
   return 0;
 }
@@ -316,6 +362,137 @@ int CyclesDevice::frameReady(ANARIFrame f, ANARIWaitMask m)
   return helium::referenceFromHandle<helium::BaseFrame>(f).frameReady(m);
 }
 
+void CyclesDevice::deviceCommitParameters()
+{
+  helium::BaseDevice::deviceCommitParameters();
+
+  // CYCLES_DEVICE_SELECTION: the parameters themselves are read lazily in
+  // initDevice() (selectComputeDevice()), so committing them before first use
+  // needs no work here -- but changing them once the Cycles session exists
+  // cannot take effect anymore, which deserves a warning. Compare against the
+  // values seen at init (not the applied backend) so re-commits after a
+  // fallback (e.g. 'cuda' requested, 'cpu' applied) stay quiet.
+  if (m_initialized) {
+    auto requested = getParamString("computeDevice", "auto");
+    const int requestedIndex = getParam<int>("computeDeviceIndex", 0);
+    if (requested != m_requestedComputeDevice
+        || requestedIndex != m_requestedComputeDeviceIndex) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "'computeDevice'/'computeDeviceIndex' ('%s'/%d) changed after the"
+          " Cycles session was created -- ignored, still rendering on '%s'"
+          " (set them before first use of the device)",
+          requested.c_str(),
+          requestedIndex,
+          m_appliedComputeDevice.c_str());
+    }
+  }
+}
+
+ccl::DeviceInfo CyclesDevice::selectComputeDevice()
+{
+  auto requested = getParamString("computeDevice", "auto");
+  const int requestedIndex = getParam<int>("computeDeviceIndex", 0);
+  m_requestedComputeDevice = requested;
+  m_requestedComputeDeviceIndex = requestedIndex;
+
+  // Env override for containers/CI -- takes precedence over the parameter.
+  if (getenv("ANARI_CYCLES_FORCE_CPU")) {
+    if (requested != "auto" && requested != "cpu") {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "ANARI_CYCLES_FORCE_CPU overrides 'computeDevice' = '%s'",
+          requested.c_str());
+    }
+    requested = "cpu";
+  }
+
+  static const std::pair<const char *, ccl::DeviceType> backendTable[] = {
+      {"cpu", ccl::DEVICE_CPU},
+      {"cuda", ccl::DEVICE_CUDA},
+      {"optix", ccl::DEVICE_OPTIX},
+      {"hip", ccl::DEVICE_HIP},
+      {"metal", ccl::DEVICE_METAL},
+      {"oneapi", ccl::DEVICE_ONEAPI},
+  };
+
+  ccl::DeviceType requestedType = ccl::DEVICE_NONE; // NONE <=> auto
+  if (requested != "auto") {
+    for (const auto &b : backendTable) {
+      if (requested == b.first) {
+        requestedType = b.second;
+        break;
+      }
+    }
+    if (requestedType == ccl::DEVICE_NONE) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "unrecognized 'computeDevice' value '%s' -- using auto selection"
+          " (valid: auto/cpu/cuda/optix/hip/metal/oneapi)",
+          requested.c_str());
+    }
+  }
+
+  const auto devices = ccl::Device::available_devices();
+  for (const ccl::DeviceInfo &info : devices) {
+    reportMessage(ANARI_SEVERITY_INFO,
+        "Found Cycles Device: %-7s| %s",
+        ccl::Device::string_from_type(info.type).c_str(),
+        info.description.c_str());
+  }
+
+  // 'hip' also matches HIP-RT devices (a HIP variant Cycles enumerates with
+  // its own type when hardware ray tracing is available).
+  auto matchesType = [](const ccl::DeviceInfo &info, ccl::DeviceType t) {
+    return info.type == t
+        || (t == ccl::DEVICE_HIP && info.type == ccl::DEVICE_HIPRT);
+  };
+
+  auto candidatesOf = [&](ccl::DeviceType t) {
+    std::vector<ccl::DeviceInfo> result;
+    for (const ccl::DeviceInfo &info : devices) {
+      if (matchesType(info, t))
+        result.push_back(info);
+    }
+    return result;
+  };
+
+  ccl::DeviceType selectedType = requestedType;
+  if (selectedType != ccl::DEVICE_NONE && candidatesOf(selectedType).empty()) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "no '%s' compute devices available -- using auto selection",
+        requested.c_str());
+    selectedType = ccl::DEVICE_NONE;
+  }
+
+  if (selectedType == ccl::DEVICE_NONE) { // auto: OptiX > CUDA > CPU
+    for (auto t : {ccl::DEVICE_OPTIX, ccl::DEVICE_CUDA}) {
+      if (!candidatesOf(t).empty()) {
+        selectedType = t;
+        break;
+      }
+    }
+    if (selectedType == ccl::DEVICE_NONE)
+      selectedType = ccl::DEVICE_CPU;
+  }
+
+  auto candidates = candidatesOf(selectedType);
+  int index = requestedIndex;
+  if (index < 0 || size_t(index) >= candidates.size()) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'computeDeviceIndex' %d out of range (%zu '%s' device(s) available)"
+        " -- using device 0",
+        requestedIndex,
+        candidates.size(),
+        ccl::Device::string_from_type(selectedType).c_str());
+    index = 0;
+  }
+
+  for (const auto &b : backendTable) {
+    if (b.second == selectedType)
+      m_appliedComputeDevice = b.first;
+  }
+
+  return candidates[index];
+}
+
 void CyclesDevice::initDevice()
 {
   if (m_initialized)
@@ -323,22 +500,7 @@ void CyclesDevice::initDevice()
 
   reportMessage(ANARI_SEVERITY_DEBUG, "initializing cycles device (%p)", this);
 
-  auto *forceCPU = getenv("ANARI_CYCLES_FORCE_CPU");
-
-  auto devices = ccl::Device::available_devices();
-  ccl::DeviceInfo selectedDevice =
-      ccl::Device::available_devices(ccl::DEVICE_MASK_CPU).front();
-  for (ccl::DeviceInfo &info : devices) {
-    reportMessage(ANARI_SEVERITY_INFO,
-        "Found Cycles Device: %-7s| %s",
-        ccl::Device::string_from_type(info.type).c_str(),
-        info.description.c_str());
-    if (!forceCPU && info.type == ccl::DEVICE_OPTIX)
-      selectedDevice = info;
-    else if (!forceCPU && selectedDevice.type != ccl::DEVICE_OPTIX
-        && info.type == ccl::DEVICE_CUDA)
-      selectedDevice = info;
-  }
+  ccl::DeviceInfo selectedDevice = selectComputeDevice();
 
   auto &state = *deviceState();
 
