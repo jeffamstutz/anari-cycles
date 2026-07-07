@@ -73,6 +73,11 @@ endif()
 if(ANARI_CYCLES_USE_OIDN)
   target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPENIMAGEDENOISE)
 endif()
+if(WITH_CYCLES_OPENSUBDIV)
+  # Lets the device warn when 'catmullClark' subdivision would silently
+  # degrade to linear dicing in a build without OpenSubdiv.
+  target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPENSUBDIV)
+endif()
 
 target_link_libraries(${PROJECT_NAME}
 PRIVATE
