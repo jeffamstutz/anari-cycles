@@ -1,0 +1,278 @@
+{
+ "info": {
+  "name": "CYCLES_RENDERER_SAMPLING_CONTROLS",
+  "type": "extension",
+  "comment": "Cycles vendor extension: renderer parameters mapping directly onto Cycles Integrator/Film sockets. All defaults equal the Cycles socket defaults, so leaving them unset changes nothing.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_RENDERER",
+   "name": "default",
+   "parameters": [
+    {
+     "name": "maxBounce",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      7
+     ],
+     "minimum": 0,
+     "description": "total maximum number of light bounces (Cycles Integrator 'max_bounce'); 0 gives direct lighting only"
+    },
+    {
+     "name": "maxDiffuseBounce",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      7
+     ],
+     "minimum": 0,
+     "description": "maximum number of diffuse bounces (Cycles Integrator 'max_diffuse_bounce')"
+    },
+    {
+     "name": "maxGlossyBounce",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      7
+     ],
+     "minimum": 0,
+     "description": "maximum number of glossy bounces (Cycles Integrator 'max_glossy_bounce')"
+    },
+    {
+     "name": "maxTransmissionBounce",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      7
+     ],
+     "minimum": 0,
+     "description": "maximum number of transmission bounces (Cycles Integrator 'max_transmission_bounce')"
+    },
+    {
+     "name": "maxVolumeBounce",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      7
+     ],
+     "minimum": 0,
+     "description": "maximum number of volume scattering bounces (Cycles Integrator 'max_volume_bounce')"
+    },
+    {
+     "name": "maxTransparencyBounce",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      7
+     ],
+     "minimum": 0,
+     "description": "maximum number of transparency bounces (Cycles Integrator 'transparent_max_bounce')"
+    },
+    {
+     "name": "clampDirect",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.0
+     ],
+     "minimum": 0.0,
+     "description": "clamp direct-light sample values to this maximum brightness; 0 disables clamping (Cycles Integrator 'sample_clamp_direct')"
+    },
+    {
+     "name": "clampIndirect",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      10.0
+     ],
+     "minimum": 0.0,
+     "description": "clamp indirect-light sample values to this maximum brightness to reduce fireflies at the cost of energy loss; 0 disables clamping (Cycles Integrator 'sample_clamp_indirect')"
+    },
+    {
+     "name": "lightTree",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      true
+     ],
+     "description": "use the light tree for many-light importance sampling (Cycles Integrator 'use_light_tree')"
+    },
+    {
+     "name": "lightSamplingThreshold",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.0
+     ],
+     "minimum": 0.0,
+     "description": "probabilistically terminate light samples expected to contribute less than this threshold; 0 disables (Cycles Integrator 'light_sampling_threshold'; only used when 'lightTree' is off)"
+    },
+    {
+     "name": "causticsReflective",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      true
+     ],
+     "description": "render reflective caustics (Cycles Integrator 'caustics_reflective'); disable to reduce fireflies from glossy surfaces"
+    },
+    {
+     "name": "causticsRefractive",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      true
+     ],
+     "description": "render refractive caustics (Cycles Integrator 'caustics_refractive'); disable to reduce fireflies from transmissive surfaces"
+    },
+    {
+     "name": "filterGlossy",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.0
+     ],
+     "minimum": 0.0,
+     "description": "blur glossy reflections after blurry bounces by this roughness amount to reduce caustics noise; 0 disables (Cycles Integrator 'filter_glossy')"
+    },
+    {
+     "name": "aoBounces",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      0
+     ],
+     "minimum": 0,
+     "description": "fast-GI approximation: replace global illumination after this many bounces with ambient occlusion; 0 disables (Cycles Integrator 'ao_bounces')"
+    },
+    {
+     "name": "aoFactor",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.0
+     ],
+     "minimum": 0.0,
+     "description": "strength of the fast-GI ambient occlusion (Cycles Integrator 'ao_factor'; only used when 'aoBounces' > 0)"
+    },
+    {
+     "name": "aoDistance",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      3.402823466e38
+     ],
+     "minimum": 0.0,
+     "description": "maximum occluder distance considered by the fast-GI ambient occlusion (Cycles Integrator 'ao_distance'; only used when 'aoBounces' > 0)"
+    },
+    {
+     "name": "adaptiveSampling",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      false
+     ],
+     "description": "skip sampling pixels that already converged below 'adaptiveThreshold' while accumulating (Cycles Integrator 'use_adaptive_sampling'); frames still complete normally, converged pixels just stop changing"
+    },
+    {
+     "name": "adaptiveThreshold",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.01
+     ],
+     "minimum": 0.0,
+     "description": "noise level at which adaptive sampling considers a pixel converged (Cycles Integrator 'adaptive_threshold')"
+    },
+    {
+     "name": "adaptiveMinSamples",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      0
+     ],
+     "minimum": 0,
+     "description": "minimum accumulated samples before adaptive sampling may stop a pixel; 0 picks an automatic value (Cycles Integrator 'adaptive_min_samples')"
+    },
+    {
+     "name": "exposure",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "minimum": 0.0,
+     "description": "linear scale applied to rendered radiance before it is written to the frame (Cycles Film 'exposure')"
+    },
+    {
+     "name": "pixelFilter",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "default": "box",
+     "values": [
+      "box",
+      "gaussian",
+      "blackmanHarris"
+     ],
+     "description": "pixel reconstruction filter used to splat samples into the frame (Cycles Film 'filter_type')"
+    },
+    {
+     "name": "pixelFilterWidth",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "minimum": 0.01,
+     "description": "pixel reconstruction filter width in pixels (Cycles Film 'filter_width'; ignored for the 'box' filter)"
+    }
+   ]
+  }
+ ]
+}

@@ -367,9 +367,12 @@ void CyclesDevice::initDevice()
       std::make_unique<ccl::Session>(state.session_params, state.scene_params);
   state.scene = state.session->scene.get();
 
-  // We cannot use adaptive sampling based on ANARI's async execution model,
-  // me _must_ know that the next sample will get executed to trigger completion
-  // code signaling the frame is complete.
+  // Adaptive sampling defaults to off: with ANARI's per-frame accumulation
+  // model each anariRenderFrame() call schedules a fixed sample interval and
+  // must see it execute to signal frame completion. Renderers may opt in via
+  // the vendor 'adaptiveSampling' parameter (Renderer::pushSamplingState()),
+  // which behaves well because Cycles still delivers the render tile even
+  // when all pixels converge early.
   state.scene->integrator->set_use_adaptive_sampling(false);
 
 #if defined(WITH_OPTIX) || defined(WITH_OPENIMAGEDENOISE)
