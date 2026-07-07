@@ -1,0 +1,140 @@
+{
+ "info": {
+  "name": "CYCLES_GEOMETRY_SUBDIVISION",
+  "type": "extension",
+  "comment": "Cycles vendor extension: Catmull-Clark / linear subdivision surfaces on 'triangle' and 'quad' geometry. Primitives become Cycles subdivision base faces and are adaptively diced at render time using an object-space metric: patch edges are split until shorter than 'subdivisionDicingRate' object-space units, capped at 2^'subdivisionLevel' segments per edge (lower rate or higher level = more detail and memory). Catmull-Clark evaluates the OpenSubdiv limit surface and computes smooth normals itself, so user-supplied normals/tangents are ignored while subdivision is active. Optional edge creases sharpen the limit surface: 'primitive.creaseIndex' holds vertex-index pairs and 'primitive.creaseWeight' one weight in [0,1] per pair (1 = fully sharp). Off by default ('subdivision'='none') with zero overhead.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_GEOMETRY",
+   "name": "triangle",
+   "parameters": [
+    {
+     "name": "subdivision",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "default": "none",
+     "values": [
+      "none",
+      "linear",
+      "catmullClark"
+     ],
+     "description": "subdivision scheme applied to the base primitives"
+    },
+    {
+     "name": "subdivisionLevel",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      12
+     ],
+     "description": "maximum subdivision level: adaptive dicing is capped at 2^level segments per patch edge (clamped to [0,16])"
+    },
+    {
+     "name": "subdivisionDicingRate",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "description": "adaptive dicing rate: target diced edge length in object-space units (smaller = finer tessellation)"
+    },
+    {
+     "name": "primitive.creaseIndex",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "tags": [],
+     "elementType": [
+      "ANARI_UINT32_VEC2",
+      "ANARI_UINT64_VEC2"
+     ],
+     "description": "vertex-index pairs naming creased edges of the base mesh"
+    },
+    {
+     "name": "primitive.creaseWeight",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "tags": [],
+     "elementType": [
+      "ANARI_FLOAT32"
+     ],
+     "description": "one crease weight in [0,1] per creaseIndex pair (1 = fully sharp edge)"
+    }
+   ]
+  },
+  {
+   "type": "ANARI_GEOMETRY",
+   "name": "quad",
+   "parameters": [
+    {
+     "name": "subdivision",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "default": "none",
+     "values": [
+      "none",
+      "linear",
+      "catmullClark"
+     ],
+     "description": "subdivision scheme applied to the base primitives"
+    },
+    {
+     "name": "subdivisionLevel",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      12
+     ],
+     "description": "maximum subdivision level: adaptive dicing is capped at 2^level segments per patch edge (clamped to [0,16])"
+    },
+    {
+     "name": "subdivisionDicingRate",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "description": "adaptive dicing rate: target diced edge length in object-space units (smaller = finer tessellation)"
+    },
+    {
+     "name": "primitive.creaseIndex",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "tags": [],
+     "elementType": [
+      "ANARI_UINT32_VEC2",
+      "ANARI_UINT64_VEC2"
+     ],
+     "description": "vertex-index pairs naming creased edges of the base mesh"
+    },
+    {
+     "name": "primitive.creaseWeight",
+     "types": [
+      "ANARI_ARRAY1D"
+     ],
+     "tags": [],
+     "elementType": [
+      "ANARI_FLOAT32"
+     ],
+     "description": "one crease weight in [0,1] per creaseIndex pair (1 = fully sharp edge)"
+    }
+   ]
+  }
+ ]
+}

@@ -213,8 +213,28 @@ Object/scene-level:
 - Per-object `color`/`alpha` (already partially there via instance color plumbing).
 
 Geometry:
-- **Subdivision surfaces** (Catmull-Clark + adaptive dicing, creases) on triangle/quad
-  meshes — big visual win, unique to a film renderer.
+- **Subdivision surfaces** — **DONE** as `CYCLES_GEOMETRY_SUBDIVISION`
+  (json/cycles_ext_geometry_subdivision.json): `subdivision`
+  (none/linear/catmullClark), `subdivisionLevel` (dicing cap: 2^level segments
+  per patch edge, clamped [0,16], default 12) and `subdivisionDicingRate`
+  (object-space target edge length, default 1.0) on triangle/quad geometry,
+  plus edge creases via `primitive.creaseIndex` (UINT32/64_VEC2 vertex pairs) +
+  `primitive.creaseWeight` (FLOAT32 in [0,1], 1 = fully sharp). Primitives feed
+  Cycles' subd-faces path (`Mesh::resize_subd_faces` et al.) and are adaptively
+  diced at scene-update time; object-space dicing was chosen over pixel-space
+  so results are camera-independent and instancing-safe. Attributes (all five
+  channels at faceVarying/vertex/primitive/uniform rates + primitive.id) upload
+  to `Mesh::subd_attributes` and are interpolated onto the diced mesh by
+  Cycles; user normals/tangents are ignored while subdivision is active (the
+  tessellator computes limit-surface normals). Catmull-Clark needs the build
+  flag `WITH_CYCLES_OPENSUBDIV=ON` (+`OPENSUBDIV_ROOT_DIR`, e.g.
+  ~/opt/OpenSubdiv); without it Cycles dices linearly and the device warns.
+  The default remains OFF to keep the first configure dependency-free.
+  Verified behaviorally (subdiv_test.cpp): quad cube → sphere-ish blob,
+  full-weight creases restore the cube, linear keeps the silhouette, coarse
+  vs fine dicing rate visibly changes the silhouette, vertex colors survive
+  tessellation, and unsetting `subdivision` restores the plain-triangle path.
+  Off by default with zero overhead.
 - **Point clouds** (Cycles `PointCloud`) as a faster `sphere` geometry backend.
 
 Materials/shading:
@@ -265,7 +285,7 @@ Device/session:
 11. **Cycles vendor extensions** (§4.2) in whatever order serves users: renderer sampling
     controls (DONE: `CYCLES_RENDERER_SAMPLING_CONTROLS`) + denoise first, then
     visibility/holdout/shadow-catcher (DONE: `CYCLES_SURFACE_COMPOSITING`),
-    subdivision, passes.
+    subdivision (DONE: `CYCLES_GEOMETRY_SUBDIVISION`), passes.
 
 ## Appendix: how things were tested
 ```sh

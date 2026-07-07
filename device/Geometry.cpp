@@ -200,6 +200,18 @@ static bool validTangentArray(
 // Both subtypes become a Cycles triangle mesh; quads split into two triangles
 // each: (v0,v1,v2) and (v0,v2,v3). Per-primitive attributes replicate across
 // both split triangles, faceVarying values map through the split corners.
+//
+// CYCLES_GEOMETRY_SUBDIVISION: when 'subdivision' is "linear" or
+// "catmullClark" the primitives are fed to Cycles as subdivision base faces
+// (the 'subd_faces' path) instead of plain triangles; Cycles then dices them
+// into micro-triangles at scene-update time (adaptive, object-space metric:
+// patch edges split until shorter than 'subdivisionDicingRate' object-space
+// units, capped at 2^'subdivisionLevel' segments per edge). Attributes are
+// uploaded to the separate 'subd_attributes' set and interpolated onto the
+// diced mesh by the tessellator. Catmull-Clark evaluates the limit surface
+// through OpenSubdiv (build requirement; Cycles silently dices linearly
+// without it) and computes smooth normals itself, so user-supplied
+// normals/tangents are ignored while subdivision is active.
 struct Mesh : public Geometry
 {
   Mesh(CyclesGlobalState *s, bool quads, const char *subtype);
@@ -230,6 +242,17 @@ struct Mesh : public Geometry
   void setNormals(ccl::Mesh *mesh) const;
   void setTangents(ccl::Mesh *mesh) const;
 
+  // CYCLES_GEOMETRY_SUBDIVISION (see struct comment)
+  bool subdivisionEnabled() const
+  {
+    return m_subdivisionType != ccl::Mesh::SUBDIVISION_NONE;
+  }
+  void syncSubdCyclesNode(ccl::Mesh *mesh) const;
+  void setSubdFaces(ccl::Mesh *mesh) const;
+  void setSubdCreases(ccl::Mesh *mesh) const;
+  void setSubdAttributes(ccl::Mesh *mesh) const;
+  static void clearSubdivisionState(ccl::Mesh *mesh);
+
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
   helium::ChangeObserverPtr<Array1D> m_vertexNormal;
@@ -238,6 +261,11 @@ struct Mesh : public Geometry
       m_faceVaryingAttr;
   helium::ChangeObserverPtr<Array1D> m_faceVaryingNormal;
   helium::ChangeObserverPtr<Array1D> m_faceVaryingTangent;
+  helium::ChangeObserverPtr<Array1D> m_creaseIndex;
+  helium::ChangeObserverPtr<Array1D> m_creaseWeight;
+  ccl::Mesh::SubdivisionType m_subdivisionType{ccl::Mesh::SUBDIVISION_NONE};
+  int m_subdivisionLevel{12};
+  float m_subdivisionDicingRate{1.f};
   bool m_quads{false};
   const char *m_subtype{"triangle"};
 };
@@ -251,6 +279,8 @@ Mesh::Mesh(CyclesGlobalState *s, bool quads, const char *subtype)
       m_faceVaryingAttr{{{this}, {this}, {this}, {this}, {this}}},
       m_faceVaryingNormal(this),
       m_faceVaryingTangent(this),
+      m_creaseIndex(this),
+      m_creaseWeight(this),
       m_quads(quads),
       m_subtype(subtype)
 {}
@@ -301,6 +331,61 @@ void Mesh::commitParameters()
   if (m_faceVaryingTangent
       && !validTangentArray(this, *m_faceVaryingTangent, "faceVarying.tangent"))
     m_faceVaryingTangent = nullptr;
+
+  // CYCLES_GEOMETRY_SUBDIVISION parameters
+  const std::string subdivision = getParamString("subdivision", "none");
+  if (subdivision == "none") {
+    m_subdivisionType = ccl::Mesh::SUBDIVISION_NONE;
+  } else if (subdivision == "linear") {
+    m_subdivisionType = ccl::Mesh::SUBDIVISION_LINEAR;
+  } else if (subdivision == "catmullClark") {
+    m_subdivisionType = ccl::Mesh::SUBDIVISION_CATMULL_CLARK;
+  } else {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'subdivision' on %s geometry must be 'none', 'linear' or "
+        "'catmullClark' (got '%s') -- disabling subdivision",
+        m_subtype,
+        subdivision.c_str());
+    m_subdivisionType = ccl::Mesh::SUBDIVISION_NONE;
+  }
+#ifndef WITH_OPENSUBDIV
+  if (m_subdivisionType == ccl::Mesh::SUBDIVISION_CATMULL_CLARK) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "this build lacks OpenSubdiv (WITH_CYCLES_OPENSUBDIV=OFF): "
+        "'catmullClark' subdivision dices the base mesh linearly");
+  }
+#endif
+
+  // 2^level caps the per-edge dicing factor; 16 keeps 1<<level well away
+  // from overflow and is already far beyond practical memory limits.
+  m_subdivisionLevel =
+      std::min(std::max(getParam<int>("subdivisionLevel", 12), 0), 16);
+  // Tiny rates are meaningful (the level caps the work), but zero/negative
+  // rates would make the dicing factor computation degenerate.
+  m_subdivisionDicingRate =
+      std::max(getParam<float>("subdivisionDicingRate", 1.f), 1e-4f);
+
+  m_creaseIndex = getParamObject<Array1D>("primitive.creaseIndex");
+  if (m_creaseIndex) {
+    const anari::DataType t = m_creaseIndex->elementType();
+    if (t != ANARI_UINT32_VEC2 && t != ANARI_UINT64_VEC2) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "'primitive.creaseIndex' on %s geometry must be an array of "
+          "UINT32_VEC2 or UINT64_VEC2 (got %s) -- ignoring creases",
+          m_subtype,
+          anari::toString(t));
+      m_creaseIndex = nullptr;
+    }
+  }
+  m_creaseWeight = getParamObject<Array1D>("primitive.creaseWeight");
+  if (m_creaseWeight && m_creaseWeight->elementType() != ANARI_FLOAT32) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'primitive.creaseWeight' on %s geometry must be an array of "
+        "FLOAT32 (got %s) -- ignoring creases",
+        m_subtype,
+        anari::toString(m_creaseWeight->elementType()));
+    m_creaseWeight = nullptr;
+  }
 }
 
 void Mesh::finalize()
@@ -309,6 +394,22 @@ void Mesh::finalize()
     reportMessage(ANARI_SEVERITY_WARNING,
         "missing required parameter 'vertex.position' on %s geometry",
         m_subtype);
+  }
+
+  if (subdivisionEnabled()) {
+    if (m_vertexNormal || m_faceVaryingNormal || m_vertexTangent
+        || m_faceVaryingTangent) {
+      reportMessage(ANARI_SEVERITY_INFO,
+          "%s geometry: normals/tangents are ignored while 'subdivision' is "
+          "active (the tessellator computes its own)",
+          m_subtype);
+    }
+    if (bool(m_creaseIndex) != bool(m_creaseWeight)) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "%s geometry: 'primitive.creaseIndex' and 'primitive.creaseWeight' "
+          "must both be set for creases to apply",
+          m_subtype);
+    }
   }
 
   Geometry::finalize();
@@ -332,14 +433,235 @@ void Mesh::syncCyclesNode(ccl::Geometry *node) const
     ccl::array<ccl::float3> P;
     mesh->set_verts(P);
     mesh->resize_mesh(0, 0);
+    clearSubdivisionState(mesh);
     return;
   }
 
+  if (subdivisionEnabled()) {
+    syncSubdCyclesNode(mesh);
+    return;
+  }
+
+  clearSubdivisionState(mesh);
   setVertexPosition(mesh);
   setPrimitiveIndex(mesh);
   setAttributes(mesh);
   setNormals(mesh);
   setTangents(mesh);
+}
+
+// Reset a previously subdivided node back to the plain-triangle path. A
+// never-subdivided mesh returns immediately, keeping the default path
+// overhead-free.
+void Mesh::clearSubdivisionState(ccl::Mesh *mesh)
+{
+  if (mesh->get_subdivision_type() == ccl::Mesh::SUBDIVISION_NONE
+      && mesh->get_num_subd_faces() == 0)
+    return;
+
+  mesh->set_subdivision_type(ccl::Mesh::SUBDIVISION_NONE);
+  mesh->resize_subd_faces(0, 0);
+  ccl::array<int> creaseEdges;
+  ccl::array<float> creaseWeights;
+  mesh->set_subd_creases_edge(creaseEdges);
+  mesh->set_subd_creases_weight(creaseWeights);
+  // Resets the subd bookkeeping counters (num_subd_added_verts) left behind
+  // by a previous tessellation and tags every socket modified so the next
+  // scene update rebuilds this geometry from the plain-triangle arrays.
+  mesh->clear_non_sockets();
+}
+
+void Mesh::syncSubdCyclesNode(ccl::Mesh *mesh) const
+{
+  // Reset the subd bookkeeping (num_subd_added_verts et al.) from any
+  // previous tessellation *before* touching verts or attributes: attribute
+  // allocation sizes ATTR_ELEMENT_VERTEX from num-subd-base-verts, which is
+  // only correct once the added-vertex count is back to zero. This also tags
+  // every socket modified, which forces need_tesselation() true so Cycles
+  // re-dices on every re-sync (matching how attribute-only updates must
+  // still re-interpolate onto the diced mesh).
+  mesh->clear_non_sockets();
+
+  setVertexPosition(mesh);
+  // Triangles are produced by the tessellator at scene-update time; clear
+  // any previously synced triangle data so it cannot linger.
+  mesh->resize_mesh(int(m_vertexPosition->size()), 0);
+
+  // Drop plain-path attributes from a previous non-subdivided sync: the
+  // tessellator copies interpolated subd attributes into 'attributes' under
+  // the same names and must not collide with stale entries.
+  auto &triAttrs = mesh->attributes;
+  for (int c = 0; c < NUM_ATTRIBUTE_CHANNELS; c++)
+    triAttrs.remove(ustring(CHANNEL_CYCLES_NAME[c]));
+  triAttrs.remove(ustring("primitiveId"));
+  triAttrs.remove(ATTR_STD_VERTEX_NORMAL);
+  triAttrs.remove(ATTR_STD_CORNER_NORMAL);
+  triAttrs.remove(ATTR_STD_UV_TANGENT);
+  triAttrs.remove(ATTR_STD_UV_TANGENT_SIGN);
+
+  setSubdFaces(mesh);
+  setSubdCreases(mesh);
+  setSubdAttributes(mesh);
+
+  mesh->set_subdivision_type(m_subdivisionType);
+  // Object-space adaptive dicing: rate is a target edge length in object
+  // space, so results are camera-independent and instancing-safe (pixel
+  // space would need one dicing transform per instance).
+  mesh->set_subd_adaptive_space(ccl::Mesh::SUBDIVISION_ADAPTIVE_SPACE_OBJECT);
+  mesh->set_subd_max_level(m_subdivisionLevel);
+  mesh->set_subd_dicing_rate(m_subdivisionDicingRate);
+}
+
+void Mesh::setSubdFaces(ccl::Mesh *mesh) const
+{
+  const size_t nPrims = numPrims();
+  const int arity = m_quads ? 4 : 3;
+
+  const uint32_t *idx32 = nullptr;
+  const uint64_t *idx64 = nullptr;
+  if (m_index) {
+    if (m_index->elementType() == ANARI_UINT64_VEC3
+        || m_index->elementType() == ANARI_UINT64_VEC4)
+      idx64 = (const uint64_t *)m_index->begin();
+    else
+      idx32 = (const uint32_t *)m_index->begin();
+  }
+  auto vertIdx = [&](size_t prim, int c) -> int {
+    if (idx64)
+      return int(idx64[arity * prim + c]);
+    if (idx32)
+      return int(idx32[arity * prim + c]);
+    return int(arity * prim + c);
+  };
+
+  mesh->resize_subd_faces(int(nPrims), int(nPrims * size_t(arity)));
+
+  int *startCorner = mesh->get_subd_start_corner().data();
+  int *numCorners = mesh->get_subd_num_corners().data();
+  int *shader = mesh->get_subd_shader().data();
+  bool *smooth = mesh->get_subd_smooth().data();
+  int *ptexOffset = mesh->get_subd_ptex_offset().data();
+  int *faceCorners = mesh->get_subd_face_corners().data();
+
+  // Quads map to one ptex patch each, non-quads (triangles) to one per
+  // corner (see Mesh::tessellate()).
+  const int numPtex = m_quads ? 1 : arity;
+  for (size_t i = 0; i < nPrims; i++) {
+    startCorner[i] = int(size_t(arity) * i);
+    numCorners[i] = arity;
+    shader[i] = 0;
+    smooth[i] = true;
+    ptexOffset[i] = int(size_t(numPtex) * i);
+    for (int c = 0; c < arity; c++)
+      faceCorners[size_t(arity) * i + c] = vertIdx(i, c);
+  }
+
+  mesh->tag_subd_start_corner_modified();
+  mesh->tag_subd_num_corners_modified();
+  mesh->tag_subd_shader_modified();
+  mesh->tag_subd_smooth_modified();
+  mesh->tag_subd_ptex_offset_modified();
+  mesh->tag_subd_face_corners_modified();
+}
+
+void Mesh::setSubdCreases(ccl::Mesh *mesh) const
+{
+  ccl::array<int> creaseEdges;
+  ccl::array<float> creaseWeights;
+
+  if (m_creaseIndex && m_creaseWeight) {
+    const size_t n = std::min(m_creaseIndex->size(), m_creaseWeight->size());
+    if (m_creaseIndex->size() != m_creaseWeight->size()) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "%s geometry: 'primitive.creaseIndex' (%zu) and "
+          "'primitive.creaseWeight' (%zu) sizes differ -- using the first "
+          "%zu crease(s)",
+          m_subtype,
+          m_creaseIndex->size(),
+          m_creaseWeight->size(),
+          n);
+    }
+
+    const uint32_t *idx32 = nullptr;
+    const uint64_t *idx64 = nullptr;
+    if (m_creaseIndex->elementType() == ANARI_UINT64_VEC2)
+      idx64 = (const uint64_t *)m_creaseIndex->begin();
+    else
+      idx32 = (const uint32_t *)m_creaseIndex->begin();
+    const float *weights = m_creaseWeight->beginAs<float>();
+
+    const size_t numVerts = m_vertexPosition->size();
+    size_t numSkipped = 0;
+    std::vector<int> edges;
+    std::vector<float> w;
+    edges.reserve(2 * n);
+    w.reserve(n);
+    for (size_t i = 0; i < n; i++) {
+      const uint64_t v0 = idx64 ? idx64[2 * i + 0] : idx32[2 * i + 0];
+      const uint64_t v1 = idx64 ? idx64[2 * i + 1] : idx32[2 * i + 1];
+      if (v0 >= numVerts || v1 >= numVerts || v0 == v1) {
+        numSkipped++;
+        continue;
+      }
+      edges.push_back(int(v0));
+      edges.push_back(int(v1));
+      // Cycles crease weights live in [0,1]; 1 maps to the maximum
+      // OpenSubdiv sharpness (a fully sharp edge).
+      w.push_back(std::min(std::max(weights[i], 0.f), 1.f));
+    }
+    if (numSkipped > 0) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "%s geometry: skipped %zu crease(s) referencing out-of-range or "
+          "degenerate vertex pairs",
+          m_subtype,
+          numSkipped);
+    }
+
+    std::copy(edges.begin(), edges.end(), creaseEdges.resize(edges.size()));
+    std::copy(w.begin(), w.end(), creaseWeights.resize(w.size()));
+  }
+
+  mesh->set_subd_creases_edge(creaseEdges);
+  mesh->set_subd_creases_weight(creaseWeights);
+}
+
+void Mesh::setSubdAttributes(ccl::Mesh *mesh) const
+{
+  auto &attrs = mesh->subd_attributes;
+  const size_t numVerts = m_vertexPosition->size();
+  const size_t nPrims = numPrims();
+  const size_t nCorners = nPrims * (m_quads ? 4 : 3);
+
+  // Subd base faces keep the ANARI primitive layout 1:1 (no quad
+  // triangulation), so every source rate maps by identity; the tessellator
+  // interpolates the values onto the diced triangles.
+  auto identity = [](size_t i) { return i; };
+
+  for (int c = 0; c < NUM_ATTRIBUTE_CHANNELS; c++) {
+    if (m_faceVaryingAttr[c]) {
+      writeAttributeArray(attrs,
+          c,
+          ATTR_ELEMENT_CORNER,
+          nCorners,
+          *m_faceVaryingAttr[c],
+          identity);
+    } else if (m_vertexAttr[c]) {
+      writeAttributeArray(
+          attrs, c, ATTR_ELEMENT_VERTEX, numVerts, *m_vertexAttr[c], identity);
+    } else if (m_primitiveAttr[c]) {
+      writeAttributeArray(
+          attrs, c, ATTR_ELEMENT_FACE, nPrims, *m_primitiveAttr[c], identity);
+    } else if (m_uniformAttr[c]) {
+      writeAttributeConstant(attrs, c, *m_uniformAttr[c]);
+    } else if (c == CH_COLOR) {
+      writeAttributeConstant(attrs, c, DEFAULT_COLOR);
+    } else {
+      attrs.remove(ustring(CHANNEL_CYCLES_NAME[c]));
+    }
+  }
+
+  writePrimitiveId(
+      attrs, ATTR_ELEMENT_FACE, nPrims, m_primitiveId.get(), identity);
 }
 
 box3 Mesh::bounds() const
