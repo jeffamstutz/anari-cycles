@@ -6,6 +6,8 @@
 #include "Camera.h"
 #include "Renderer.h"
 #include "World.h"
+// cycles
+#include "scene/pass.h"
 // helium
 #include "helium/BaseFrame.h"
 // std
@@ -39,6 +41,30 @@ struct Frame : public helium::BaseFrame
     std::string name; // the <name> suffix == Cycles lightgroup name
     std::string passName; // "lightgroup_<name>" scene pass backing it
     std::vector<float> buffer; // RGB
+  };
+
+  // CYCLES_FRAME_CHANNELS: static description of one vendor frame channel
+  // backed by a Cycles pass created on demand (see syncAuxPasses()). The
+  // table of supported channels lives in Frame.cpp.
+  struct AuxChannelDesc
+  {
+    const char *channel; // ANARI frame parameter, e.g. "channel.position"
+    const char *passName; // Cycles scene pass name backing it
+    ccl::PassType passType;
+    anari::DataType type; // the one data type the channel supports
+    int components; // floats per pixel in the Cycles pass
+    bool scaleBySamples; // sampleCount: rescale normalized value to counts
+  };
+
+  // One entry per requested vendor frame channel this commit.
+  struct AuxChannel
+  {
+    const AuxChannelDesc *desc{nullptr};
+    std::vector<float> buffer; // desc->components floats per pixel
+    // Whether the backing pass exists for the current render; syncAuxPasses()
+    // clears this for 'channel.shadowCatcherMatte' when the scene has no
+    // shadow-catcher objects (the channel then reads zero).
+    bool active{true};
   };
 
   Frame(CyclesGlobalState *s);
@@ -76,6 +102,10 @@ struct Frame : public helium::BaseFrame
   // frame's 'channel.lightgroup.*' channels (runs under the SceneLock on
   // every accumulation reset).
   void syncLightgroupPasses();
+  // Same reconciliation for the CYCLES_FRAME_CHANNELS aux passes (position,
+  // mist, motion, ...): passes for dropped channels are deleted, missing
+  // ones created -- unused channels cost nothing.
+  void syncAuxPasses();
 
   friend struct FrameOutputDriver;
 
@@ -108,6 +138,7 @@ struct Frame : public helium::BaseFrame
   std::vector<uint32_t> m_primitiveIdBuffer;
   std::vector<uint32_t> m_instanceIdBuffer;
   std::vector<LightgroupChannel> m_lightgroupChannels;
+  std::vector<AuxChannel> m_auxChannels;
 
   BackgroundComposite m_bgComposite;
 

@@ -154,6 +154,11 @@ void Renderer::commitParameters()
   }
   sp.pixelFilterWidth =
       std::max(0.01f, getParam<float>("pixelFilterWidth", 1.f));
+
+  // CYCLES_FRAME_CHANNELS: 'channel.mist' distance mapping.
+  sp.mistStart = std::max(0.f, getParam<float>("mistStart", 0.f));
+  sp.mistDepth = std::max(0.f, getParam<float>("mistDepth", 100.f));
+  sp.mistFalloff = std::max(0.f, getParam<float>("mistFalloff", 1.f));
 }
 
 void Renderer::rebuildDefaultBackgroundShader()
@@ -315,6 +320,10 @@ void Renderer::pushSamplingState()
     filterType = ccl::FILTER_BLACKMAN_HARRIS;
   film->set_filter_type(filterType);
   film->set_filter_width(sp.pixelFilterWidth);
+  // CYCLES_FRAME_CHANNELS: 'channel.mist' distance mapping.
+  film->set_mist_start(sp.mistStart);
+  film->set_mist_depth(sp.mistDepth);
+  film->set_mist_falloff(sp.mistFalloff);
 }
 
 bool Renderer::runAsync() const

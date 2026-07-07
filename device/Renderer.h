@@ -96,6 +96,10 @@ struct Renderer : public Object
     float exposure{1.f};
     std::string pixelFilter{"box"}; // box | gaussian | blackmanHarris
     float pixelFilterWidth{1.f};
+    // CYCLES_FRAME_CHANNELS 'channel.mist' distance mapping (Film sockets).
+    float mistStart{0.f};
+    float mistDepth{100.f};
+    float mistFalloff{1.f};
   } m_sampling;
 
   void rebuildDefaultBackgroundShader();

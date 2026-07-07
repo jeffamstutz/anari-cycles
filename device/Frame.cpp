@@ -12,6 +12,39 @@
 
 namespace anari_cycles {
 
+// CYCLES_FRAME_CHANNELS: the vendor frame channels this device supports,
+// each backed by one Cycles pass created lazily when the channel is first
+// requested (see syncAuxPasses()). Notes:
+//  - 'channel.mist' distance mapping is driven by the renderer's
+//    'mistStart'/'mistDepth'/'mistFalloff' parameters (Cycles Film sockets).
+//  - 'channel.motion' holds raw 2D screen-space motion vectors
+//    (prev.xy, next.xy); Cycles only computes them while motion blur is
+//    inactive (Scene::need_motion() must be MOTION_PASS), so when a
+//    non-degenerate camera shutter plus motion transforms enable motion
+//    blur the pass reads zero.
+//  - 'channel.sampleCount' is read back normalized by the accumulated
+//    sample count; the output driver rescales it to absolute per-pixel
+//    sample counts (interesting with 'adaptiveSampling' on the renderer).
+//  - 'channel.shadowCatcher[Matte]' pair with CYCLES_SURFACE_COMPOSITING's
+//    'shadowCatcher' surface flag. Without catcher objects 'shadowCatcher'
+//    reads 1 (nothing is shadowed) and the matte pass is not created at all
+//    (see syncAuxPasses()), leaving 'channel.shadowCatcherMatte' zero.
+static const Frame::AuxChannelDesc g_auxChannelDescs[] = {
+    {"channel.position", "position", ccl::PASS_POSITION, ANARI_FLOAT32_VEC3, 3,
+        false},
+    {"channel.roughness", "roughness", ccl::PASS_ROUGHNESS, ANARI_FLOAT32, 1,
+        false},
+    {"channel.mist", "mist", ccl::PASS_MIST, ANARI_FLOAT32, 1, false},
+    {"channel.motion", "motion", ccl::PASS_MOTION, ANARI_FLOAT32_VEC4, 4,
+        false},
+    {"channel.sampleCount", "sample_count", ccl::PASS_SAMPLE_COUNT,
+        ANARI_FLOAT32, 1, true},
+    {"channel.shadowCatcher", "shadow_catcher", ccl::PASS_SHADOW_CATCHER,
+        ANARI_FLOAT32_VEC3, 3, false},
+    {"channel.shadowCatcherMatte", "shadow_catcher_matte",
+        ccl::PASS_SHADOW_CATCHER_MATTE, ANARI_FLOAT32_VEC4, 4, false},
+};
+
 // A single flush() advances change-observer chains by only one hop:
 // notifications issued during a flush land in the buffer's staging area for
 // the *next* flush. Dependency chains span several hops (e.g. a committed
@@ -94,6 +127,25 @@ void Frame::commitParameters()
     ch.passName = "lightgroup_" + ch.name;
     m_lightgroupChannels.push_back(std::move(ch));
   }
+  // CYCLES_FRAME_CHANNELS: collect the requested vendor channels. Each one
+  // supports exactly one data type (matching the backing Cycles pass).
+  m_auxChannels.clear();
+  for (const auto &desc : g_auxChannelDescs) {
+    const auto type = getParam<anari::DataType>(desc.channel, ANARI_UNKNOWN);
+    if (type == ANARI_UNKNOWN)
+      continue;
+    if (type != desc.type) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "'%s' ignored -- only %s is supported",
+          desc.channel,
+          anari::toString(desc.type));
+      continue;
+    }
+    AuxChannel ch;
+    ch.desc = &desc;
+    m_auxChannels.push_back(std::move(ch));
+  }
+
   m_accumulation = getParam<bool>("accumulation", false);
   m_completionCallback = getParam<ANARIFrameCompletionCallback>(
       "frameCompletionCallback", nullptr);
@@ -129,6 +181,8 @@ void Frame::finalize()
   m_instanceIdBuffer.resize(m_instanceIdType == ANARI_UINT32 ? numPixels : 0);
   for (auto &lg : m_lightgroupChannels)
     lg.buffer.resize(numPixels * 3);
+  for (auto &aux : m_auxChannels)
+    aux.buffer.resize(size_t(numPixels) * aux.desc->components);
 }
 
 bool Frame::getProperty(const std::string_view &name,
@@ -233,9 +287,11 @@ void Frame::renderFrame()
       m_camera->setCameraCurrent(m_frameData.size.x, m_frameData.size.y);
       m_renderer->makeRendererCurrent();
 
-      // CYCLES_LIGHTGROUPS: bring the scene's per-lightgroup passes in line
-      // with this frame's channels before the session reset picks them up.
+      // CYCLES_LIGHTGROUPS / CYCLES_FRAME_CHANNELS: bring the scene's
+      // per-lightgroup and aux passes in line with this frame's channels
+      // before the session reset picks them up.
       syncLightgroupPasses();
+      syncAuxPasses();
 
       // An HDRI light drives scene->background; when it is not 'visible',
       // its shader shows a solid color to camera rays that must track this
@@ -337,6 +393,14 @@ void *Frame::map(std::string_view channel,
   } else if (channel == "channel.instanceId") {
     *pixelType = ANARI_UINT32;
     return m_instanceIdBuffer.data();
+  } else if (auto it = std::find_if(m_auxChannels.begin(),
+                 m_auxChannels.end(),
+                 [&](const AuxChannel &aux) {
+                   return channel == aux.desc->channel;
+                 });
+      it != m_auxChannels.end()) {
+    *pixelType = it->desc->type;
+    return it->buffer.data();
   } else if (channel.rfind("channel.lightgroup.", 0) == 0) {
     const auto name = channel.substr(std::strlen("channel.lightgroup."));
     for (auto &lg : m_lightgroupChannels) {
@@ -422,6 +486,69 @@ void Frame::syncLightgroupPasses()
     pass->set_name(OIIO::ustring(lg->passName));
     pass->set_type(ccl::PASS_COMBINED);
     pass->set_lightgroup(OIIO::ustring(lg->name));
+  }
+}
+
+// Reconcile the scene's CYCLES_FRAME_CHANNELS aux passes with this frame's
+// requested channels, exactly like syncLightgroupPasses() above: passes for
+// dropped channels are deleted, missing ones created, so unused channels
+// cost nothing. Passes are matched by their (unique) names from
+// g_auxChannelDescs -- only this device creates named passes with those
+// names (Film's auto-generated helper passes are unnamed). Any helper
+// passes a pass needs (e.g. 'motion' -> motion_weight, 'shadow_catcher' ->
+// its sample count) are auto-added by Film::update_passes() during the
+// scene update, and removed again with it.
+//
+// One exception: the 'shadow_catcher_matte' pass is only created when the
+// scene actually contains shadow-catcher objects. Cycles redirects *every*
+// combined-pass read to the matte pass whenever one exists
+// (BufferParams::get_actual_display_pass()), and without catcher objects
+// the kernel never writes the matte -- 'channel.color' would turn black.
+// Runs after setCyclesWorldObjects(), so has_shadow_catcher() is current.
+void Frame::syncAuxPasses()
+{
+  auto *scene = deviceState()->scene;
+
+  std::vector<ccl::Pass *> stale;
+  std::vector<const AuxChannelDesc *> missing;
+  for (auto &aux : m_auxChannels) {
+    const bool active = aux.desc->passType != ccl::PASS_SHADOW_CATCHER_MATTE
+        || scene->has_shadow_catcher();
+    if (active != aux.active) {
+      aux.active = active;
+      if (!active) {
+        reportMessage(ANARI_SEVERITY_WARNING,
+            "'%s' reads zero -- the world has no shadow-catcher surfaces",
+            aux.desc->channel);
+        std::fill(aux.buffer.begin(), aux.buffer.end(), 0.f);
+      }
+    }
+    if (active)
+      missing.push_back(aux.desc);
+  }
+
+  for (ccl::Pass *pass : scene->passes) {
+    const bool isAuxName = std::any_of(std::begin(g_auxChannelDescs),
+        std::end(g_auxChannelDescs),
+        [&](const AuxChannelDesc &d) { return pass->get_name() == d.passName; });
+    if (!isAuxName)
+      continue; // not one of ours
+    auto it = std::find_if(missing.begin(), missing.end(), [&](const auto *d) {
+      return pass->get_name() == d->passName;
+    });
+    if (it != missing.end())
+      missing.erase(it);
+    else
+      stale.push_back(pass);
+  }
+
+  for (ccl::Pass *pass : stale)
+    scene->delete_node(pass);
+
+  for (const AuxChannelDesc *d : missing) {
+    ccl::Pass *pass = scene->create_node<ccl::Pass>();
+    pass->set_name(OIIO::ustring(d->passName));
+    pass->set_type(d->passType);
   }
 }
 
