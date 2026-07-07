@@ -11,6 +11,10 @@
 
 #include "anari_library_cycles_queries.h"
 
+// std
+#include <string>
+#include <vector>
+
 namespace anari_cycles {
 
 struct CyclesDevice : public helium::BaseDevice
@@ -98,12 +102,25 @@ struct CyclesDevice : public helium::BaseDevice
       uint64_t size,
       uint32_t mask) override;
 
+  void deviceCommitParameters() override;
+
  private:
   void initDevice();
+
+  // CYCLES_DEVICE_SELECTION: resolve the 'computeDevice'/'computeDeviceIndex'
+  // parameters (and the ANARI_CYCLES_FORCE_CPU env override) to a concrete
+  // Cycles device, warning and falling back to auto selection on invalid
+  // requests. Sets m_appliedComputeDevice to the chosen backend name.
+  ccl::DeviceInfo selectComputeDevice();
 
   CyclesGlobalState *deviceState() const;
 
   bool m_initialized{false};
+  std::string m_appliedComputeDevice; // backend in use (empty until initDevice)
+  std::string m_requestedComputeDevice{"auto"}; // param values seen at init --
+  int m_requestedComputeDeviceIndex{0}; // for late-change warnings only
+  std::vector<std::string> m_availableBackends; // 'computeDevices' property
+  std::vector<const char *> m_availableBackendPtrs; // ...its STRING_LIST view
 };
 
 } // namespace anari_cycles

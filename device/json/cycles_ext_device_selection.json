@@ -1,0 +1,45 @@
+{
+ "info": {
+  "name": "CYCLES_DEVICE_SELECTION",
+  "type": "extension",
+  "comment": "Cycles vendor extension: explicit compute-device (render backend) selection on the ANARI_DEVICE. Parameters are read when the Cycles session is created on first use of the device; changing them afterwards has no effect. The ANARI_CYCLES_FORCE_CPU environment variable overrides both parameters (for containers/CI). The device also reports the read-only properties 'computeDevices' (ANARI_STRING_LIST of available backends) and 'computeDevice'/'computeDevice.size' (ANARI_STRING, the backend actually in use).",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_DEVICE",
+   "parameters": [
+    {
+     "name": "computeDevice",
+     "types": [
+      "ANARI_STRING"
+     ],
+     "tags": [],
+     "default": "auto",
+     "values": [
+      "auto",
+      "cpu",
+      "cuda",
+      "optix",
+      "hip",
+      "metal",
+      "oneapi"
+     ],
+     "description": "compute backend used for rendering; 'auto' picks OptiX, then CUDA, then CPU; an unavailable or unrecognized selection warns and falls back to 'auto'"
+    },
+    {
+     "name": "computeDeviceIndex",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      0
+     ],
+     "minimum": 0,
+     "description": "index into the enumerated devices of the selected backend (for multi-GPU hosts); an out-of-range index warns and uses device 0"
+    }
+   ]
+  }
+ ]
+}
