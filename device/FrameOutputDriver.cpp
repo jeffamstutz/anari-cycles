@@ -187,6 +187,7 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
   if (frame.m_instanceIdType == ANARI_UINT32)
     extractAovIdPass(tile, "instanceId", frame.m_instanceIdBuffer);
   extractLightgroupPasses(tile);
+  extractAuxPasses(tile);
   renderEnd();
 }
 
@@ -418,6 +419,34 @@ void FrameOutputDriver::extractLightgroupPasses(const Tile &tile)
     if (!tile.get_pass_pixels(lg.passName, 3, lg.buffer.data()))
       m_impl->frame->reportMessage(
           ANARI_SEVERITY_ERROR, "Failed to read '%s' pass", lg.passName.c_str());
+  }
+}
+
+// CYCLES_FRAME_CHANNELS: each requested aux channel maps 1:1 onto a Cycles
+// pass created by Frame::syncAuxPasses(); see g_auxChannelDescs (Frame.cpp)
+// for the channel table. get_pass_pixels() runs the full PassAccessor
+// pipeline, so derived passes come out ready to use (motion divided by the
+// motion-weight pass, mist mapped through the Film mist curve, the shadow
+// catcher passes composited/normalized). The 'sampleCount' pass is the one
+// exception: it arrives normalized by the accumulated sample count, so
+// rescale it back to absolute per-pixel counts.
+void FrameOutputDriver::extractAuxPasses(const Tile &tile)
+{
+  for (auto &aux : m_impl->frame->m_auxChannels) {
+    if (aux.buffer.empty() || !aux.active)
+      continue;
+    if (!tile.get_pass_pixels(
+            aux.desc->passName, aux.desc->components, aux.buffer.data())) {
+      m_impl->frame->reportMessage(ANARI_SEVERITY_ERROR,
+          "Failed to read '%s' pass",
+          aux.desc->passName);
+      continue;
+    }
+    if (aux.desc->scaleBySamples) {
+      const float samples = float(m_impl->frame->m_progressSampleTarget);
+      for (float &v : aux.buffer)
+        v = std::round(v * samples);
+    }
   }
 }
 

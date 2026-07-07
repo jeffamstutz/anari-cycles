@@ -1,0 +1,143 @@
+{
+ "info": {
+  "name": "CYCLES_FRAME_CHANNELS",
+  "type": "extension",
+  "comment": "Cycles vendor extension: additional frame channels backed by Cycles render passes, created lazily when the corresponding 'channel.*' frame parameter is set (unused channels cost nothing). Each channel supports exactly one data type, matching the backing pass. The renderer 'mistStart'/'mistDepth'/'mistFalloff' parameters drive the 'channel.mist' distance mapping (Cycles Film sockets).",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_FRAME",
+   "parameters": [
+    {
+     "name": "channel.position",
+     "types": [
+      "ANARI_DATA_TYPE"
+     ],
+     "tags": [],
+     "values": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "description": "enables mapping the world-space position channel (Cycles 'position' pass; first-hit surface position)"
+    },
+    {
+     "name": "channel.roughness",
+     "types": [
+      "ANARI_DATA_TYPE"
+     ],
+     "tags": [],
+     "values": [
+      "ANARI_FLOAT32"
+     ],
+     "description": "enables mapping the roughness channel (Cycles 'roughness' pass; first-hit BSDF roughness)"
+    },
+    {
+     "name": "channel.mist",
+     "types": [
+      "ANARI_DATA_TYPE"
+     ],
+     "tags": [],
+     "values": [
+      "ANARI_FLOAT32"
+     ],
+     "description": "enables mapping the mist/depth-fog channel in [0,1] (Cycles 'mist' pass; distance mapping set by the renderer 'mistStart'/'mistDepth'/'mistFalloff' parameters)"
+    },
+    {
+     "name": "channel.motion",
+     "types": [
+      "ANARI_DATA_TYPE"
+     ],
+     "tags": [],
+     "values": [
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "description": "enables mapping the 2D screen-space motion-vector channel as (prev.xy, next.xy) pixel offsets (Cycles 'motion' pass); Cycles only computes motion vectors when motion blur is inactive (degenerate camera shutter), zero otherwise"
+    },
+    {
+     "name": "channel.sampleCount",
+     "types": [
+      "ANARI_DATA_TYPE"
+     ],
+     "tags": [],
+     "values": [
+      "ANARI_FLOAT32"
+     ],
+     "description": "enables mapping the per-pixel accumulated sample count channel (Cycles 'sample_count' pass); with 'adaptiveSampling' on the renderer this shows where sampling stopped early"
+    },
+    {
+     "name": "channel.shadowCatcher",
+     "types": [
+      "ANARI_DATA_TYPE"
+     ],
+     "tags": [],
+     "values": [
+      "ANARI_FLOAT32_VEC3"
+     ],
+     "description": "enables mapping the shadow-catcher channel (Cycles 'shadow_catcher' pass): the shadowed/unshadowed lighting ratio on CYCLES_SURFACE_COMPOSITING 'shadowCatcher' surfaces, for multiplying caught shadows onto a backplate; 1 (unshadowed) without catcher objects"
+    },
+    {
+     "name": "channel.shadowCatcherMatte",
+     "types": [
+      "ANARI_DATA_TYPE"
+     ],
+     "tags": [],
+     "values": [
+      "ANARI_FLOAT32_VEC4"
+     ],
+     "description": "enables mapping the shadow-catcher matte channel (Cycles 'shadow_catcher_matte' pass): the non-catcher objects' contribution with the approximate caught shadow composited in, for alpha-over onto a backplate; reads zero (with a warning) when the world has no CYCLES_SURFACE_COMPOSITING 'shadowCatcher' surfaces"
+    }
+   ],
+   "channel": [
+    "channel.position",
+    "channel.roughness",
+    "channel.mist",
+    "channel.motion",
+    "channel.sampleCount",
+    "channel.shadowCatcher",
+    "channel.shadowCatcherMatte"
+   ]
+  },
+  {
+   "type": "ANARI_RENDERER",
+   "name": "default",
+   "parameters": [
+    {
+     "name": "mistStart",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.0
+     ],
+     "minimum": 0,
+     "description": "distance from the camera at which 'channel.mist' starts (Cycles Film 'mist_start')"
+    },
+    {
+     "name": "mistDepth",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      100.0
+     ],
+     "minimum": 0,
+     "description": "distance over which 'channel.mist' ramps from 0 to 1 past 'mistStart' (Cycles Film 'mist_depth')"
+    },
+    {
+     "name": "mistFalloff",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      1.0
+     ],
+     "minimum": 0,
+     "description": "exponent of the 'channel.mist' ramp: 1 linear, 2 quadratic, 0.5 square root (Cycles Film 'mist_falloff')"
+    }
+   ]
+  }
+ ]
+}

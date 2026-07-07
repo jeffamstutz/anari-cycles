@@ -247,11 +247,31 @@ Materials/shading:
 - Toon/hair BSDF material subtypes.
 - Procedural sky (SkyTextureNode) as an `EXT` light subtype (sun+sky in one).
 
-Frame channels (Cycles passes already exist for all of these):
-- `mist`, `position`, `roughness`, `motion` vectors, `cryptomatte`,
-  `shadow_catcher(+matte)`, AOV color/value, `sample_count` (per-lightgroup
-  combined is DONE via `CYCLES_LIGHTGROUPS` `channel.lightgroup.<name>`).
-- Variance estimate channel (`channel.colorVariance`-ish) from adaptive sampling buffers.
+Frame channels:
+- **DONE** as `CYCLES_FRAME_CHANNELS` (json/cycles_ext_frame_channels.json):
+  `channel.position` (VEC3), `channel.roughness` (FLOAT32), `channel.mist`
+  (FLOAT32; renderer `mistStart`/`mistDepth`/`mistFalloff` → Film mist sockets),
+  `channel.motion` (VEC4, 2D prev/next raster motion vectors; needs motion blur
+  inactive), `channel.sampleCount` (FLOAT32, absolute per-pixel counts — the
+  driver rescales the normalized Cycles pass), `channel.shadowCatcher` (VEC3)
+  and `channel.shadowCatcherMatte` (VEC4, pairs with
+  `CYCLES_SURFACE_COMPOSITING` 'shadowCatcher' + transparent background).
+  Backing passes are created lazily per requested channel on accumulation
+  reset (Frame::syncAuxPasses(), mirroring syncLightgroupPasses()) so unused
+  channels cost nothing. Two Cycles pitfalls handled: (1) a
+  `shadow_catcher_matte` pass hijacks *all* combined-pass reads
+  (BufferParams::get_actual_display_pass()) and is never written without
+  catcher objects — the pass is therefore only created when the world has
+  catchers (channel reads zero + warns otherwise); (2) camera `fov_pre/post`
+  must track `fov` (Camera.cpp) or static scenes get bogus constant motion
+  vectors. Verified behaviorally (/tmp aux_channels_test.c,
+  catcher_channels_test.c): position/mist values at a known-depth plane,
+  roughness ~1 on matte, zero motion on a static scene, exact sample counts,
+  catcher ratio <0.5 in a caught shadow with matte alpha compositing into
+  channel.color, and pass creation/removal round-trips.
+- Still open: `cryptomatte` (needs meaningful object/asset names + a manifest
+  transport), AOV color/value (needs custom shader graphs), a variance
+  estimate channel (`channel.colorVariance`-ish) from adaptive sampling buffers.
 
 Device/session:
 - Device selection extension: expose CPU/CUDA/OptiX/HIP/Metal/oneAPI choice + GPU index as

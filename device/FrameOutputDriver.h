@@ -47,6 +47,7 @@ struct FrameOutputDriver : public ccl::OutputDriver
   void extractAovIdPass(
       const Tile &tile, const char *passName, std::vector<uint32_t> &dst);
   void extractLightgroupPasses(const Tile &tile);
+  void extractAuxPasses(const Tile &tile);
 
   // KHR_FRAME_COMPLETION_CALLBACK support; see the threading notes in
   // FrameOutputDriver.cpp.
