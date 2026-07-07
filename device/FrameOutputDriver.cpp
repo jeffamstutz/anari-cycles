@@ -186,6 +186,7 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
     extractAovIdPass(tile, "primitiveId", frame.m_primitiveIdBuffer);
   if (frame.m_instanceIdType == ANARI_UINT32)
     extractAovIdPass(tile, "instanceId", frame.m_instanceIdBuffer);
+  extractLightgroupPasses(tile);
   renderEnd();
 }
 
@@ -402,6 +403,21 @@ void FrameOutputDriver::extractObjectIdPass(const Tile &tile)
     // 'id' ~0u arrives as -1.0f); go through int64 so negative/large values
     // wrap back to the uint32 id instead of being undefined behavior.
     dst[i] = static_cast<uint32_t>(static_cast<int64_t>(tmp[i]));
+  }
+}
+
+// CYCLES_LIGHTGROUPS: each 'channel.lightgroup.<name>' frame channel is
+// backed by a per-lightgroup combined pass (RGB) created by
+// Frame::syncLightgroupPasses(); pixels hold that lightgroup's (direct +
+// indirect) contribution to the beauty pass.
+void FrameOutputDriver::extractLightgroupPasses(const Tile &tile)
+{
+  for (auto &lg : m_impl->frame->m_lightgroupChannels) {
+    if (lg.buffer.empty())
+      continue;
+    if (!tile.get_pass_pixels(lg.passName, 3, lg.buffer.data()))
+      m_impl->frame->reportMessage(
+          ANARI_SEVERITY_ERROR, "Failed to read '%s' pass", lg.passName.c_str());
   }
 }
 

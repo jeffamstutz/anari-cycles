@@ -4,8 +4,11 @@
 #include "Frame.h"
 // cycles
 #include "scene/background.h"
+#include "scene/pass.h"
+#include "scene/scene.h"
 // std
 #include <algorithm>
+#include <cstring>
 
 namespace anari_cycles {
 
@@ -65,6 +68,32 @@ void Frame::commitParameters()
       getParam<anari::DataType>("channel.primitiveId", ANARI_UNKNOWN);
   m_instanceIdType =
       getParam<anari::DataType>("channel.instanceId", ANARI_UNKNOWN);
+
+  // CYCLES_LIGHTGROUPS: collect the 'channel.lightgroup.<name>' channels.
+  // Only ANARI_FLOAT32_VEC3 is supported -- Cycles per-lightgroup combined
+  // passes are RGB (no alpha; see Pass::get_info()).
+  m_lightgroupChannels.clear();
+  static const std::string lgPrefix = "channel.lightgroup.";
+  for (auto p = params_begin(); p != params_end(); ++p) {
+    const std::string &pName = p->first;
+    if (pName.size() <= lgPrefix.size()
+        || pName.compare(0, lgPrefix.size(), lgPrefix) != 0)
+      continue;
+    const auto type = getParam<anari::DataType>(pName, ANARI_UNKNOWN);
+    if (type == ANARI_UNKNOWN)
+      continue;
+    if (type != ANARI_FLOAT32_VEC3) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "'%s' ignored -- lightgroup channels only support "
+          "ANARI_FLOAT32_VEC3",
+          pName.c_str());
+      continue;
+    }
+    LightgroupChannel ch;
+    ch.name = pName.substr(lgPrefix.size());
+    ch.passName = "lightgroup_" + ch.name;
+    m_lightgroupChannels.push_back(std::move(ch));
+  }
   m_accumulation = getParam<bool>("accumulation", false);
   m_completionCallback = getParam<ANARIFrameCompletionCallback>(
       "frameCompletionCallback", nullptr);
@@ -98,6 +127,8 @@ void Frame::finalize()
   m_objectIdBuffer.resize(m_objectIdType == ANARI_UINT32 ? numPixels : 0);
   m_primitiveIdBuffer.resize(m_primitiveIdType == ANARI_UINT32 ? numPixels : 0);
   m_instanceIdBuffer.resize(m_instanceIdType == ANARI_UINT32 ? numPixels : 0);
+  for (auto &lg : m_lightgroupChannels)
+    lg.buffer.resize(numPixels * 3);
 }
 
 bool Frame::getProperty(const std::string_view &name,
@@ -202,6 +233,10 @@ void Frame::renderFrame()
       m_camera->setCameraCurrent(m_frameData.size.x, m_frameData.size.y);
       m_renderer->makeRendererCurrent();
 
+      // CYCLES_LIGHTGROUPS: bring the scene's per-lightgroup passes in line
+      // with this frame's channels before the session reset picks them up.
+      syncLightgroupPasses();
+
       // An HDRI light drives scene->background; when it is not 'visible',
       // its shader shows a solid color to camera rays that must track this
       // renderer's 'background' parameter (no-op otherwise). The pointer is
@@ -302,12 +337,20 @@ void *Frame::map(std::string_view channel,
   } else if (channel == "channel.instanceId") {
     *pixelType = ANARI_UINT32;
     return m_instanceIdBuffer.data();
-  } else {
-    *width = 0;
-    *height = 0;
-    *pixelType = ANARI_UNKNOWN;
-    return nullptr;
+  } else if (channel.rfind("channel.lightgroup.", 0) == 0) {
+    const auto name = channel.substr(std::strlen("channel.lightgroup."));
+    for (auto &lg : m_lightgroupChannels) {
+      if (lg.name == name) {
+        *pixelType = ANARI_FLOAT32_VEC3;
+        return lg.buffer.data();
+      }
+    }
   }
+
+  *width = 0;
+  *height = 0;
+  *pixelType = ANARI_UNKNOWN;
+  return nullptr;
 }
 
 void Frame::unmap(std::string_view channel)
@@ -340,6 +383,46 @@ bool Frame::ready() const
 void Frame::wait() const
 {
   deviceState()->output_driver->wait();
+}
+
+// Reconcile the scene's per-lightgroup combined passes with this frame's
+// 'channel.lightgroup.*' channels: passes for dropped channels are deleted,
+// missing ones created. Pass creation/deletion tags the film modified, and
+// the scene update then refreshes scene->lightgroups and re-tags the object/
+// light managers and background (Scene::device_update()), so objects'
+// 'lightGroup' names resolve to the new pass indices automatically. Runs
+// under the frame's SceneLock; frames rendered alternately with different
+// channel sets re-sync (and restart accumulation) on every switch.
+void Frame::syncLightgroupPasses()
+{
+  auto *scene = deviceState()->scene;
+
+  std::vector<ccl::Pass *> stale;
+  std::vector<const LightgroupChannel *> missing;
+  for (const auto &lg : m_lightgroupChannels)
+    missing.push_back(&lg);
+
+  for (ccl::Pass *pass : scene->passes) {
+    if (pass->get_lightgroup().empty())
+      continue; // not one of ours -- only this device creates these passes
+    auto it = std::find_if(missing.begin(), missing.end(), [&](const auto *lg) {
+      return pass->get_name() == lg->passName.c_str();
+    });
+    if (it != missing.end())
+      missing.erase(it);
+    else
+      stale.push_back(pass);
+  }
+
+  for (ccl::Pass *pass : stale)
+    scene->delete_node(pass);
+
+  for (const LightgroupChannel *lg : missing) {
+    ccl::Pass *pass = scene->create_node<ccl::Pass>();
+    pass->set_name(OIIO::ustring(lg->passName));
+    pass->set_type(ccl::PASS_COMBINED);
+    pass->set_lightgroup(OIIO::ustring(lg->name));
+  }
 }
 
 bool Frame::resetAccumulationNextFrame() const

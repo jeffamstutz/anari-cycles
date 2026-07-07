@@ -10,6 +10,7 @@
 #include "helium/BaseFrame.h"
 // std
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace anari_cycles {
@@ -28,6 +29,16 @@ struct Frame : public helium::BaseFrame
     bool enabled{false};
     math::float4 color{0.f, 0.f, 0.f, 1.f};
     std::shared_ptr<const Renderer::BackgroundImage> image; // null -> color
+  };
+
+  // CYCLES_LIGHTGROUPS: one entry per 'channel.lightgroup.<name>' frame
+  // channel (ANARI_FLOAT32_VEC3), backed by a Cycles per-lightgroup combined
+  // pass created on demand (see syncLightgroupPasses()).
+  struct LightgroupChannel
+  {
+    std::string name; // the <name> suffix == Cycles lightgroup name
+    std::string passName; // "lightgroup_<name>" scene pass backing it
+    std::vector<float> buffer; // RGB
   };
 
   Frame(CyclesGlobalState *s);
@@ -61,6 +72,10 @@ struct Frame : public helium::BaseFrame
 
  private:
   bool resetAccumulationNextFrame() const;
+  // Make the scene's set of per-lightgroup combined passes match this
+  // frame's 'channel.lightgroup.*' channels (runs under the SceneLock on
+  // every accumulation reset).
+  void syncLightgroupPasses();
 
   friend struct FrameOutputDriver;
 
@@ -92,6 +107,7 @@ struct Frame : public helium::BaseFrame
   std::vector<uint32_t> m_objectIdBuffer;
   std::vector<uint32_t> m_primitiveIdBuffer;
   std::vector<uint32_t> m_instanceIdBuffer;
+  std::vector<LightgroupChannel> m_lightgroupChannels;
 
   BackgroundComposite m_bgComposite;
 

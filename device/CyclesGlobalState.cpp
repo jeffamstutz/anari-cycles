@@ -50,6 +50,18 @@ CyclesGlobalState::SceneLock::~SceneLock()
   }
 }
 
+int CyclesGlobalState::LinkSetRegistry::resolve(const std::string &name)
+{
+  auto it = indices.find(name);
+  if (it != indices.end())
+    return int(it->second);
+  const uint32_t next = uint32_t(indices.size()) + 1;
+  if (next >= 64) // LIGHT_LINK_SET_MAX, index 0 reserved for the default set
+    return -1;
+  indices[name] = next;
+  return int(next);
+}
+
 void CyclesGlobalState::syncIntegratorMotionBlur()
 {
   const bool motionBlur = objectsHaveMotion || cameraHasMotion;

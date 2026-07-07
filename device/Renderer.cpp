@@ -247,10 +247,13 @@ void Renderer::makeRendererCurrent()
     // denoise is off), never upgrade NOISY→DENOISED. Once a named pass
     // becomes NOISY it stays NOISY, causing the output driver to always
     // read the noisy buffer. Fix by restoring DENOISED mode on the named
-    // combined pass before the scene update runs.
+    // combined pass before the scene update runs. Per-lightgroup combined
+    // passes are skipped: they don't support denoising (Pass::get_info())
+    // and must stay NOISY.
     if (m_denoise) {
       for (ccl::Pass *pass : deviceState()->scene->passes) {
         if (pass->get_type() == ccl::PASS_COMBINED && !pass->get_name().empty()
+            && pass->get_lightgroup().empty()
             && pass->get_mode() != ccl::PassMode::DENOISED) {
           pass->set_mode(ccl::PassMode::DENOISED);
         }

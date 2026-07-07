@@ -211,13 +211,19 @@ void World::setupHDRIBackground()
   // not re-walk every instance's light array; see backgroundHdriLight()).
   Light *hdriLight = findFirstHDRILight();
   m_backgroundHdriLight = hdriLight;
+  auto *background = deviceState()->scene->background;
   if (hdriLight) {
     // Set the new HDRI background
-    deviceState()->scene->background->set_shader(hdriLight->cyclesShader());
-    deviceState()->scene->background->tag_update(deviceState()->scene);
+    background->set_shader(hdriLight->cyclesShader());
+    // CYCLES_LIGHTGROUPS: background-hit contributions of the HDRI go to its
+    // 'lightGroup' pass (its scene object routes light-tree samples there,
+    // but camera/escaped rays read Background::lightgroup instead).
+    background->set_lightgroup(OIIO::ustring(hdriLight->lightGroup()));
+    background->tag_update(deviceState()->scene);
   } else {
     // Clear any existing HDRI background first
-    deviceState()->scene->background->set_shader(nullptr);
+    background->set_shader(nullptr);
+    background->set_lightgroup(OIIO::ustring());
   }
 }
 

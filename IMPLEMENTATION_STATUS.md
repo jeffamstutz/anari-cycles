@@ -189,8 +189,27 @@ Object/scene-level:
   of a surface share them. Not exposed on volumes (core has no Volume `visible`).
   Still-unexposed candidates: shadow-terminator offsets, per-object `ao_distance`,
   caustics caster/receiver.
-- **Light linking / shadow linking** sets (Object::receiver_light_set etc.).
-- **Lightgroups** (per-light-group AOV outputs).
+- **Light linking / shadow linking** — **DONE** as `CYCLES_LIGHT_LINKING`
+  (json/cycles_ext_light_linking.json): named link sets on Light
+  (`lightSet`/`shadowSet` → `Object::light_set_membership`/`shadow_set_membership`
+  one-bit masks) and Surface (`receiverLightSet`/`shadowBlockerSet` →
+  `Object::receiver_light_set`/`blocker_shadow_set` indices). Two device-lifetime
+  name→index registries (light sets and shadow sets; `CyclesGlobalState::LinkSetRegistry`),
+  63 named sets each (index 0 = default set; overflow warns and behaves unset).
+  Semantics follow Blender: a linked light illuminates only its set's receivers; a
+  receiver in a set is lit by that set's lights plus all unlinked lights (shadow
+  linking analogous). Kernel features auto-enable via `Object::has_light_linking()`.
+  Verified: two lights/two surfaces exclusive illumination + shadow-set
+  membership toggling (/tmp test in task 26). Not exposed on volumes, and emissive
+  surfaces don't participate as emitters.
+- **Lightgroups** — **DONE** as `CYCLES_LIGHTGROUPS`
+  (json/cycles_ext_lightgroups.json): `lightGroup` (STRING) on lights and surfaces →
+  `Object::lightgroup`; an HDRI's group also drives `Background::lightgroup`. Frame
+  channels `channel.lightgroup.<name>` (ANARI_FLOAT32_VEC3) map to per-lightgroup
+  combined passes created/removed on accumulation reset
+  (Frame::syncLightgroupPasses(); Scene::device_update() refreshes
+  scene->lightgroups and re-tags managers). Lightgroup passes are excluded from the
+  denoise pass-mode workaround (they can't be denoised).
 - Per-object `color`/`alpha` (already partially there via instance color plumbing).
 
 Geometry:
@@ -210,7 +229,8 @@ Materials/shading:
 
 Frame channels (Cycles passes already exist for all of these):
 - `mist`, `position`, `roughness`, `motion` vectors, `cryptomatte`,
-  `shadow_catcher(+matte)`, AOV color/value, per-lightgroup combined, `sample_count`.
+  `shadow_catcher(+matte)`, AOV color/value, `sample_count` (per-lightgroup
+  combined is DONE via `CYCLES_LIGHTGROUPS` `channel.lightgroup.<name>`).
 - Variance estimate channel (`channel.colorVariance`-ish) from adaptive sampling buffers.
 
 Device/session:
