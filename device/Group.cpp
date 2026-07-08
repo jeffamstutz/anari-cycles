@@ -5,6 +5,8 @@
 // cycles
 #include "kernel/types.h"
 #include "scene/object.h"
+// std
+#include <algorithm>
 
 namespace anari_cycles {
 
@@ -24,11 +26,13 @@ void Group::commitParameters()
   m_lightData = getParamObject<ObjectArray>("light");
 }
 
-void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
+bool Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
+    const helium::box1 &shutter,
     const std::vector<ccl::Transform> *motion,
     uint32_t instanceId) const
 {
   auto &state = *deviceState();
+  bool deformationMotion = false;
 
   auto cxfm = mat4ToCycles(xfm);
 
@@ -67,6 +71,9 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
       }
       if (!s->cyclesGeometry())
         return;
+      // KHR_GEOMETRY_*_MOTION_DEFORMATION: (re)bake the geometry's motion
+      // keys onto this shutter (cached; no-op for non-deforming geometry).
+      deformationMotion |= s->bakeGeometryMotion(shutter);
       auto *o = state.scene->create_node<ccl::Object>();
       o->set_geometry(s->cyclesGeometry());
       o->set_tfm(cxfm);
@@ -152,6 +159,22 @@ void Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
         makeLightObject(second, l->secondaryXfm());
     });
   }
+
+  return deformationMotion;
+}
+
+bool Group::hasDeformingSurfaces() const
+{
+  if (!m_surfaceData)
+    return false;
+  auto **surfacesBegin = (Surface **)m_surfaceData->handlesBegin();
+  auto **surfacesEnd = (Surface **)m_surfaceData->handlesEnd();
+  // Only surfaces that can render count (invalid ones are skipped by
+  // addGroupToCurrentCyclesScene(), so their keys cannot depend on the
+  // shutter).
+  return std::any_of(surfacesBegin, surfacesEnd, [](const Surface *s) {
+    return s->isValid() && s->geometry()->hasDeformationMotion();
+  });
 }
 
 box3 Group::bounds() const

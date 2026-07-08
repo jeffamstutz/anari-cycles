@@ -19,15 +19,24 @@ struct Group : public Object
   void commitParameters() override;
 
   // Instantiate the group's contents as Cycles scene objects under 'xfm'.
-  // 'motion', when given (size >= 2), is a per-object motion-transform array
-  // uniformly spanning the camera shutter interval (Cycles kernel ray-time
-  // [0,1]); it applies to surfaces and volumes -- Cycles has no motion blur
-  // for lights, which use 'xfm' (the shutter-start pose) only.
-  // 'instanceId' is the ANARI Instance 'id' (KHR_FRAME_CHANNEL_INSTANCE_ID)
-  // of the instance being expanded; ~0u means "no id set".
-  void addGroupToCurrentCyclesScene(const math::mat4 &xfm,
+  // 'shutter' is the camera shutter interval that deforming surface
+  // geometries (KHR_GEOMETRY_*_MOTION_DEFORMATION) bake their motion keys
+  // onto. 'motion', when given (size >= 2), is a per-object motion-transform
+  // array uniformly spanning that interval (Cycles kernel ray-time [0,1]);
+  // it applies to surfaces and volumes -- Cycles has no motion blur for
+  // lights, which use 'xfm' (the shutter-start pose) only. 'instanceId' is
+  // the ANARI Instance 'id' (KHR_FRAME_CHANNEL_INSTANCE_ID) of the instance
+  // being expanded; ~0u means "no id set". Returns 'true' when any surface
+  // baked active deformation motion steps (the caller then enables
+  // integrator motion blur).
+  bool addGroupToCurrentCyclesScene(const math::mat4 &xfm,
+      const helium::box1 &shutter,
       const std::vector<ccl::Transform> *motion = nullptr,
       uint32_t instanceId = ~0u) const;
+
+  // 'true' when any committed surface's geometry carries deformation motion
+  // keys -- i.e. its baked Cycles node depends on the camera shutter.
+  bool hasDeformingSurfaces() const;
 
   box3 bounds() const override;
 

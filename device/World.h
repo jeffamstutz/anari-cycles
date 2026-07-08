@@ -16,14 +16,17 @@ struct World : public Object
   void finalize() override;
 
   // (Re)build scene->objects. 'shutter' is the camera shutter interval that
-  // motion instances bake their motion keys onto (see MotionTrack.h); it is
-  // ignored by static instances, so worlds without motion instances need no
-  // rebuild when the shutter changes (see hasMotionInstances()).
+  // motion instances (see MotionTrack.h) and deforming surface geometries
+  // (KHR_GEOMETRY_*_MOTION_DEFORMATION) bake their motion keys onto; it is
+  // ignored by static content, so worlds without any shutter-dependent
+  // motion need no rebuild when the shutter changes (see
+  // hasShutterDependentMotion()).
   void setCyclesWorldObjects(const helium::box1 &shutter);
 
-  // 'true' when any committed instance carries motion keys -- i.e. the baked
-  // scene objects depend on the camera shutter interval.
-  bool hasMotionInstances() const;
+  // 'true' when any committed instance carries motion keys or any surface
+  // geometry carries deformation keys -- i.e. the baked scene objects depend
+  // on the camera shutter interval.
+  bool hasShutterDependentMotion() const;
 
   // 'true' when rendering with 'shutter' requires rebuilding the scene
   // objects because motion instances were baked against a different shutter

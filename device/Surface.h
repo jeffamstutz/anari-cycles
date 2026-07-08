@@ -40,6 +40,16 @@ struct Surface : public Object
 
   ccl::Geometry *cyclesGeometry() const;
 
+  // KHR_GEOMETRY_TRIANGLE/QUAD_MOTION_DEFORMATION: (re)bake this surface's
+  // deformation motion keys onto 'shutter' (each surface owns its Cycles
+  // geometry node, so baking is per surface even when geometries are shared).
+  // Returns 'true' when motion steps are active on the node -- the caller
+  // (Group::addGroupToCurrentCyclesScene()) then enables integrator motion
+  // blur. Cached per shutter so instances expanding this surface many times
+  // per world rebuild bake once; any re-finalize invalidates the cache (the
+  // re-sync rewrites the node from the static arrays).
+  bool bakeGeometryMotion(const helium::box1 &shutter);
+
   bool isValid() const override;
   void warnIfUnknownObject() const override;
 
@@ -65,6 +75,10 @@ struct Surface : public Object
   std::string m_lightGroup;
   bool m_geometryHandleChanged{false};
   bool m_materialHandleChanged{false};
+  // bakeGeometryMotion() cache (see its docs)
+  bool m_motionBakeValid{false};
+  bool m_motionBakeActive{false};
+  helium::box1 m_motionBakeShutter{0.f, 0.f};
   // one warning per geometry/material pairing (see finalize())
   bool m_warnedPointInteriorVolume{false};
 };

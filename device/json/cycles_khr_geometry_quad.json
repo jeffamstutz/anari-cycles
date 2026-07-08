@@ -3,7 +3,7 @@
   "name": "KHR_GEOMETRY_QUAD",
   "type": "extension",
   "dependencies": [],
-  "comment": "Local copy of the ANARI registry extension. All parameters of this extension are implemented by anari-cycles as of the geometry-attribute-completion task. Caveats: 'primitive.id' values are stored as float32 Cycles attributes (exact below 2^24); on 'curve', the implicit primitiveId of chained segments merged into one Cycles curve reports the run's first segment (merging is disabled whenever any primitive.* array or primitive.id is set, making values exact). Keep info.name equal to the official extension name so introspection advertises it."
+  "comment": "Local copy of the ANARI registry extension. All parameters of this extension are implemented by anari-cycles as of the geometry-attribute-completion task. Caveats: 'primitive.id' values are stored as float32 Cycles attributes (exact below 2^24); on 'curve', the implicit primitiveId of chained segments merged into one Cycles curve reports the run's first segment (merging is disabled whenever any primitive.* array or primitive.id is set, making values exact). Keep info.name equal to the official extension name so introspection advertises it. The nested (ARRAY1D-of-ARRAY1D) elementType on vertex.position/normal/tangent belongs to KHR_GEOMETRY_QUAD_MOTION_DEFORMATION (deformation motion keys; declared in cycles_khr_geometry_quad_motion_deformation.json, which only adds the 'time' parameter because this file already declares the vertex arrays)."
  },
  "objects": [
   {
@@ -163,12 +163,16 @@
       "ANARI_ARRAY1D"
      ],
      "elementType": [
-      "ANARI_FLOAT32_VEC3"
+      "ANARI_FLOAT32_VEC3",
+      "ANARI_ARRAY1D"
      ],
      "tags": [
       "required"
      ],
-     "description": "vertex position"
+     "description": "vertex position",
+     "elementElementType": [
+      "ANARI_FLOAT32_VEC3"
+     ]
     },
     {
      "name": "vertex.normal",
@@ -177,10 +181,15 @@
      ],
      "elementType": [
       "ANARI_FLOAT32_VEC3",
-      "ANARI_FIXED16_VEC3"
+      "ANARI_FIXED16_VEC3",
+      "ANARI_ARRAY1D"
      ],
      "tags": [],
-     "description": "vertex normal"
+     "description": "vertex normal",
+     "elementElementType": [
+      "ANARI_FLOAT32_VEC3",
+      "ANARI_FIXED16_VEC3"
+     ]
     },
     {
      "name": "vertex.tangent",
@@ -191,10 +200,17 @@
       "ANARI_FLOAT32_VEC3",
       "ANARI_FIXED16_VEC3",
       "ANARI_FLOAT32_VEC4",
-      "ANARI_FIXED16_VEC4"
+      "ANARI_FIXED16_VEC4",
+      "ANARI_ARRAY1D"
      ],
      "tags": [],
-     "description": "vertex normal"
+     "description": "vertex normal",
+     "elementElementType": [
+      "ANARI_FLOAT32_VEC3",
+      "ANARI_FIXED16_VEC3",
+      "ANARI_FLOAT32_VEC4",
+      "ANARI_FIXED16_VEC4"
+     ]
     },
     {
      "name": "vertex.color",

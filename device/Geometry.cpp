@@ -3,6 +3,7 @@
 
 #include "Geometry.h"
 #include "MarchingCubes.h"
+#include "MotionTrack.h" // detail::keyLocation (deformation key resampling)
 #include "SpatialField.h"
 // cycles
 #include "scene/hair.h"
@@ -201,6 +202,17 @@ static bool validTangentArray(
 // each: (v0,v1,v2) and (v0,v2,v3). Per-primitive attributes replicate across
 // both split triangles, faceVarying values map through the split corners.
 //
+// KHR_GEOMETRY_TRIANGLE/QUAD_MOTION_DEFORMATION: 'vertex.position' (and
+// optionally 'vertex.normal'/'vertex.tangent') may be an ARRAY1D of ARRAY1D
+// handles -- per-key vertex arrays uniformly distributed over the 'time'
+// interval (FLOAT32_BOX1, default [0,1]). The first position key acts as the
+// static representative array (primitive count, attribute sizing); the
+// per-shutter Cycles motion steps are baked by bakeDeformationMotion() during
+// world rebuilds (see Surface::bakeGeometryMotion()). Tangents do not motion
+// blur in Cycles, so a nested 'vertex.tangent' contributes its middle key as
+// the static tangent. Deformation keys are ignored while 'subdivision' is
+// active (Cycles' tessellator does not re-dice motion steps).
+//
 // CYCLES_GEOMETRY_SUBDIVISION: when 'subdivision' is "linear" or
 // "catmullClark" the primitives are fed to Cycles as subdivision base faces
 // (the 'subd_faces' path) instead of plain triangles; Cycles then dices them
@@ -222,6 +234,10 @@ struct Mesh : public Geometry
 
   ccl::Geometry *createCyclesGeometryNode() override;
   void syncCyclesNode(ccl::Geometry *node) const override;
+
+  bool hasDeformationMotion() const override;
+  bool bakeDeformationMotion(
+      ccl::Geometry *node, const helium::box1 &shutter) const override;
 
   box3 bounds() const override;
 
@@ -253,10 +269,44 @@ struct Mesh : public Geometry
   void setSubdAttributes(ccl::Mesh *mesh) const;
   static void clearSubdivisionState(ccl::Mesh *mesh);
 
+  // KHR_GEOMETRY_*_MOTION_DEFORMATION (see struct comment)
+  using KeyVector = std::vector<helium::ChangeObserverPtr<Array1D>>;
+  // Validated inner key arrays of a nested vertex parameter; invalid entries
+  // (wrong handle/element type or -- with 'requireEqualSizes' -- a size other
+  // than the first valid key's) are skipped with a warning.
+  template <typename ValidFn>
+  void readVertexKeys(const ObjectArray *data,
+      const char *param,
+      bool requireEqualSizes,
+      ValidFn &&valid,
+      KeyVector &out);
+  // Interpolated vertex positions at absolute frame time 't' (linear between
+  // the bracketing keys, clamped outside 'time').
+  void samplePositionKeys(float t, ccl::float3 *dst) const;
+  // Interpolated (renormalized) vertex normals at frame time 't', from
+  // per-key float4 conversions computed once per bake (normal keys may be
+  // FIXED16, so they cannot be read in place like position keys).
+  using ConvertedKeys = std::vector<std::vector<anari_vec::float4>>;
+  void sampleNormalKeys(const ConvertedKeys &keys,
+      float t,
+      ccl::packed_normal *dst,
+      size_t count) const;
+  static void clearDeformationMotionState(ccl::Mesh *mesh);
+
   helium::ChangeObserverPtr<Array1D> m_index;
   helium::ChangeObserverPtr<Array1D> m_vertexPosition;
   helium::ChangeObserverPtr<Array1D> m_vertexNormal;
   helium::ChangeObserverPtr<Array1D> m_vertexTangent;
+  // KHR_GEOMETRY_*_MOTION_DEFORMATION: the nested (array-of-arrays) forms of
+  // the vertex parameters and their validated key arrays. All are observed so
+  // data changes on the outer array or any key re-finalize this geometry.
+  helium::ChangeObserverPtr<ObjectArray> m_positionKeyData;
+  helium::ChangeObserverPtr<ObjectArray> m_normalKeyData;
+  helium::ChangeObserverPtr<ObjectArray> m_tangentKeyData;
+  KeyVector m_positionKeys;
+  KeyVector m_normalKeys;
+  KeyVector m_tangentKeys;
+  helium::box1 m_motionTime{0.f, 1.f};
   std::array<helium::ChangeObserverPtr<Array1D>, NUM_ATTRIBUTE_CHANNELS>
       m_faceVaryingAttr;
   helium::ChangeObserverPtr<Array1D> m_faceVaryingNormal;
@@ -276,6 +326,9 @@ Mesh::Mesh(CyclesGlobalState *s, bool quads, const char *subtype)
       m_vertexPosition(this),
       m_vertexNormal(this),
       m_vertexTangent(this),
+      m_positionKeyData(this),
+      m_normalKeyData(this),
+      m_tangentKeyData(this),
       m_faceVaryingAttr{{{this}, {this}, {this}, {this}, {this}}},
       m_faceVaryingNormal(this),
       m_faceVaryingTangent(this),
@@ -309,15 +362,43 @@ void Mesh::commitParameters()
     }
   }
 
-  m_vertexPosition = validatedVertexPosition(m_subtype).ptr;
+  // KHR_GEOMETRY_*_MOTION_DEFORMATION: each of these vertex parameters may be
+  // a nested array of per-key arrays instead of a plain data array. Key
+  // *contents* are read in finalize() (array data changes notify change
+  // observers, which re-run finalize only); here the parameter is routed to
+  // either its nested or its plain slot.
+  auto nestedKeysOrNull = [&](const char *name) -> ObjectArray * {
+    auto *array = getParamObject<Array1D>(name);
+    return array && array->elementType() == ANARI_ARRAY1D
+        ? getParamObject<ObjectArray>(name)
+        : nullptr;
+  };
 
-  m_vertexNormal = getParamObject<Array1D>("vertex.normal");
+  m_positionKeyData = nestedKeysOrNull("vertex.position");
+  m_vertexPosition =
+      m_positionKeyData ? nullptr : validatedVertexPosition(m_subtype).ptr;
+
+  m_normalKeyData = nestedKeysOrNull("vertex.normal");
+  m_vertexNormal =
+      m_normalKeyData ? nullptr : getParamObject<Array1D>("vertex.normal");
   if (m_vertexNormal && !validNormalArray(this, *m_vertexNormal, "vertex.normal"))
     m_vertexNormal = nullptr;
-  m_vertexTangent = getParamObject<Array1D>("vertex.tangent");
+  m_tangentKeyData = nestedKeysOrNull("vertex.tangent");
+  m_vertexTangent =
+      m_tangentKeyData ? nullptr : getParamObject<Array1D>("vertex.tangent");
   if (m_vertexTangent
       && !validTangentArray(this, *m_vertexTangent, "vertex.tangent"))
     m_vertexTangent = nullptr;
+
+  m_motionTime = getParam<helium::box1>("time", helium::box1{0.f, 1.f});
+  if ((m_positionKeyData || m_normalKeyData || m_tangentKeyData)
+      && m_motionTime.upper < m_motionTime.lower) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "invalid 'time' interval [%f, %f] (upper < lower) -- all deformation "
+        "keys collapse to the first key",
+        m_motionTime.lower,
+        m_motionTime.upper);
+  }
 
   for (int c = 0; c < NUM_ATTRIBUTE_CHANNELS; c++) {
     m_faceVaryingAttr[c] = getParamObject<Array1D>(
@@ -390,9 +471,59 @@ void Mesh::commitParameters()
 
 void Mesh::finalize()
 {
+  // KHR_GEOMETRY_*_MOTION_DEFORMATION: (re)read the nested key arrays. All
+  // position keys must share one element count (they describe the same
+  // vertices at different times); normal/tangent keys follow the usual
+  // clamped-index rule of their static counterparts. The first position key
+  // becomes the representative static array every non-motion code path
+  // (primitive count, attribute sizing, initial sync) reads.
+  m_positionKeys.clear();
+  m_normalKeys.clear();
+  m_tangentKeys.clear();
+  if (m_positionKeyData) {
+    readVertexKeys(m_positionKeyData.get(),
+        "vertex.position",
+        true,
+        [](const Object *, const Array1D &a, const char *) {
+          return a.elementType() == ANARI_FLOAT32_VEC3;
+        },
+        m_positionKeys);
+    m_vertexPosition =
+        m_positionKeys.empty() ? nullptr : m_positionKeys.front().get();
+  }
+  if (m_normalKeyData) {
+    readVertexKeys(m_normalKeyData.get(),
+        "vertex.normal",
+        false,
+        validNormalArray,
+        m_normalKeys);
+    m_vertexNormal = m_normalKeys.empty()
+        ? nullptr
+        : m_normalKeys[(m_normalKeys.size() - 1) / 2].get();
+  }
+  if (m_tangentKeyData) {
+    readVertexKeys(m_tangentKeyData.get(),
+        "vertex.tangent",
+        false,
+        validTangentArray,
+        m_tangentKeys);
+    // Cycles has no time-varying tangents: the middle key stands in for the
+    // whole track (see the struct comment).
+    m_vertexTangent = m_tangentKeys.empty()
+        ? nullptr
+        : m_tangentKeys[(m_tangentKeys.size() - 1) / 2].get();
+  }
+
   if (!m_vertexPosition) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "missing required parameter 'vertex.position' on %s geometry",
+        m_subtype);
+  }
+
+  if (subdivisionEnabled() && m_positionKeys.size() > 1) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "%s geometry: deformation motion keys are ignored while "
+        "'subdivision' is active (only the first key renders)",
         m_subtype);
   }
 
@@ -434,15 +565,23 @@ void Mesh::syncCyclesNode(ccl::Geometry *node) const
     mesh->set_verts(P);
     mesh->resize_mesh(0, 0);
     clearSubdivisionState(mesh);
+    clearDeformationMotionState(mesh);
     return;
   }
 
   if (subdivisionEnabled()) {
+    clearDeformationMotionState(mesh);
     syncSubdCyclesNode(mesh);
     return;
   }
 
   clearSubdivisionState(mesh);
+  // A geometry that lost its deformation keys must not keep stale motion
+  // steps; with keys present the (shutter-dependent) motion state is written
+  // by bakeDeformationMotion() during the world rebuild that follows any
+  // re-sync.
+  if (!hasDeformationMotion())
+    clearDeformationMotionState(mesh);
   setVertexPosition(mesh);
   setPrimitiveIndex(mesh);
   setAttributes(mesh);
@@ -669,11 +808,21 @@ box3 Mesh::bounds() const
   box3 b = empty_box3();
   if (!m_vertexPosition)
     return b;
-  std::for_each(m_vertexPosition->beginAs<anari_vec::float3>(),
-      m_vertexPosition->endAs<anari_vec::float3>(),
-      [&](const anari_vec::float3 &v) {
-        extend(b, make_float3(v[0], v[1], v[2]));
-      });
+  auto extendOver = [&](const Array1D &positions) {
+    std::for_each(positions.beginAs<anari_vec::float3>(),
+        positions.endAs<anari_vec::float3>(),
+        [&](const anari_vec::float3 &v) {
+          extend(b, make_float3(v[0], v[1], v[2]));
+        });
+  };
+  if (m_positionKeys.size() > 1) {
+    // Deformation keys: cover the whole motion track (keys interpolate
+    // linearly, so the union of the key poses bounds every sample time).
+    for (const auto &key : m_positionKeys)
+      extendOver(*key);
+  } else {
+    extendOver(*m_vertexPosition);
+  }
   return b;
 }
 
@@ -866,6 +1015,236 @@ void Mesh::setTangents(ccl::Mesh *mesh) const
   }
   attrT->modified = true;
   attrS->modified = true;
+}
+
+// KHR_GEOMETRY_TRIANGLE/QUAD_MOTION_DEFORMATION //////////////////////////////
+
+bool Mesh::hasDeformationMotion() const
+{
+  return m_positionKeys.size() > 1 && !subdivisionEnabled();
+}
+
+template <typename ValidFn>
+void Mesh::readVertexKeys(const ObjectArray *data,
+    const char *param,
+    bool requireEqualSizes,
+    ValidFn &&valid,
+    KeyVector &out)
+{
+  if (!data)
+    return;
+  size_t numSkipped = 0;
+  size_t keySize = 0;
+  for (auto **h = data->handlesBegin(); h != data->handlesEnd(); h++) {
+    auto *arr = (*h)->type() == ANARI_ARRAY1D ? (Array1D *)*h : nullptr;
+    bool ok = arr && valid(this, *arr, param);
+    if (ok && requireEqualSizes) {
+      if (out.empty())
+        keySize = arr->size();
+      else
+        ok = arr->size() == keySize;
+    }
+    if (!ok) {
+      numSkipped++;
+      continue;
+    }
+    out.emplace_back(this, arr);
+  }
+  if (numSkipped > 0) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "%s geometry: skipped %zu '%s' deformation key array(s) with a "
+        "mismatched element type or size",
+        m_subtype,
+        numSkipped,
+        param);
+  }
+}
+
+void Mesh::samplePositionKeys(float t, ccl::float3 *dst) const
+{
+  const size_t numVerts = m_vertexPosition->size();
+  size_t j;
+  float f;
+  detail::keyLocation(m_motionTime, m_positionKeys.size(), t, j, f);
+  const auto *a = m_positionKeys[j]->beginAs<anari_vec::float3>();
+  if (f == 0.f) {
+    for (size_t i = 0; i < numVerts; i++)
+      dst[i] = make_float3(a[i][0], a[i][1], a[i][2]);
+  } else {
+    const auto *b = m_positionKeys[j + 1]->beginAs<anari_vec::float3>();
+    const float g = 1.f - f;
+    for (size_t i = 0; i < numVerts; i++) {
+      dst[i] = make_float3(g * a[i][0] + f * b[i][0],
+          g * a[i][1] + f * b[i][1],
+          g * a[i][2] + f * b[i][2]);
+    }
+  }
+}
+
+void Mesh::sampleNormalKeys(const ConvertedKeys &keys,
+    float t,
+    ccl::packed_normal *dst,
+    size_t count) const
+{
+  const float3 fallback = make_float3(0.f, 0.f, 1.f);
+  size_t j;
+  float f;
+  detail::keyLocation(m_motionTime, keys.size(), t, j, f);
+  const auto &a = keys[j];
+  static const std::vector<anari_vec::float4> emptyKey;
+  const auto &b = f != 0.f ? keys[j + 1] : emptyKey;
+  for (size_t i = 0; i < count; i++) {
+    float3 n = fallback;
+    if (!a.empty()) {
+      const auto &na = a[std::min(i, a.size() - 1)];
+      n = make_float3(na[0], na[1], na[2]);
+      if (!b.empty()) {
+        const auto &nb = b[std::min(i, b.size() - 1)];
+        n = (1.f - f) * n + f * make_float3(nb[0], nb[1], nb[2]);
+      }
+      const float l = len(n);
+      n = l > 0.f ? n / l : fallback;
+    }
+    dst[i] = packed_normal(n);
+  }
+}
+
+// Reset a node that previously carried baked deformation steps back to the
+// static path. A never-deforming mesh returns immediately, keeping the
+// common case overhead-free.
+void Mesh::clearDeformationMotionState(ccl::Mesh *mesh)
+{
+  const bool haveAttrs =
+      mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION) != nullptr
+      || mesh->attributes.find(ATTR_STD_MOTION_VERTEX_NORMAL) != nullptr;
+  if (!haveAttrs && mesh->get_motion_steps() == 0
+      && !mesh->get_use_motion_blur())
+    return;
+  mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_POSITION);
+  mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_NORMAL);
+  mesh->set_motion_steps(0);
+  mesh->set_use_motion_blur(false);
+}
+
+bool Mesh::bakeDeformationMotion(
+    ccl::Geometry *node, const helium::box1 &shutter) const
+{
+  auto *mesh = (ccl::Mesh *)node;
+  if (!hasDeformationMotion() || !m_vertexPosition) { // callers guard this
+    clearDeformationMotionState(mesh);
+    return false;
+  }
+
+  const size_t numVerts = m_vertexPosition->size();
+  const size_t numKeys = m_positionKeys.size();
+  const float extent = shutter.upper - shutter.lower;
+
+  // Step count N (odd -- Cycles stores the center step in the base verts,
+  // see motion_triangle.h): when the shutter spans exactly the 'time'
+  // interval the steps land on the source keys (odd key counts directly,
+  // even counts via 2M-1, which adds the segment midpoints and is exact for
+  // linearly interpolated keys); a shutter that is a strict sub-interval is
+  // refined 4x, mirroring bakeMotionOnShutter() (see the resampling contract
+  // in MotionTrack.h).
+  size_t n = 1;
+  if (extent > 0.f) {
+    const bool aligned = shutter.lower == m_motionTime.lower
+        && shutter.upper == m_motionTime.upper;
+    n = aligned ? (numKeys % 2 ? numKeys : 2 * numKeys - 1)
+                : (numKeys - 1) * 4 + 1;
+    n = std::min(n, size_t(ccl::Object::MAX_MOTION_STEPS)); // 129 (odd)
+    n = std::max(n, size_t(3));
+    if (n % 2 == 0)
+      n--; // defensive; the formulas above already produce odd counts
+  }
+
+  // Sample every step up front so a track that does not actually move across
+  // the shutter (or a degenerate shutter, n == 1) collapses to a static pose
+  // and keeps all motion machinery off.
+  std::vector<ccl::float3> steps(n * numVerts);
+  bool allEqual = true;
+  for (size_t s = 0; s < n; s++) {
+    const float t = n > 1 ? shutter.lower + extent * float(s) / float(n - 1)
+                          : shutter.lower;
+    samplePositionKeys(t, steps.data() + s * numVerts);
+    for (size_t i = 0; s > 0 && allEqual && i < numVerts; i++)
+      allEqual = steps[s * numVerts + i] == steps[i];
+  }
+
+  const bool motion = n > 1 && !allEqual;
+  const size_t center = motion ? (n - 1) / 2 : 0;
+
+  // Base verts hold the center step: the shutter-midpoint pose (for the
+  // static collapse every sampled step is the same pose, and a degenerate
+  // shutter's single sample at s0 == its midpoint).
+  {
+    ccl::array<ccl::float3> P;
+    auto *dst = P.resize(numVerts);
+    std::copy_n(steps.data() + center * numVerts, numVerts, dst);
+    mesh->set_verts(P);
+  }
+
+  if (!motion) {
+    clearDeformationMotionState(mesh);
+  } else {
+    mesh->set_motion_steps(uint(n));
+    mesh->set_use_motion_blur(true);
+    // Remove-then-add so the attribute is (re)allocated for the current step
+    // and vertex counts (add() reuses an existing allocation as-is).
+    mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_POSITION);
+    Attribute *attr = mesh->attributes.add(ATTR_STD_MOTION_VERTEX_POSITION);
+    ccl::float3 *dst = attr->data_float3_for_write();
+    for (size_t s = 0; s < n; s++) {
+      if (s == center)
+        continue;
+      std::copy_n(steps.data() + s * numVerts, numVerts, dst);
+      dst += numVerts;
+    }
+    attr->modified = true;
+  }
+
+  // Nested vertex normals: the center pose goes into the regular normal
+  // attribute (the kernel's center step reads it), the other steps into the
+  // motion normal attribute. Keys are converted to float4 once up front (not
+  // per sampled step).
+  ConvertedKeys normalKeys;
+  normalKeys.reserve(m_normalKeys.size());
+  for (const auto &key : m_normalKeys)
+    normalKeys.push_back(convertToFloat4(*key));
+  if (!normalKeys.empty()) {
+    Attribute *attrN =
+        mesh->attributes.add(ATTR_STD_VERTEX_NORMAL, ustring("vertex.normal"));
+    const float tCenter = n > 1
+        ? shutter.lower + extent * float(center) / float(n - 1)
+        : shutter.lower;
+    sampleNormalKeys(normalKeys, tCenter, attrN->data_normal_for_write(), numVerts);
+    attrN->modified = true;
+  }
+  if (motion && normalKeys.size() > 1) {
+    mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_NORMAL);
+    Attribute *attrMN = mesh->attributes.add(ATTR_STD_MOTION_VERTEX_NORMAL);
+    packed_normal *dst = attrMN->data_normal_for_write();
+    for (size_t s = 0; s < n; s++) {
+      if (s == center)
+        continue;
+      const float t = shutter.lower + extent * float(s) / float(n - 1);
+      sampleNormalKeys(normalKeys, t, dst, numVerts);
+      dst += numVerts;
+    }
+    attrMN->modified = true;
+  } else {
+    mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_NORMAL);
+  }
+
+  // The bake changes the mesh's BVH primitive layout whenever the motion
+  // step count flips or changes (static triangles vs. motion triangles with
+  // N steps), so a refit is not enough -- request a BVH rebuild like
+  // Surface::finalize() does after a re-sync. Without it the sharp pose
+  // after a blur (or vice versa) traces against a stale motion BVH and
+  // renders nothing.
+  mesh->tag_update(deviceState()->scene, true);
+
+  return motion;
 }
 
 // Sphere definitions /////////////////////////////////////////////////////////
@@ -2021,6 +2400,16 @@ Geometry *Geometry::createInstance(std::string_view type, CyclesGlobalState *s)
 void Geometry::finalize()
 {
   Object::finalize();
+}
+
+bool Geometry::hasDeformationMotion() const
+{
+  return false;
+}
+
+bool Geometry::bakeDeformationMotion(ccl::Geometry *, const helium::box1 &) const
+{
+  return false;
 }
 
 void Geometry::commitAttributeParameters()
