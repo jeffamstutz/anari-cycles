@@ -128,6 +128,11 @@ bool Instance::hasMotion() const
   return isMotionSubtype() && !m_motion.empty();
 }
 
+bool Instance::hasGeometryMotion() const
+{
+  return m_group && m_group->hasDeformingSurfaces();
+}
+
 math::mat4 Instance::motionPoseAt(float t) const
 {
   // Per the extension registry the static 'transform' is still present on
@@ -141,9 +146,11 @@ bool Instance::addInstanceObjectsToCyclesScene(const helium::box1 &shutter)
     return false;
 
   if (!isMotionSubtype()) {
-    if (!m_xfmArray)
-      m_group->addGroupToCurrentCyclesScene(m_xfm, nullptr, m_id);
-    else {
+    bool deformationMotion = false;
+    if (!m_xfmArray) {
+      deformationMotion =
+          m_group->addGroupToCurrentCyclesScene(m_xfm, shutter, nullptr, m_id);
+    } else {
       auto *begin = m_xfmArray->beginAs<helium::mat4>();
       auto *end = m_xfmArray->endAs<helium::mat4>();
       const uint32_t *ids =
@@ -153,28 +160,29 @@ bool Instance::addInstanceObjectsToCyclesScene(const helium::box1 &shutter)
         const size_t i = size_t(m - begin);
         // Per-transform id when provided, else the uniform 'id' fallback.
         const uint32_t id = (ids && i < numIds) ? ids[i] : m_id;
-        m_group->addGroupToCurrentCyclesScene(*m, nullptr, id);
+        deformationMotion |=
+            m_group->addGroupToCurrentCyclesScene(*m, shutter, nullptr, id);
       }
     }
-    return false;
+    return deformationMotion;
   }
 
   // Motion subtypes: resample the motion track onto the camera shutter
   // interval (see MotionTrack.h for the resampling contract). A degenerate
   // shutter, missing motion arrays, or a track that does not actually move
   // across the shutter all collapse to a single static pose at the shutter
-  // start so no motion-blur machinery gets enabled.
+  // start so no instance motion-blur machinery gets enabled (deforming
+  // geometry inside the group can still enable it).
   const auto steps = bakeMotionOnShutter(m_motion, shutter);
   if (steps.empty()) {
-    m_group->addGroupToCurrentCyclesScene(
-        motionPoseAt(shutter.lower), nullptr, m_id);
-    return false;
+    return m_group->addGroupToCurrentCyclesScene(
+        motionPoseAt(shutter.lower), shutter, nullptr, m_id);
   }
 
   // MOTION_POSITION_START contract: the object's base transform is the pose
   // at the shutter start (== motion step 0).
   m_group->addGroupToCurrentCyclesScene(
-      motionPoseAt(shutter.lower), &steps, m_id);
+      motionPoseAt(shutter.lower), shutter, &steps, m_id);
   return true;
 }
 

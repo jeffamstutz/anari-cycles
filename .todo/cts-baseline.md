@@ -133,3 +133,14 @@ unwinnable):
   `ImageLoader::equals()`, which compared raw ANARI array *pointers*; a freed
   array reallocated at the same address deduped onto a stale image. The
   loader now pins the array (IntrusivePtr) and compares element types too.
+
+## Update after task 36 (geometry motion deformation, 2026-07-08)
+
+Fresh helide ground truth (190 generated, 124 skipped — one fewer than the
+2026-07-03 run) and the whole-suite command (128x128, --accumulation 16):
+**17 passed / 158 failed / 139 skipped**, byte-for-byte identical per-case
+verdicts between this task's build and its parent commit (only float metric
+noise differs). The CTS has no KHR_GEOMETRY_*_MOTION_DEFORMATION tests, so
+claiming the extensions flips nothing from skipped to scored. anariRenderTests
+is also identical to the parent commit (12/13 PNGs byte-equal;
+perf_spinning_cubes differs run-to-run even on one build — animated test).

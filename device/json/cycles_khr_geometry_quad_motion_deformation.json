@@ -1,0 +1,28 @@
+{
+ "info": {
+  "name": "KHR_GEOMETRY_QUAD_MOTION_DEFORMATION",
+  "type": "extension",
+  "dependencies": [],
+  "comment": "Local copy of the ANARI registry extension. The registry's vertex.position/normal/tangent entries are omitted here because cycles_khr_geometry_quad.json already declares those parameters (the query generator merges parameter lists by name and would duplicate the 'types' entries); their nested ARRAY1D-of-ARRAY1D elementType is declared there instead. Caveats: Cycles has no time-varying tangents, so a nested vertex.tangent contributes its middle key as the static tangent; deformation keys are ignored while CYCLES_GEOMETRY_SUBDIVISION is active. Keep info.name equal to the official extension name so introspection advertises it."
+ },
+ "objects": [
+  {
+   "type": "ANARI_GEOMETRY",
+   "name": "quad",
+   "parameters": [
+    {
+     "name": "time",
+     "types": [
+      "ANARI_FLOAT32_BOX1"
+     ],
+     "tags": [],
+     "default": [
+      0.0,
+      1.0
+     ],
+     "description": "time associated with the first and last key array in vertex.position"
+    }
+   ]
+  }
+ ]
+}

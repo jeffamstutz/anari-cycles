@@ -133,25 +133,30 @@ bool World::motionRequiresRebake(const helium::box1 &shutter)
       || shutter.upper != m_bakedShutter.upper;
   if (!shutterChanged)
     return false;
-  if (hasMotionInstances())
+  if (hasShutterDependentMotion())
     return true;
-  // Without motion instances the baked objects do not depend on the shutter;
-  // record it so static worlds don't rescan their instances every frame.
+  // Without shutter-dependent motion the baked objects do not depend on the
+  // shutter; record it so static worlds don't rescan their instances every
+  // frame.
   // NOTE: multiple frames rendering this world with cameras whose shutters
-  // differ will rebake on every alternation when motion instances exist --
-  // correct, but pathological for multi-view apps.
+  // differ will rebake on every alternation when motion exists -- correct,
+  // but pathological for multi-view apps.
   m_bakedShutter = shutter;
   return false;
 }
 
-bool World::hasMotionInstances() const
+bool World::hasShutterDependentMotion() const
 {
+  // Deforming geometry can live in the zero instance too (world-level
+  // 'surface' array), unlike instance motion transforms.
+  if (m_zeroInstance->hasGeometryMotion())
+    return true;
   if (!m_instanceData)
     return false;
   auto **instancesBegin = (Instance **)m_instanceData->handlesBegin();
   auto **instancesEnd = (Instance **)m_instanceData->handlesEnd();
   return std::any_of(instancesBegin, instancesEnd, [](const Instance *i) {
-    return i->isValid() && i->hasMotion();
+    return i->isValid() && (i->hasMotion() || i->hasGeometryMotion());
   });
 }
 

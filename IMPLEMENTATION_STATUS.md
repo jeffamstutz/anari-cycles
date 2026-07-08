@@ -73,7 +73,7 @@ Registry source: `~/opt/anari/share/anari/code_gen/api/*.json`. Device claims 17
 ### 2.1 Missing object subtypes
 | Category | Implemented | Missing (KHR) | Cycles mapping difficulty |
 |---|---|---|---|
-| Geometry | triangle, quad, sphere | **cylinder, cone, curve, isosurface**, triangle/quad motion deformation | curve → Cycles `Hair` (easy fit); cylinder/cone → mesh tessellation or hair-with-linear (medium); isosurface → needs volume field first (hard) |
+| Geometry | triangle, quad, sphere, triangle/quad motion deformation (DONE 2026-07-08: nested `vertex.position`/`normal`/`tangent` key arrays + `time`, baked onto the camera shutter as Cycles `motion_steps` + `ATTR_STD_MOTION_VERTEX_POSITION/_NORMAL`; re-baked per shutter via `Surface::bakeGeometryMotion()`) | **cylinder, cone, curve, isosurface** | curve → Cycles `Hair` (easy fit); cylinder/cone → mesh tessellation or hair-with-linear (medium); isosurface → needs volume field first (hard) |
 | Camera | perspective, orthographic | **omnidirectional** | trivial — Cycles `CAMERA_PANORAMA` + `PANORAMA_EQUIRECTANGULAR` |
 | Light | directional, hdri, point, spot, quad | **ring** | Cycles `AreaLight` with `ellipse=true` (easy) |
 | Sampler | image1D, image2D | **image3D, primitive, transform** | transform = pure graph math (easy); primitive = per-prim attribute lookup (medium); image3D blocked by Cycles dropping dense 3D textures (consider NanoVDB conversion) |
@@ -150,7 +150,9 @@ From a survey of `cycles/src/scene/` + `session/`. Ordered roughly by value/effo
   `grid_from_dense_voxels()` (image_vdb.h:57).
 - **Curves/hair** → `KHR_GEOMETRY_CURVE` (Cycles `Hair`, ribbon/thick/linear shapes).
 - **Motion blur** → `KHR_INSTANCE_MOTION_TRANSFORM`, `KHR_CAMERA_SHUTTER`,
-  geometry motion deformation (Cycles motion steps up to 129, `use_motion_blur`).
+  geometry motion deformation (Cycles motion steps up to 129, `use_motion_blur`)
+  — **DONE** (tasks 13/14/36): instance/camera motion transforms and
+  `KHR_GEOMETRY_TRIANGLE/QUAD_MOTION_DEFORMATION` deforming vertex keys.
 - **Panoramic/stereo/DoF cameras** → `KHR_CAMERA_OMNIDIRECTIONAL/_STEREO/_DEPTH_OF_FIELD/_SHUTTER`.
 - **Ring light** → `KHR_LIGHT_RING` (AreaLight ellipse).
 - **IES profiles** → quad/ring `intensityDistribution` (Cycles `IESLightNode`).

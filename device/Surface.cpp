@@ -137,10 +137,32 @@ void Surface::finalize()
 
   m_geometryHandleChanged = false;
   m_materialHandleChanged = false;
+  // The re-sync above rewrote the node from the static arrays, dropping any
+  // shutter bake -- the world rebuild that follows this finalize (it bumps
+  // lastSceneChange below) re-bakes through bakeGeometryMotion().
+  m_motionBakeValid = false;
 
   state->objectUpdates.lastSceneChange = helium::newTimeStamp();
 
   Object::finalize();
+}
+
+bool Surface::bakeGeometryMotion(const helium::box1 &shutter)
+{
+  if (!isValid() || !m_cyclesGeometryNode
+      || !m_geometry->hasDeformationMotion()) {
+    m_motionBakeValid = false;
+    return false;
+  }
+  if (m_motionBakeValid && m_motionBakeShutter.lower == shutter.lower
+      && m_motionBakeShutter.upper == shutter.upper)
+    return m_motionBakeActive;
+
+  m_motionBakeActive =
+      m_geometry->bakeDeformationMotion(m_cyclesGeometryNode, shutter);
+  m_motionBakeShutter = shutter;
+  m_motionBakeValid = true;
+  return m_motionBakeActive;
 }
 
 const Geometry *Surface::geometry() const

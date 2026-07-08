@@ -30,6 +30,11 @@ struct Instance : public Object
   // against the camera shutter interval.
   bool hasMotion() const;
 
+  // 'true' when the instanced group holds a surface whose geometry carries
+  // deformation motion keys (KHR_GEOMETRY_*_MOTION_DEFORMATION) -- also
+  // shutter-dependent, independent of this instance's own motion arrays.
+  bool hasGeometryMotion() const;
+
   // Returns 'true' when motion steps were baked into the created objects
   // (the caller then enables integrator motion blur).
   bool addInstanceObjectsToCyclesScene(const helium::box1 &shutter);
