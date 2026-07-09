@@ -172,26 +172,14 @@ void FieldVolume::syncCyclesMesh(
 
   // Native VDB-backed fields sample a Cycles voxel-grid attribute; the
   // clear() above dropped any previously attached grids, so re-attach them.
-  // Tricubic filtering is a shader-wide flag in Cycles, so it applies when
-  // any sampled field asks for it.
-  bool cubic = false;
-  bool nonCubicVoxelField = false;
+  // Each grid image carries its own interpolation mode (the shader-wide
+  // volume_interpolation_method stays at its linear default, which the
+  // kernel treats as "use the image's interpolation"), so fields with
+  // different 'filter' settings coexist in one volume shader.
   for (const SpatialField *field : fields) {
-    if (!field)
-      continue;
-    field->attachVoxelAttributes(m_mesh);
-    cubic |= field->cubicVolumeInterpolation();
-    nonCubicVoxelField |=
-        field->usesVoxelAttributes() && !field->cubicVolumeInterpolation();
+    if (field)
+      field->attachVoxelAttributes(m_mesh);
   }
-  if (cubic && nonCubicVoxelField) {
-    reportMessage(ANARI_SEVERITY_WARNING,
-        "volume mixes a filter='cubic' spatial field with other grid-backed "
-        "fields; Cycles' tricubic volume interpolation is per-shader, so it "
-        "overrides those fields' 'filter' setting");
-  }
-  m_shader->set_volume_interpolation_method(
-      cubic ? ccl::VOLUME_INTERPOLATION_CUBIC : ccl::VOLUME_INTERPOLATION_LINEAR);
 
   m_mesh->tag_update(state.scene, true);
 }

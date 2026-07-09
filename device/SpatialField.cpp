@@ -109,6 +109,56 @@ int gridImagePrecision(nanovdb::GridType gridType)
   }
 }
 
+// Copy an ANARI 'data' blob into a NanoVDB-owned buffer and wrap it as a
+// grid handle. The copy matters twice over: ANARI arrays guarantee no
+// particular alignment while NanoVDB requires NANOVDB_DATA_ALIGNMENT, and it
+// decouples downstream use of the grid from the ANARI array's lifetime.
+// Throws std::runtime_error when the blob is not a valid NanoVDB grid.
+nanovdb::GridHandle<> gridHandleFromBlob(const void *data, size_t numBytes)
+{
+  auto buffer = nanovdb::HostBuffer::create(numBytes);
+  std::memcpy(buffer.data(), data, numBytes);
+  return nanovdb::GridHandle<>(std::move(buffer));
+}
+
+// Scalar dense resampling (isosurface extraction) over the grid types the
+// registry's "serialized NanoVDB grid" can reasonably carry.
+template <typename BuildT>
+void readDenseVoxelsT(const nanovdb::NanoGrid<BuildT> *grid,
+    const nanovdb::CoordBBox &bbox,
+    float *dst)
+{
+  auto acc = grid->getAccessor();
+  size_t idx = 0;
+  // int64 counters: a bbox touching INT32_MAX must not wrap the loop index
+  for (int64_t k = bbox.min()[2]; k <= bbox.max()[2]; ++k)
+    for (int64_t j = bbox.min()[1]; j <= bbox.max()[1]; ++j)
+      for (int64_t i = bbox.min()[0]; i <= bbox.max()[0]; ++i) {
+        dst[idx++] = float(
+            acc.getValue(nanovdb::Coord(int32_t(i), int32_t(j), int32_t(k))));
+      }
+}
+
+bool readDenseVoxels(
+    const nanovdb::GridHandle<> &handle, const nanovdb::CoordBBox &bbox, float *dst)
+{
+  if (const auto *grid = handle.grid<float>())
+    readDenseVoxelsT(grid, bbox, dst);
+  else if (const auto *grid = handle.grid<double>())
+    readDenseVoxelsT(grid, bbox, dst);
+  else if (const auto *grid = handle.grid<nanovdb::Fp4>())
+    readDenseVoxelsT(grid, bbox, dst);
+  else if (const auto *grid = handle.grid<nanovdb::Fp8>())
+    readDenseVoxelsT(grid, bbox, dst);
+  else if (const auto *grid = handle.grid<nanovdb::Fp16>())
+    readDenseVoxelsT(grid, bbox, dst);
+  else if (const auto *grid = handle.grid<nanovdb::FpN>())
+    readDenseVoxelsT(grid, bbox, dst);
+  else
+    return false;
+  return true;
+}
+
 } // namespace
 
 #endif // ANARI_CYCLES_HAS_VDB
@@ -146,11 +196,6 @@ void SpatialField::attachVoxelAttributes(ccl::Geometry *geom) const
   auto *attr = geom->attributes.add(
       m_voxelAttributeName, ccl::TypeFloat, ccl::ATTR_ELEMENT_VOXEL);
   attr->data_voxel_for_write() = m_voxelImage;
-}
-
-bool SpatialField::cubicVolumeInterpolation() const
-{
-  return false;
 }
 
 ccl::ShaderOutput *SpatialField::createVoxelSamplingNodes(
@@ -259,7 +304,8 @@ bool StructuredRegularField::finalizeCubicGrid()
             m_dims,
             objectToTexture,
             "ANARI structuredRegular cubic"),
-        INTERPOLATION_LINEAR); // the kernel forces cubic via the shader flag
+        INTERPOLATION_CUBIC); // per-image tricubic (kernel_image_interp_3d
+                              // honors the image's own interpolation)
   } catch (const std::exception &e) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "building the VDB grid for filter='cubic' on 'structuredRegular' "
@@ -280,11 +326,6 @@ bool StructuredRegularField::finalizeCubicGrid()
 bool StructuredRegularField::isValid() const
 {
   return m_data && m_dims[0] > 0 && m_dims[1] > 0 && m_dims[2] > 0;
-}
-
-bool StructuredRegularField::cubicVolumeInterpolation() const
-{
-  return !m_voxelImage.empty();
 }
 
 ccl::ShaderOutput *StructuredRegularField::createCyclesSamplingNodes(
@@ -552,13 +593,8 @@ void NanoVDBField::finalize()
   openvdb::initialize();
 
   try {
-    // Copy the blob into a NanoVDB-owned buffer: ANARI arrays guarantee no
-    // particular alignment while NanoVDB grids require
-    // NANOVDB_DATA_ALIGNMENT, and the copy also decouples the Cycles image
-    // (loaded lazily at render time) from the ANARI array's lifetime.
-    auto buffer = nanovdb::HostBuffer::create(m_data->size());
-    std::memcpy(buffer.data(), m_data->data(), m_data->size());
-    const nanovdb::GridHandle<> handle(std::move(buffer));
+    const nanovdb::GridHandle<> handle =
+        gridHandleFromBlob(m_data->data(), m_data->size());
 
     const nanovdb::GridMetaData *metadata = handle.gridMetaData(0);
     if (!metadata || !metadata->isValid()) {
@@ -656,6 +692,107 @@ float NanoVDBField::stepSize() const
 bool NanoVDBField::isValid() const
 {
   return m_data && !m_voxelImage.empty();
+}
+
+bool NanoVDBField::getDenseVoxelGrid(std::vector<float> &voxels,
+    anari_vec::uint3 &dims,
+    anari_vec::float3 &origin,
+    anari_vec::float3 &spacing) const
+{
+#ifdef ANARI_CYCLES_HAS_VDB
+  // Like StructuredRegularField, work from the committed 'data' blob rather
+  // than finalized state: a consumer's finalize can run before this field's
+  // within one commit flush (both are priority-0 objects).
+  if (!m_data || m_data->elementType() != ANARI_UINT8
+      || m_data->size() < sizeof(nanovdb::GridData)) {
+    return false;
+  }
+
+  try {
+    const nanovdb::GridHandle<> handle =
+        gridHandleFromBlob(m_data->data(), m_data->size());
+    const nanovdb::GridMetaData *metadata = handle.gridMetaData(0);
+    if (!metadata || !metadata->isValid() || metadata->isEmpty())
+      return false;
+
+    const auto &indexBounds = metadata->indexBBox();
+    const uint64_t n[3] = {
+        uint64_t(int64_t(indexBounds.max()[0]) - indexBounds.min()[0] + 1),
+        uint64_t(int64_t(indexBounds.max()[1]) - indexBounds.min()[1] + 1),
+        uint64_t(int64_t(indexBounds.max()[2]) - indexBounds.min()[2] + 1)};
+
+    // Marching cubes needs the grid densified; cap the expansion so a large
+    // but sparse grid cannot trigger an unbounded allocation (64M voxels =
+    // 256 MB of floats, roughly a 400^3 dense grid). Checked factor by
+    // factor: each term stays <= 2^52, so the running product cannot wrap
+    // uint64 and sneak a pathological index bbox (up to 2^32 per axis)
+    // under the cap.
+    constexpr uint64_t kMaxDenseVoxels = uint64_t(1) << 26;
+    if (n[0] > kMaxDenseVoxels || n[1] > kMaxDenseVoxels
+        || n[0] * n[1] > kMaxDenseVoxels
+        || n[0] * n[1] * n[2] > kMaxDenseVoxels) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "isosurface over 'nanovdb' field needs a %zux%zux%zu dense "
+          "grid, exceeding the %zu-voxel cap; extracting an empty surface",
+          size_t(n[0]),
+          size_t(n[1]),
+          size_t(n[2]),
+          size_t(kMaxDenseVoxels));
+      return false;
+    }
+    const uint64_t numVoxels = n[0] * n[1] * n[2];
+
+    // The dense grid is described by per-axis origin/spacing, so the grid
+    // transform must be axis-aligned: each unit index step may only move
+    // along its own world axis.
+    const auto &map = metadata->map();
+    const nanovdb::Vec3d indexLower(double(indexBounds.min()[0]),
+        double(indexBounds.min()[1]),
+        double(indexBounds.min()[2]));
+    const nanovdb::Vec3d base = map.applyMap(indexLower);
+    double axisSpacing[3];
+    for (int axis = 0; axis < 3; ++axis) {
+      nanovdb::Vec3d p = indexLower;
+      p[axis] += 1.0;
+      const nanovdb::Vec3d step = map.applyMap(p) - base;
+      axisSpacing[axis] = step[axis];
+      const double offAxis = std::max(std::abs(step[(axis + 1) % 3]),
+          std::abs(step[(axis + 2) % 3]));
+      if (offAxis > 1e-5 * std::max(std::abs(step[axis]), 1e-20)) {
+        reportMessage(ANARI_SEVERITY_WARNING,
+            "isosurface over 'nanovdb' field with a non-axis-aligned grid "
+            "transform is not supported; extracting an empty surface");
+        return false;
+      }
+    }
+
+    dims = {uint32_t(n[0]), uint32_t(n[1]), uint32_t(n[2])};
+    origin = {float(base[0]), float(base[1]), float(base[2])};
+    spacing = {
+        float(axisSpacing[0]), float(axisSpacing[1]), float(axisSpacing[2])};
+
+    voxels.resize(numVoxels);
+    if (!readDenseVoxels(handle, indexBounds, voxels.data())) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "isosurface over 'nanovdb' field with an unsupported grid value "
+          "type; extracting an empty surface");
+      return false;
+    }
+    return true;
+  } catch (const std::exception &e) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "isosurface over 'nanovdb' field failed to read the grid (%s); "
+        "extracting an empty surface",
+        e.what());
+    return false;
+  }
+#else
+  (void)voxels;
+  (void)dims;
+  (void)origin;
+  (void)spacing;
+  return false;
+#endif
 }
 
 } // namespace anari_cycles

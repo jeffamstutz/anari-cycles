@@ -2122,11 +2122,11 @@ void Tube::tessellate(TubeMeshData &md) const
 
 // KHR_GEOMETRY_ISOSURFACE. Cycles cannot ray-trace implicit isosurfaces, so
 // the shells are extracted into a triangle mesh at finalize time by marching
-// cubes over the spatial field's dense voxel grid (this build has no
-// OpenVDB/NanoVDB, so extraction happens in device code — see
-// MarchingCubes.cpp). Edge-welded vertices keep each shell watertight, and
-// vertex normals come from field gradients, pointing toward decreasing field
-// values (out of the enclosed field > isovalue region).
+// cubes over the spatial field's dense voxel grid (see MarchingCubes.cpp;
+// fields provide the grid via SpatialField::getDenseVoxelGrid — nanovdb
+// fields densify their sparse grid). Edge-welded vertices keep each shell
+// watertight, and vertex normals come from field gradients, pointing toward
+// decreasing field values (out of the enclosed field > isovalue region).
 //
 // One ANARI primitive per isovalue: 'primitive.*' attributes and
 // 'primitive.id' are indexed by the isovalue index of the shell a triangle
