@@ -27,28 +27,57 @@ generate_export_header(${PROJECT_NAME}
 
 target_sources(${PROJECT_NAME}
 PRIVATE
-  Array.cpp
   CyclesGlobalState.cpp
-  Camera.cpp
   Device.cpp
-  Frame.cpp
-  FrameOutputDriver.cpp
-  Geometry.cpp
-  Group.cpp
-  Instance.cpp
   Library.cpp
-  Light.cpp
-  MarchingCubes.cpp
-  Material.cpp
   Object.cpp
-  Renderer.cpp
-  Sampler.cpp
-  SamplerImageLoader.cpp
-  SpatialField.cpp
-  Surface.cpp
-  Volume.cpp
-  VolumeImageLoader.cpp
-  World.cpp
+  array/Array1D.cpp
+  array/ObjectArray.cpp
+  camera/Camera.cpp
+  camera/Omnidirectional.cpp
+  camera/Orthographic.cpp
+  camera/Perspective.cpp
+  frame/Frame.cpp
+  frame/FrameOutputDriver.cpp
+  geometry/Curve.cpp
+  geometry/Geometry.cpp
+  geometry/Isosurface.cpp
+  geometry/MarchingCubes.cpp
+  geometry/Mesh.cpp
+  geometry/Sphere.cpp
+  geometry/Tube.cpp
+  light/Directional.cpp
+  light/HDRI.cpp
+  light/Light.cpp
+  light/Point.cpp
+  light/QuadLight.cpp
+  light/Ring.cpp
+  light/Sky.cpp
+  light/Spot.cpp
+  light/UnknownLight.cpp
+  material/HairMaterial.cpp
+  material/Material.cpp
+  material/MatteMaterial.cpp
+  material/OSLMaterial.cpp
+  material/PhysicallyBasedMaterial.cpp
+  material/ToonMaterial.cpp
+  renderer/Renderer.cpp
+  sampler/Image1D.cpp
+  sampler/Image2D.cpp
+  sampler/Sampler.cpp
+  sampler/SamplerImageLoader.cpp
+  spatial_field/NanoVDBField.cpp
+  spatial_field/SpatialField.cpp
+  spatial_field/StructuredRegularField.cpp
+  spatial_field/VolumeImageLoader.cpp
+  surface/Surface.cpp
+  volume/FieldVolume.cpp
+  volume/PrincipledVolume.cpp
+  volume/TransferFunction1D.cpp
+  volume/Volume.cpp
+  world/Group.cpp
+  world/Instance.cpp
+  world/World.cpp
 )
 
 get_target_property(CYCLES_INCLUDE_DIRECTORIES cycles_bvh INCLUDE_DIRECTORIES)
@@ -80,7 +109,7 @@ if(WITH_CYCLES_OPENSUBDIV)
 endif()
 if(WITH_CYCLES_OPENVDB)
   # Must match the Cycles build: scene/image_vdb.h (included by
-  # SpatialField.cpp) changes layout with these defines.
+  # spatial_field/) changes layout with these defines.
   target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPENVDB)
   target_include_directories(${PROJECT_NAME} PRIVATE ${OPENVDB_INCLUDE_DIR})
 endif()
@@ -96,7 +125,7 @@ if(WITH_CYCLES_NANOVDB)
 endif()
 if(WITH_CYCLES_OSL)
   # Enables the CYCLES_MATERIAL_OSL runtime path ('osl' material subtype,
-  # OSLMaterial in Material.cpp) and the session-wide OSL shading system
+  # material/OSLMaterial.cpp) and the session-wide OSL shading system
   # switch in Device.cpp. Without it the subtype warns and yields an
   # invalid material.
   target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OSL)

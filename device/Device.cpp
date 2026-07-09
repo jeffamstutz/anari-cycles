@@ -10,10 +10,13 @@
 #include "scene/integrator.h"
 #include "scene/shader_nodes.h"
 
-#include "Array.h"
-#include "Frame.h"
+#include "array/Array1D.h"
+#include "array/Array2D.h"
+#include "array/Array3D.h"
+#include "array/ObjectArray.h"
+#include "frame/Frame.h"
 
-#include "FrameOutputDriver.h"
+#include "frame/FrameOutputDriver.h"
 
 // std
 #include <cstring>

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "CyclesGlobalState.h"
-#include "Frame.h"
+#include "frame/Frame.h"
 // cycles
 #include "scene/geometry.h"
 #include "scene/integrator.h"

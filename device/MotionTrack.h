@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "Array.h"
+#include "array/Array1D.h"
 #include "Object.h"
 #include "cycles_math.h"
 // cycles
