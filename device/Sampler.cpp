@@ -34,7 +34,11 @@ static ccl::ustring imageColorspace(anari::DataType type)
   case ANARI_UFIXED8_RA_SRGB:
   case ANARI_UFIXED8_RGB_SRGB:
   case ANARI_UFIXED8_RGBA_SRGB:
-    return ccl::u_colorspace_srgb;
+    // NOT u_colorspace_srgb: ImageMetaData::finalize() treats that as "needs
+    // an OCIO conversion" and silently upgrades BYTE4 storage to HALF4, so
+    // the byte pixels load_pixels() writes would be reinterpreted as halfs.
+    // scene_linear_srgb keeps byte storage and decodes sRGB in the kernel.
+    return ccl::u_colorspace_scene_linear_srgb;
   default:
     return ccl::u_colorspace_data;
   }
