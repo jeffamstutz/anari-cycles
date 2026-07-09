@@ -126,6 +126,41 @@ if(WITH_CYCLES_NANOVDB)
       CACHE PATH "NanoVDB include directory (fetched headers)" FORCE
     )
     message(STATUS "NanoVDB headers not found locally; fetched to ${NANOVDB_INCLUDE_DIR}")
+
+    # Version-skew guard: the fetched headers are NanoVDB 32.6 (from OpenVDB
+    # 11). If the OpenVDB found locally is a different major release, the
+    # NanoVDB<->OpenVDB conversion headers may not match the library that
+    # will be linked. This is usually a compile-time problem (not a silent
+    # runtime one), so warn with the fix rather than hard-failing.
+    set(_anari_cycles_fetched_openvdb_major 11)
+    set(_anari_cycles_openvdb_version_h "")
+    foreach(_prefix ${OPENVDB_ROOT_DIR} $ENV{OPENVDB_ROOT_DIR}
+        ${CMAKE_PREFIX_PATH} /usr /usr/local)
+      if(_prefix AND EXISTS "${_prefix}/include/openvdb/version.h")
+        set(_anari_cycles_openvdb_version_h "${_prefix}/include/openvdb/version.h")
+        break()
+      endif()
+    endforeach()
+    if(_anari_cycles_openvdb_version_h)
+      file(STRINGS "${_anari_cycles_openvdb_version_h}" _anari_cycles_openvdb_major_line
+        REGEX "#define OPENVDB_LIBRARY_MAJOR_VERSION_NUMBER +[0-9]+"
+      )
+      if(_anari_cycles_openvdb_major_line MATCHES "([0-9]+)")
+        if(NOT CMAKE_MATCH_1 EQUAL _anari_cycles_fetched_openvdb_major)
+          message(WARNING
+            "Fetched NanoVDB headers come from OpenVDB "
+            "${_anari_cycles_fetched_openvdb_major}.x but the local OpenVDB "
+            "(${_anari_cycles_openvdb_version_h}) is major version "
+            "${CMAKE_MATCH_1}. If the build fails in NanoVDB/OpenVDB "
+            "conversion code, point NANOVDB_ROOT_DIR at the NanoVDB headers "
+            "matching your OpenVDB release instead."
+          )
+        endif()
+      endif()
+    endif()
+    unset(_anari_cycles_fetched_openvdb_major)
+    unset(_anari_cycles_openvdb_version_h)
+    unset(_anari_cycles_openvdb_major_line)
   endif()
 endif()
 
