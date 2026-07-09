@@ -65,3 +65,6 @@ ANARI_LIBRARY=cycles ~/opt/anari/bin/anariCts            # conformance suite
 
 **Performance / interactivity**
 - 35-interactive-resolution-scaling.md
+
+**Build / deployment**
+- 37-precompiled-gpu-kernels.md
