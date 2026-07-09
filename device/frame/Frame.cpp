@@ -234,7 +234,9 @@ bool Frame::getProperty(const std::string_view &name,
       CyclesGlobalState::SceneLock lock(*deviceState());
       drainCommitBuffer(*deviceState());
     }
-    bool doReset = resetAccumulationNextFrame();
+    // After an interactive-scaling preview the next frame always resets
+    // (forced full-res restart), even without new scene/camera changes.
+    bool doReset = resetAccumulationNextFrame() || m_lastRenderWasPreview;
     helium::writeToVoidP(ptr, doReset);
     return true;
   }
@@ -279,12 +281,49 @@ void Frame::renderFrame()
       m_worldLastChanged = helium::newTimeStamp();
     }
 
-    if (currentFrameChanged || resetAccumulationNextFrame()) {
+    // CYCLES_RENDERER_INTERACTIVE_SCALING: 'changeReset' is the ordinary
+    // reset trigger (scene/camera/renderer change, or a different frame
+    // object rendering). When the previous render of this frame was a
+    // low-res preview, the next unchanged frame forces one extra full-res
+    // reset restarting accumulation from sample 0 -- mirroring the Cycles
+    // render scheduler's divider step-down to 1. Full-res render durations
+    // (previews excluded) seed the automatic divider choice.
+    const bool changeReset =
+        currentFrameChanged || resetAccumulationNextFrame();
+    if (!m_lastRenderWasPreview)
+      m_fullResDuration = m_duration;
+
+    if (changeReset || m_lastRenderWasPreview) {
       reportMessage(ANARI_SEVERITY_DEBUG, "frame -- resetting accumulation");
 
       state.objectUpdates.lastAccumulationReset = helium::newTimeStamp();
 
-      m_camera->setCameraCurrent(m_frameData.size.x, m_frameData.size.y);
+      // A change-driven reset with interactive scaling enabled (and only
+      // with 'accumulation' on -- without it every frame resets and would
+      // stay a low-res preview forever) renders a divider-scaled preview
+      // instead of the full-res frame; the output driver upscales it.
+      m_preview = PreviewState();
+      if (changeReset && m_accumulation && m_renderer->interactiveScaling()) {
+        const int divider = choosePreviewDivider();
+        if (divider > 1) {
+          m_preview.active = true;
+          m_preview.divider = divider;
+          // Round up (Cycles' divide_up) so odd sizes don't drift the
+          // preview's aspect ratio from the frame's.
+          const auto d = uint32_t(divider);
+          m_preview.size = make_uint2((m_frameData.size.x + d - 1) / d,
+              (m_frameData.size.y + d - 1) / d);
+          reportMessage(ANARI_SEVERITY_DEBUG,
+              "frame -- rendering preview at 1/%i resolution (%u x %u)",
+              divider,
+              m_preview.size.x,
+              m_preview.size.y);
+        }
+      }
+      const uint2 renderSize =
+          m_preview.active ? m_preview.size : m_frameData.size;
+
+      m_camera->setCameraCurrent(renderSize.x, renderSize.y);
       m_renderer->makeRendererCurrent();
 
       // CYCLES_LIGHTGROUPS / CYCLES_FRAME_CHANNELS: bring the scene's
@@ -324,10 +363,10 @@ void Frame::renderFrame()
       m_bgComposite.color = m_renderer->backgroundColorAndAlpha();
       m_bgComposite.image = m_renderer->backgroundImage();
 
-      state.buffer_params.width = m_frameData.size.x;
-      state.buffer_params.height = m_frameData.size.y;
-      state.buffer_params.full_width = m_frameData.size.x;
-      state.buffer_params.full_height = m_frameData.size.y;
+      state.buffer_params.width = renderSize.x;
+      state.buffer_params.height = renderSize.y;
+      state.buffer_params.full_width = renderSize.x;
+      state.buffer_params.full_height = renderSize.y;
 
       // The sample target must be in the (delayed) reset params -- a later
       // set_samples() would be clobbered when the reset is applied on the
@@ -349,6 +388,8 @@ void Frame::renderFrame()
     state.sessionSamples += m_renderer->pixelSamples();
     state.session->set_samples(state.sessionSamples);
     m_progressSampleTarget = state.sessionSamples;
+
+    m_lastRenderWasPreview = m_preview.active;
   }
 
   state.session->start();
@@ -550,6 +591,35 @@ void Frame::syncAuxPasses()
     pass->set_name(OIIO::ustring(d->passName));
     pass->set_type(d->passType);
   }
+}
+
+// CYCLES_RENDERER_INTERACTIVE_SCALING: pick the resolution divider for a
+// preview frame. A positive 'interactiveScalingDivider' renderer parameter
+// is used as-is; otherwise mirror the shape of the Cycles RenderScheduler
+// heuristic (render_scheduler.cpp, calculate_resolution_divider_for_time()):
+// the smallest power-of-two divider expected to bring the frame under the
+// target frame time -- estimated from the last measured full-res duration,
+// each halving of the resolution cutting the time by ~4x -- capped at 8 and
+// keeping the long image axis at >= 128 pixels. Before any full-res timing
+// exists, start at the cap (Blender's start_resolution_divider default).
+int Frame::choosePreviewDivider() const
+{
+  const int fixed = m_renderer->interactiveScalingDivider();
+  if (fixed > 0)
+    return fixed;
+
+  int divider = 8;
+  if (m_fullResDuration > 0.f) {
+    divider = 1;
+    const float target = m_renderer->interactiveScalingTargetFrameTime();
+    for (float estimate = m_fullResDuration; estimate > target && divider < 8;
+        estimate *= 0.25f)
+      divider *= 2;
+  }
+  const uint32_t longAxis = std::max(m_frameData.size.x, m_frameData.size.y);
+  while (divider > 1 && longAxis / uint32_t(divider) < 128)
+    divider /= 2;
+  return divider;
 }
 
 bool Frame::resetAccumulationNextFrame() const

@@ -36,6 +36,15 @@ struct Renderer : public Object
 
   bool runAsync() const;
   int pixelSamples() const;
+
+  // CYCLES_RENDERER_INTERACTIVE_SCALING: opt-in low-res preview frames on
+  // accumulation resets (camera/scene changes); consumed by
+  // Frame::renderFrame(), which only engages it while the frame uses
+  // 'accumulation'.
+  bool interactiveScaling() const;
+  int interactiveScalingDivider() const; // fixed divider; 0 -> automatic
+  float interactiveScalingTargetFrameTime() const; // seconds
+
   math::float3 backgroundColor() const;
   math::float4 backgroundColorAndAlpha() const;
 
@@ -67,6 +76,14 @@ struct Renderer : public Object
   bool m_runAsync{false};
   bool m_denoise{false};
   int m_pixelSamples{1};
+
+  // CYCLES_RENDERER_INTERACTIVE_SCALING parameters (defaults keep the
+  // feature off -- behavior is then identical to not having it at all).
+  struct {
+    bool enabled{false};
+    int divider{0}; // fixed divider override; 0 -> automatic
+    float targetFrameTime{1.f / 30.f}; // automatic-divider target, seconds
+  } m_interactive;
 
   // Vendor sampling/integrator controls (CYCLES_RENDERER_SAMPLING_CONTROLS).
   // Defaults mirror the Cycles Integrator/Film socket defaults so leaving

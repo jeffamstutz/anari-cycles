@@ -165,7 +165,16 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
       ANARI_SEVERITY_DEBUG, "receiving %i x %i frame", width, height);
 #endif
 
-  if (frameData.size.x != width || frameData.size.y != height) {
+  // CYCLES_RENDERER_INTERACTIVE_SCALING: a preview render delivers a
+  // complete divider-scaled tile. The extraction below then reads the
+  // passes at the tile's (small) size into the leading pixels of the
+  // full-res frame buffers, and upscalePreviewPasses() blows them up in
+  // place afterwards.
+  const bool preview = frame.m_preview.active
+      && uint32_t(width) == frame.m_preview.size.x
+      && uint32_t(height) == frame.m_preview.size.y;
+
+  if (!preview && (frameData.size.x != width || frameData.size.y != height)) {
     frame.reportMessage(ANARI_SEVERITY_WARNING,
         "rejecting frame -- buffer size mismatch,"
         " got {%i, %i} but target is {%i, %i}",
@@ -188,7 +197,88 @@ void FrameOutputDriver::write_render_tile(const Tile &tile)
     extractAovIdPass(tile, "instanceId", frame.m_instanceIdBuffer);
   extractLightgroupPasses(tile);
   extractAuxPasses(tile);
+  if (preview)
+    upscalePreviewPasses(tile);
   renderEnd();
+}
+
+// CYCLES_RENDERER_INTERACTIVE_SCALING: nearest-neighbor upscale of one
+// extracted preview pass, in place inside its full-res destination buffer
+// (the preview pixels occupy the first srcW*srcH*comps elements). Filling
+// the destination from the last pixel down never overwrites a source pixel
+// before it is read: a destination pixel's source always has a smaller (or
+// equal, only for the self-copy at pixel 0) linear index. Nearest keeps
+// depth/id channels merely blocky instead of blending unrelated values;
+// color previews are transient, so the simple filter is fine there too.
+template <typename T>
+static void upscaleNearestInPlace(
+    T *buf, int comps, int srcW, int srcH, int dstW, int dstH)
+{
+  if (!buf || (srcW == dstW && srcH == dstH))
+    return;
+  for (int y = dstH - 1; y >= 0; y--) {
+    const int sy = std::min(y * srcH / dstH, srcH - 1);
+    const T *srcRow = buf + size_t(sy) * srcW * comps;
+    T *dstRow = buf + size_t(y) * dstW * comps;
+    for (int x = dstW - 1; x >= 0; x--) {
+      const int sx = std::min(x * srcW / dstW, srcW - 1);
+      for (int c = comps - 1; c >= 0; c--)
+        dstRow[size_t(x) * comps + c] = srcRow[size_t(sx) * comps + c];
+    }
+  }
+}
+
+// Upscale every channel extracted from a preview tile to the frame's full
+// resolution (guards mirror the per-channel extraction guards above).
+void FrameOutputDriver::upscalePreviewPasses(const Tile &tile)
+{
+  auto &frame = *m_impl->frame;
+  const int srcW = tile.size.x;
+  const int srcH = tile.size.y;
+  const int dstW = frame.m_frameData.size.x;
+  const int dstH = frame.m_frameData.size.y;
+
+  if (frame.m_colorType == ANARI_FLOAT32_VEC4) {
+    upscaleNearestInPlace(
+        (float *)frame.m_pixelBuffer.data(), 4, srcW, srcH, dstW, dstH);
+  } else if (frame.m_colorType != ANARI_UNKNOWN) {
+    upscaleNearestInPlace(
+        (uint32_t *)frame.m_pixelBuffer.data(), 1, srcW, srcH, dstW, dstH);
+  }
+  if (frame.m_depthType == ANARI_FLOAT32) {
+    upscaleNearestInPlace(
+        frame.m_depthBuffer.data(), 1, srcW, srcH, dstW, dstH);
+  }
+  if (frame.m_normalType == ANARI_FLOAT32_VEC3) {
+    upscaleNearestInPlace(
+        frame.m_normalBuffer.data(), 3, srcW, srcH, dstW, dstH);
+  }
+  if (frame.m_albedoType == ANARI_FLOAT32_VEC3) {
+    upscaleNearestInPlace(
+        frame.m_albedoBuffer.data(), 3, srcW, srcH, dstW, dstH);
+  }
+  if (frame.m_objectIdType == ANARI_UINT32) {
+    upscaleNearestInPlace(
+        frame.m_objectIdBuffer.data(), 1, srcW, srcH, dstW, dstH);
+  }
+  if (frame.m_primitiveIdType == ANARI_UINT32) {
+    upscaleNearestInPlace(
+        frame.m_primitiveIdBuffer.data(), 1, srcW, srcH, dstW, dstH);
+  }
+  if (frame.m_instanceIdType == ANARI_UINT32) {
+    upscaleNearestInPlace(
+        frame.m_instanceIdBuffer.data(), 1, srcW, srcH, dstW, dstH);
+  }
+  for (auto &lg : frame.m_lightgroupChannels) {
+    if (!lg.buffer.empty())
+      upscaleNearestInPlace(lg.buffer.data(), 3, srcW, srcH, dstW, dstH);
+  }
+  for (auto &aux : frame.m_auxChannels) {
+    if (!aux.buffer.empty() && aux.active) {
+      upscaleNearestInPlace(
+          aux.buffer.data(), aux.desc->components, srcW, srcH, dstW, dstH);
+    }
+  }
 }
 
 bool FrameOutputDriver::renderBegin(Frame *f)

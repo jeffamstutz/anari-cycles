@@ -174,6 +174,28 @@ converge early, so frames complete normally), and Film `exposure` +
 `pixelFilter`/`pixelFilterWidth`. All defaults equal the Cycles socket defaults, and the
 state is pushed with change-detecting Cycles setters, so unset parameters change nothing.
 
+Interactive resolution scaling — **DONE** as `CYCLES_RENDERER_INTERACTIVE_SCALING`
+(json/cycles_ext_renderer_interactive_scaling.json, task 35): device-side emulation of
+the Cycles viewport resolution divider (the native `use_resolution_divider` path is
+incompatible with the OutputDriver/ANARI frame model — see the task's investigation).
+Opt-in renderer parameters `interactiveScaling` (default off) +
+`interactiveScalingDivider` (0 = automatic from the previous full-res frame time,
+targeting `interactiveScalingTargetFrameTime`, capped at 8, long axis kept ≥ 128 px;
+Cycles' heuristic shape). Only engages while frame `accumulation` is on: an
+accumulation-reset frame (camera/scene change) renders a complete divider-scaled
+preview — Cycles camera and buffer params both scaled, so the delivered tile is honest —
+and `FrameOutputDriver::upscalePreviewPasses()` nearest-upscales every extracted channel
+(color/depth/normal/albedo/ids/lightgroups/aux) in place into the full-res buffers; the
+next unchanged frame forces one full-res reset restarting accumulation from sample 0
+(mirroring the scheduler's divider step-down), after which refinement proceeds as usual.
+`nextFrameReset` reports true after a preview. Measured ~9-40x faster camera-move frames
+(divider 4 fixed / 8 auto, 1200x800). Accepted caveats: preview frames are blocky in
+*all* channels (ids/depth included — picking during navigation is approximate, same as
+Blender), and the first frame after a change is an upscaled preview rather than a
+full-res 1-sample image (hence opt-in). Behavioral test:
+/tmp/anari-cycles-rendertests/interactive_scaling_test.c (fixed + auto divider + default-off
+sequences; asserts preview speedup, forced full-res restart cost, and `nextFrameReset`).
+
 Still-unexposed renderer candidates:
 - **Path guiding** (`use_guiding`) — not compiled in (needs OpenPGL/WITH_PATH_GUIDING);
   expose once the build enables it.
@@ -372,7 +394,8 @@ Device/session:
   override, late-change warning). Caveat: this build compiles only the CPU backend
   (ANARI_CYCLES_USE_OPTIX=OFF), so GPU selection paths are exercised via their
   warn-and-fallback branches only.
-- `pixelSize`, `threads`, progressive resolution divider for interactive use.
+- `pixelSize`, `threads`. (Progressive resolution divider for interactive use —
+  **DONE** as `CYCLES_RENDERER_INTERACTIVE_SCALING`, see §4.2.)
 
 ---
 
