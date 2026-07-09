@@ -124,8 +124,11 @@ bool SamplerImageLoader::load_metadata(ccl::ImageMetaData &metadata,
 
   metadata.use_transform_3d = false;
 
+  // scene_linear_srgb, not u_colorspace_srgb: the latter makes
+  // ImageMetaData::finalize() upgrade BYTE4 storage to HALF4 for an OCIO
+  // conversion, mismatching the byte pixels load_pixels() writes.
   if (isSRGB(m_dataType))
-    metadata.colorspace = ccl::u_colorspace_srgb;
+    metadata.colorspace = ccl::u_colorspace_scene_linear_srgb;
 
   return true;
 }
