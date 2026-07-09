@@ -42,7 +42,7 @@ TransferFunction1D::~TransferFunction1D() = default;
 
 bool TransferFunction1D::isValid() const
 {
-  return m_field && m_field->isValid() && m_colorData && m_opacityData;
+  return m_field && m_field->isValid();
 }
 
 void TransferFunction1D::commitParameters()
@@ -50,21 +50,17 @@ void TransferFunction1D::commitParameters()
   m_field = getParamObject<SpatialField>("value");
   m_valueRange = getParam<helium::box1>("valueRange", helium::box1{0.f, 1.f});
   m_colorData = getParamObject<Array1D>("color");
+  m_uniformColor = {1.f, 1.f, 1.f, 1.f};
+  getParam("color", ANARI_FLOAT32_VEC3, &m_uniformColor);
+  getParam("color", ANARI_FLOAT32_VEC4, &m_uniformColor);
   m_opacityData = getParamObject<Array1D>("opacity");
+  m_uniformOpacity = getParam<float>("opacity", 1.f);
   m_unitDistance = getParam<float>("unitDistance", 1.f);
   m_id = getParam<uint32_t>("id", ~0u);
 
   if (!m_field) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "no spatial field provided to transferFunction1D volume");
-  }
-  if (!m_colorData) {
-    reportMessage(ANARI_SEVERITY_WARNING,
-        "no color data provided to transferFunction1D volume");
-  }
-  if (!m_opacityData) {
-    reportMessage(ANARI_SEVERITY_WARNING,
-        "no opacity data provided to transferFunction1D volume");
   }
 }
 
@@ -98,23 +94,37 @@ void TransferFunction1D::rebuildCyclesShaderGraph()
     mapRange->set_from_max(m_valueRange.upper);
     graph->connect(fieldValue, mapRange->input("Value"));
 
+    // The color array may be float4 with opacity baked into alpha, float3
+    // (implicit alpha of 1), or absent entirely (uniform 'color' parameter).
+    // Color alpha and the opacity array/parameter multiply together.
     std::vector<ccl::float3> colors;
-    if (m_colorData->elementType() == ANARI_FLOAT32_VEC3) {
+    std::vector<float> colorAlphas;
+    if (!m_colorData) {
+      colors.push_back(ccl::make_float3(
+          m_uniformColor[0], m_uniformColor[1], m_uniformColor[2]));
+      colorAlphas.push_back(m_uniformColor[3]);
+    } else if (m_colorData->elementType() == ANARI_FLOAT32_VEC3) {
       auto *c = m_colorData->beginAs<anari_vec::float3>();
       for (size_t i = 0; i < m_colorData->size(); ++i)
         colors.push_back(ccl::make_float3(c[i][0], c[i][1], c[i][2]));
+      colorAlphas.push_back(1.f);
     } else if (m_colorData->elementType() == ANARI_FLOAT32_VEC4) {
       auto *c = m_colorData->beginAs<anari_vec::float4>();
-      for (size_t i = 0; i < m_colorData->size(); ++i)
+      for (size_t i = 0; i < m_colorData->size(); ++i) {
         colors.push_back(ccl::make_float3(c[i][0], c[i][1], c[i][2]));
+        colorAlphas.push_back(c[i][3]);
+      }
     } else {
       reportMessage(ANARI_SEVERITY_WARNING,
           "unsupported color array element type on transferFunction1D volume");
       colors.push_back(ccl::make_float3(1.f, 1.f, 1.f));
+      colorAlphas.push_back(1.f);
     }
 
     std::vector<float> opacities;
-    if (m_opacityData->elementType() == ANARI_FLOAT32) {
+    if (!m_opacityData) {
+      opacities.push_back(m_uniformOpacity);
+    } else if (m_opacityData->elementType() == ANARI_FLOAT32) {
       auto *o = m_opacityData->beginAs<float>();
       opacities.assign(o, o + m_opacityData->size());
     } else {
@@ -124,8 +134,10 @@ void TransferFunction1D::rebuildCyclesShaderGraph()
     }
 
     // Guard against zero-length arrays (sampleArray would read out of bounds)
-    if (colors.empty())
+    if (colors.empty()) {
       colors.push_back(ccl::make_float3(1.f, 1.f, 1.f));
+      colorAlphas.push_back(1.f);
+    }
     if (opacities.empty())
       opacities.push_back(1.f);
 
@@ -143,7 +155,8 @@ void TransferFunction1D::rebuildCyclesShaderGraph()
     for (int i = 0; i < lutSize; ++i) {
       const float x = float(i) / float(lutSize - 1);
       ramp->get_ramp()[i] = sampleArray(colors, x);
-      ramp->get_ramp_alpha()[i] = sampleArray(opacities, x);
+      ramp->get_ramp_alpha()[i] =
+          sampleArray(colorAlphas, x) * sampleArray(opacities, x);
     }
     graph->connect(mapRange->output("Result"), ramp->input("Fac"));
 

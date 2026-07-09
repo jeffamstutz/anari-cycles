@@ -27,6 +27,8 @@ struct TransferFunction1D : public FieldVolume
 
   helium::ChangeObserverPtr<Array1D> m_colorData;
   helium::ChangeObserverPtr<Array1D> m_opacityData;
+  anari_vec::float4 m_uniformColor{1.f, 1.f, 1.f, 1.f};
+  float m_uniformOpacity{1.f};
 };
 
 } // namespace anari_cycles
