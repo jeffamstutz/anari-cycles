@@ -87,6 +87,48 @@ set(WITH_CYCLES_OSL                   OFF CACHE BOOL "Open Shading Language supp
 set(WITH_CYCLES_PUGIXML               ON  CACHE BOOL "XML support (requires pugixml)")
 set(WITH_CYCLES_USD                   OFF CACHE BOOL "USD scene support (requires USD)")
 
+# NanoVDB volume support ('nanovdb' spatial fields + tricubic filtering).
+# NanoVDB itself is header-only, but Cycles' VDB image pipeline hard-requires
+# the OpenVDB *library* as well (scene/image_vdb.cpp only compiles its
+# WITH_NANOVDB path against OpenVDB grids), so WITH_CYCLES_NANOVDB=ON must be
+# paired with WITH_CYCLES_OPENVDB=ON (found via -DOPENVDB_ROOT_DIR=<prefix>).
+# The NanoVDB headers usually ship with OpenVDB; when they are not installed
+# (some distro OpenVDB packages omit them), fetch the headers from the OpenVDB
+# release carrying the NanoVDB version this Cycles snapshot was tested with.
+if(WITH_CYCLES_NANOVDB)
+  if(NOT WITH_CYCLES_OPENVDB)
+    message(FATAL_ERROR
+      "WITH_CYCLES_NANOVDB=ON requires WITH_CYCLES_OPENVDB=ON: Cycles "
+      "builds its NanoVDB volume images from OpenVDB grids."
+    )
+  endif()
+  find_path(NANOVDB_INCLUDE_DIR
+    NAMES nanovdb/NanoVDB.h
+    HINTS ${NANOVDB_ROOT_DIR} ENV NANOVDB_ROOT_DIR
+          ${OPENVDB_ROOT_DIR} ENV OPENVDB_ROOT_DIR
+    PATH_SUFFIXES include
+  )
+  if(NOT NANOVDB_INCLUDE_DIR)
+    include(FetchContent)
+    # Deliberately the direct (multi-argument) FetchContent_Populate form:
+    # this downloads and extracts only — the OpenVDB superproject must never
+    # be add_subdirectory'd, we only want its nanovdb/ headers. (CMP0169
+    # deprecates the single-argument Declare+Populate form, not this one.)
+    FetchContent_Populate(nanovdb_headers
+      URL https://github.com/AcademySoftwareFoundation/openvdb/archive/refs/tags/v11.0.0.tar.gz
+      URL_HASH SHA256=6314ff1db057ea90050763e7b7d7ed86d8224fcd42a82cdbb9c515e001b96c74
+      SOURCE_DIR ${CMAKE_BINARY_DIR}/_deps/nanovdb_headers-src
+    )
+    # Header-only use: just put the fetched nanovdb/ directory on the include
+    # path (never add_subdirectory the OpenVDB superproject).
+    set(NANOVDB_INCLUDE_DIR
+      ${CMAKE_BINARY_DIR}/_deps/nanovdb_headers-src/nanovdb
+      CACHE PATH "NanoVDB include directory (fetched headers)" FORCE
+    )
+    message(STATUS "NanoVDB headers not found locally; fetched to ${NANOVDB_INCLUDE_DIR}")
+  endif()
+endif()
+
 # These are derived from the ANARI_CYCLES_USE_* options above, so keep them in
 # sync on reconfigure (FORCE); without it a pre-existing cache entry wins and
 # toggling the ANARI_CYCLES_USE_* option silently does nothing.

@@ -39,7 +39,11 @@ struct FieldVolume : public Volume
 
  protected:
   // (Re)build the scene-owned bounding-box mesh over m_bounds using m_shader.
-  void syncCyclesMesh();
+  // 'fields' are the spatial fields sampled by the shader graph (null entries
+  // allowed): rebuilding the mesh drops attached attributes, so each field
+  // re-attaches its Cycles voxel-grid image (if any), and the shader-wide
+  // tricubic volume interpolation flag is derived from them.
+  void syncCyclesMesh(std::initializer_list<const SpatialField *> fields);
   // Retire the proxy mesh (invalid-volume path); scene->objects may still
   // reference it, so deletion is deferred.
   void retireMesh();

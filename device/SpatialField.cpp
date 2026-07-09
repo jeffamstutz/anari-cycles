@@ -3,19 +3,123 @@
 
 // std
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstring>
 // ours
 #include "SpatialField.h"
 #include "VolumeImageLoader.h"
 // cycles
+#include "scene/geometry.h"
 #include "scene/scene.h"
 #include "scene/shader_nodes.h"
 
+#if defined(WITH_OPENVDB) && defined(WITH_NANOVDB)
+// Cycles' native VDB volume path: VDBImageLoader converts an OpenVDB grid to
+// the NanoVDB image sampled by the kernel, so both libraries are required.
+#define ANARI_CYCLES_HAS_VDB 1
+// cycles
+#include "scene/image_vdb.h" // pulls in <nanovdb/NanoVDB.h> + GridHandle
+// openvdb/nanovdb
+#include <openvdb/openvdb.h>
+#if NANOVDB_MAJOR_VERSION_NUMBER > 32 || \
+    (NANOVDB_MAJOR_VERSION_NUMBER == 32 && NANOVDB_MINOR_VERSION_NUMBER >= 7)
+#include <nanovdb/tools/NanoToOpenVDB.h>
+#else
+#include <nanovdb/util/NanoToOpenVDB.h>
+#endif
+#endif
+
 namespace anari_cycles {
+
+namespace {
+
+// All spatial field images are non-color voxel data; only the loader and the
+// interpolation mode differ between the atlas and VDB paths.
+ccl::ImageHandle addFieldImage(CyclesGlobalState &state,
+    std::unique_ptr<ccl::ImageLoader> loader,
+    InterpolationType interpolation)
+{
+  ccl::ImageParams params;
+  params.alpha_type = IMAGE_ALPHA_AUTO;
+  params.colorspace = ccl::u_colorspace_data;
+  params.interpolation = interpolation;
+  return state.scene->image_manager->add_image(
+      std::move(loader), params, false);
+}
+
+} // namespace
+
+#ifdef ANARI_CYCLES_HAS_VDB
+
+namespace {
+
+// VDBImageLoader with device-controlled precision and no value clipping:
+// ANARI fields hand us explicit voxel data, so nothing may be dropped or
+// quantized beyond what the input grid already encodes.
+class FieldVDBImageLoader : public ccl::VDBImageLoader
+{
+ public:
+  FieldVDBImageLoader(
+      openvdb::GridBase::ConstPtr g, const char *name, int gridPrecision)
+      : VDBImageLoader(std::move(g), name, 0.f)
+  {
+    precision = gridPrecision;
+  }
+
+  // Dense scalar voxels (structuredRegular filter="cubic"): 'objectToTexture'
+  // maps object space to the [0,1]^3 texture space spanning dims*spacing from
+  // the field origin, which lands voxel centers on integer grid indices.
+  FieldVDBImageLoader(const float *voxels,
+      const anari_vec::uint3 &dims,
+      const ccl::Transform &objectToTexture,
+      const char *name)
+      : VDBImageLoader(name, 0.f)
+  {
+    precision = 32;
+    grid_from_dense_voxels(dims[0], dims[1], dims[2], 1, voxels, objectToTexture);
+  }
+};
+
+openvdb::GridBase::Ptr nanovdbGridToOpenVDB(const nanovdb::GridHandle<> &handle)
+{
+#if NANOVDB_MAJOR_VERSION_NUMBER > 32 || \
+    (NANOVDB_MAJOR_VERSION_NUMBER == 32 && NANOVDB_MINOR_VERSION_NUMBER >= 7)
+  return nanovdb::tools::nanoToOpenVDB(handle);
+#else
+  return nanovdb::nanoToOpenVDB(handle);
+#endif
+}
+
+// Precision VDBImageLoader re-encodes the grid with, chosen to not degrade
+// the input: quantized NanoVDB grids stay quantized, everything else keeps
+// full float precision.
+int gridImagePrecision(nanovdb::GridType gridType)
+{
+  switch (gridType) {
+    case nanovdb::GridType::Fp4:
+    case nanovdb::GridType::Fp8:
+    case nanovdb::GridType::Fp16:
+    case nanovdb::GridType::Half:
+      return 16;
+    case nanovdb::GridType::FpN:
+      return 0;
+    default:
+      return 32;
+  }
+}
+
+} // namespace
+
+#endif // ANARI_CYCLES_HAS_VDB
 
 SpatialField::SpatialField(CyclesGlobalState *s)
     : Object(ANARI_SPATIAL_FIELD, s)
-{}
+{
+  static std::atomic<uint64_t> s_nextFieldIndex{0};
+  m_voxelAttributeName = ccl::ustring(
+      "ANARI_spatial_field_" + std::to_string(s_nextFieldIndex++));
+}
 
 SpatialField::~SpatialField() = default;
 
@@ -24,6 +128,8 @@ SpatialField *SpatialField::createInstance(
 {
   if (subtype == "structuredRegular")
     return new StructuredRegularField(s);
+  else if (subtype == "nanovdb")
+    return new NanoVDBField(s);
   else
     return (SpatialField *)new UnknownObject(ANARI_SPATIAL_FIELD, subtype, s);
 }
@@ -31,6 +137,30 @@ SpatialField *SpatialField::createInstance(
 void SpatialField::finalize()
 {
   Object::finalize();
+}
+
+void SpatialField::attachVoxelAttributes(ccl::Geometry *geom) const
+{
+  if (m_voxelImage.empty())
+    return;
+  auto *attr = geom->attributes.add(
+      m_voxelAttributeName, ccl::TypeFloat, ccl::ATTR_ELEMENT_VOXEL);
+  attr->data_voxel_for_write() = m_voxelImage;
+}
+
+bool SpatialField::cubicVolumeInterpolation() const
+{
+  return false;
+}
+
+ccl::ShaderOutput *SpatialField::createVoxelSamplingNodes(
+    ccl::ShaderGraph *graph)
+{
+  if (m_voxelImage.empty())
+    return nullptr;
+  auto *attr = graph->create_node<ccl::AttributeNode>();
+  attr->set_attribute(m_voxelAttributeName);
+  return attr->output("Fac");
 }
 
 // Subtypes ///////////////////////////////////////////////////////////////////
@@ -48,15 +178,24 @@ void StructuredRegularField::commitParameters()
   m_data = getParamObject<helium::Array3D>("data");
   m_origin = getParam<helium::float3>("origin", helium::float3(0.f));
   m_spacing = getParam<helium::float3>("spacing", helium::float3(1.f));
-  m_linearFilter = getParamString("filter", "linear") != "nearest";
+
+  const std::string filter = getParamString("filter", "linear");
+  if (filter == "nearest")
+    m_filter = Filter::NEAREST;
+  else if (filter == "cubic")
+    m_filter = Filter::CUBIC;
+  else
+    m_filter = Filter::LINEAR;
 }
 
 void StructuredRegularField::finalize()
 {
+  m_atlas = ccl::ImageHandle();
+  m_voxelImage = ccl::ImageHandle();
+
   if (!m_data) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "missing required parameter 'data' on 'structuredRegular' field");
-    m_atlas = ccl::ImageHandle();
     SpatialField::finalize();
     return;
   }
@@ -65,7 +204,11 @@ void StructuredRegularField::finalize()
   if (!isValid()) {
     reportMessage(ANARI_SEVERITY_WARNING,
         "'data' on 'structuredRegular' field has a zero-sized dimension");
-    m_atlas = ccl::ImageHandle();
+    SpatialField::finalize();
+    return;
+  }
+
+  if (m_filter == Filter::CUBIC && finalizeCubicGrid()) {
     SpatialField::finalize();
     return;
   }
@@ -78,18 +221,60 @@ void StructuredRegularField::finalize()
   m_tilesX = std::min(std::max(uint32_t(std::lround(idealTilesX)), 1u), nz);
   m_tilesY = (nz + m_tilesX - 1) / m_tilesX;
 
-  auto &state = *deviceState();
-  auto loader =
-      std::make_unique<VolumeImageLoader>(m_data.get(), m_tilesX, m_tilesY);
-  ccl::ImageParams params;
-  params.alpha_type = IMAGE_ALPHA_AUTO;
-  params.colorspace = ccl::u_colorspace_data;
-  params.interpolation =
-      m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST;
-  m_atlas =
-      state.scene->image_manager->add_image(std::move(loader), params, false);
+  m_atlas = addFieldImage(*deviceState(),
+      std::make_unique<VolumeImageLoader>(m_data.get(), m_tilesX, m_tilesY),
+      m_filter == Filter::NEAREST ? INTERPOLATION_CLOSEST
+                                  : INTERPOLATION_LINEAR);
 
   SpatialField::finalize();
+}
+
+bool StructuredRegularField::finalizeCubicGrid()
+{
+#ifdef ANARI_CYCLES_HAS_VDB
+  if (!voxelToFloatSupported(m_data->elementType())) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "unsupported voxel type on 'structuredRegular' field with "
+        "filter='cubic'; falling back to 'linear'");
+    return false;
+  }
+
+  const size_t n = size_t(m_dims[0]) * m_dims[1] * m_dims[2];
+  std::vector<float> voxels(n);
+  convertVoxelsToFloat(
+      m_data->elementType(), m_data->data(), 0, voxels.data(), n);
+
+  openvdb::initialize();
+
+  const ccl::Transform objectToTexture =
+      transform_scale(make_float3(1.f / (m_dims[0] * m_spacing[0]),
+          1.f / (m_dims[1] * m_spacing[1]),
+          1.f / (m_dims[2] * m_spacing[2]))) *
+      transform_translate(
+          make_float3(-m_origin[0], -m_origin[1], -m_origin[2]));
+
+  try {
+    m_voxelImage = addFieldImage(*deviceState(),
+        std::make_unique<FieldVDBImageLoader>(voxels.data(),
+            m_dims,
+            objectToTexture,
+            "ANARI structuredRegular cubic"),
+        INTERPOLATION_LINEAR); // the kernel forces cubic via the shader flag
+  } catch (const std::exception &e) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "building the VDB grid for filter='cubic' on 'structuredRegular' "
+        "field failed (%s); falling back to 'linear'",
+        e.what());
+    return false;
+  }
+  return true;
+#else
+  reportMessage(ANARI_SEVERITY_WARNING,
+      "filter='cubic' on 'structuredRegular' field requires a device built "
+      "with WITH_CYCLES_NANOVDB=ON and WITH_CYCLES_OPENVDB=ON; falling back "
+      "to 'linear'");
+  return false;
+#endif
 }
 
 bool StructuredRegularField::isValid() const
@@ -97,10 +282,25 @@ bool StructuredRegularField::isValid() const
   return m_data && m_dims[0] > 0 && m_dims[1] > 0 && m_dims[2] > 0;
 }
 
+bool StructuredRegularField::cubicVolumeInterpolation() const
+{
+  return !m_voxelImage.empty();
+}
+
 ccl::ShaderOutput *StructuredRegularField::createCyclesSamplingNodes(
     ccl::ShaderGraph *graph)
 {
-  if (!isValid() || m_atlas.empty())
+  if (!isValid())
+    return nullptr;
+  if (!m_voxelImage.empty())
+    return createVoxelSamplingNodes(graph);
+  return createAtlasSamplingNodes(graph);
+}
+
+ccl::ShaderOutput *StructuredRegularField::createAtlasSamplingNodes(
+    ccl::ShaderGraph *graph)
+{
+  if (m_atlas.empty())
     return nullptr;
 
   const float nx = float(m_dims[0]);
@@ -215,7 +415,7 @@ ccl::ShaderOutput *StructuredRegularField::createCyclesSamplingNodes(
     return tex->output("Color");
   };
 
-  if (!m_linearFilter || m_dims[2] < 2) {
+  if (m_filter == Filter::NEAREST || m_dims[2] < 2) {
     // Nearest (or single-slice) lookup: slice = floor(zf + 0.5)
     auto *rounded =
         mathNode(ccl::NODE_MATH_ADD, zf->output("Value"), nullptr, 0.f, 0.5f);
@@ -307,6 +507,155 @@ bool StructuredRegularField::getDenseVoxelGrid(std::vector<float> &voxels,
   convertVoxelsToFloat(
       m_data->elementType(), m_data->data(), 0, voxels.data(), n);
   return true;
+}
+
+// NanoVDBField //
+
+NanoVDBField::NanoVDBField(CyclesGlobalState *s)
+    : SpatialField(s), m_data(this), m_bounds(empty_box3())
+{}
+
+NanoVDBField::~NanoVDBField() = default;
+
+void NanoVDBField::commitParameters()
+{
+  m_data = getParamObject<Array1D>("data");
+  m_linearFilter = getParamString("filter", "linear") != "nearest";
+}
+
+void NanoVDBField::finalize()
+{
+  m_voxelImage = ccl::ImageHandle();
+  m_bounds = empty_box3();
+  m_stepSize = 0.f;
+
+  if (!m_data) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "missing required parameter 'data' on 'nanovdb' field");
+    SpatialField::finalize();
+    return;
+  }
+
+  if (m_data->elementType() != ANARI_UINT8) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'data' on 'nanovdb' field must be an ANARI_UINT8 array "
+        "(a serialized NanoVDB grid)");
+    SpatialField::finalize();
+    return;
+  }
+
+#ifndef ANARI_CYCLES_HAS_VDB
+  reportMessage(ANARI_SEVERITY_WARNING,
+      "'nanovdb' field requires a device built with WITH_CYCLES_NANOVDB=ON "
+      "and WITH_CYCLES_OPENVDB=ON");
+#else
+  openvdb::initialize();
+
+  try {
+    // Copy the blob into a NanoVDB-owned buffer: ANARI arrays guarantee no
+    // particular alignment while NanoVDB grids require
+    // NANOVDB_DATA_ALIGNMENT, and the copy also decouples the Cycles image
+    // (loaded lazily at render time) from the ANARI array's lifetime.
+    auto buffer = nanovdb::HostBuffer::create(m_data->size());
+    std::memcpy(buffer.data(), m_data->data(), m_data->size());
+    const nanovdb::GridHandle<> handle(std::move(buffer));
+
+    const nanovdb::GridMetaData *metadata = handle.gridMetaData(0);
+    if (!metadata || !metadata->isValid()) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "'data' on 'nanovdb' field is not a valid serialized NanoVDB grid");
+      SpatialField::finalize();
+      return;
+    }
+    if (handle.gridCount() > 1) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "'data' on 'nanovdb' field holds %u grids; using the first",
+          handle.gridCount());
+    }
+    if (metadata->isEmpty()) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "'data' on 'nanovdb' field has no active voxels");
+      SpatialField::finalize();
+      return;
+    }
+
+    if (metadata->hasBBox()) {
+      const auto &worldBounds = metadata->worldBBox();
+      m_bounds.lower[0] = float(worldBounds.min()[0]);
+      m_bounds.lower[1] = float(worldBounds.min()[1]);
+      m_bounds.lower[2] = float(worldBounds.min()[2]);
+      m_bounds.upper[0] = float(worldBounds.max()[0]);
+      m_bounds.upper[1] = float(worldBounds.max()[1]);
+      m_bounds.upper[2] = float(worldBounds.max()[2]);
+    } else {
+      // Grids serialized without stats lack the precomputed world-space
+      // bounds; derive them by mapping the index-space bounds (expanded to
+      // voxel corners) through the grid transform.
+      const auto &indexBounds = metadata->indexBBox();
+      const double lo[3] = {double(indexBounds.min()[0]),
+          double(indexBounds.min()[1]),
+          double(indexBounds.min()[2])};
+      const double hi[3] = {double(indexBounds.max()[0]) + 1.0,
+          double(indexBounds.max()[1]) + 1.0,
+          double(indexBounds.max()[2]) + 1.0};
+      for (int corner = 0; corner < 8; ++corner) {
+        const nanovdb::Vec3d p = metadata->map().applyMap(
+            nanovdb::Vec3d(corner & 1 ? hi[0] : lo[0],
+                corner & 2 ? hi[1] : lo[1],
+                corner & 4 ? hi[2] : lo[2]));
+        for (int axis = 0; axis < 3; ++axis) {
+          m_bounds.lower[axis] = std::min(m_bounds.lower[axis], float(p[axis]));
+          m_bounds.upper[axis] = std::max(m_bounds.upper[axis], float(p[axis]));
+        }
+      }
+    }
+
+    const auto voxelSize = metadata->voxelSize();
+    m_stepSize = float(std::min({voxelSize[0], voxelSize[1], voxelSize[2]}));
+
+    // Cycles samples VDB volumes from a NanoVDB image built out of an OpenVDB
+    // grid (VDBImageLoader), so round-trip the input grid through OpenVDB.
+    openvdb::GridBase::Ptr grid = nanovdbGridToOpenVDB(handle);
+    if (!grid) {
+      reportMessage(ANARI_SEVERITY_WARNING,
+          "unsupported NanoVDB grid type on 'nanovdb' field");
+      SpatialField::finalize();
+      return;
+    }
+
+    m_voxelImage = addFieldImage(*deviceState(),
+        std::make_unique<FieldVDBImageLoader>(
+            grid, "ANARI nanovdb", gridImagePrecision(metadata->gridType())),
+        m_linearFilter ? INTERPOLATION_LINEAR : INTERPOLATION_CLOSEST);
+  } catch (const std::exception &e) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "'data' on 'nanovdb' field is not a valid serialized NanoVDB grid: %s",
+        e.what());
+  }
+#endif
+
+  SpatialField::finalize();
+}
+
+ccl::ShaderOutput *NanoVDBField::createCyclesSamplingNodes(
+    ccl::ShaderGraph *graph)
+{
+  return createVoxelSamplingNodes(graph);
+}
+
+box3 NanoVDBField::bounds() const
+{
+  return m_bounds;
+}
+
+float NanoVDBField::stepSize() const
+{
+  return m_stepSize;
+}
+
+bool NanoVDBField::isValid() const
+{
+  return m_data && !m_voxelImage.empty();
 }
 
 } // namespace anari_cycles
