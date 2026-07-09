@@ -77,7 +77,7 @@ Registry source: `~/opt/anari/share/anari/code_gen/api/*.json`. Device claims 17
 | Camera | perspective, orthographic | **omnidirectional** | trivial — Cycles `CAMERA_PANORAMA` + `PANORAMA_EQUIRECTANGULAR` |
 | Light | directional, hdri, point, spot, quad | **ring** | Cycles `AreaLight` with `ellipse=true` (easy) |
 | Sampler | image1D, image2D | **image3D, primitive, transform** | transform = pure graph math (easy); primitive = per-prim attribute lookup (medium); image3D blocked by Cycles dropping dense 3D textures (consider NanoVDB conversion) |
-| Spatial field | structuredRegular (non-functional) | **nanovdb, unstructured**, structuredRegularCubic | nanovdb is a *direct* fit to Cycles `VDBImageLoader` — do this first |
+| Spatial field | structuredRegular (nearest/linear/cubic filters), nanovdb (DONE 2026-07-08: `KHR_SPATIAL_FIELD_NANOVDB` + `KHR_SPATIAL_FIELD_STRUCTURED_REGULAR_CUBIC` — serialized NanoVDB blob round-tripped through `nanoToOpenVDB` into Cycles' `VDBImageLoader`, attached as a voxel-grid attribute on the volume's proxy mesh and sampled via `AttributeNode`; `filter` maps to the image interpolation, cubic to the shader-wide `VOLUME_INTERPOLATION_CUBIC` flag; structuredRegular cubic converts its dense voxels through `grid_from_dense_voxels`. Needs `WITH_CYCLES_NANOVDB`+`WITH_CYCLES_OPENVDB`, see BUILDING.md; without them nanovdb warns/invalid and cubic falls back to linear. Isosurface extraction from nanovdb fields is not implemented — `getDenseVoxelGrid` returns false) | **unstructured** | unstructured has no Cycles analogue (would need resampling) |
 | Instance | transform (+array) | **motionTransform, motionScaleRotationTranslation** | Cycles objects support motion transform arrays natively (`Object::motion`, up to 129 steps) |
 | Material | matte, physicallyBased | — (both exist; param gaps below) | |
 
@@ -147,7 +147,10 @@ From a survey of `cycles/src/scene/` + `session/`. Ordered roughly by value/effo
 ### 4.1 Features that fill KHR extensions (do these as spec work, not vendor exts)
 - **NanoVDB volumes** → `KHR_SPATIAL_FIELD_NANOVDB` (Cycles `VDBImageLoader`,
   `WITH_NANOVDB`); also the practical route to make `structuredRegular` work via
-  `grid_from_dense_voxels()` (image_vdb.h:57).
+  `grid_from_dense_voxels()` (image_vdb.h:57) — **DONE** (task 22, 2026-07-08):
+  `nanovdb` field subtype + `KHR_SPATIAL_FIELD_STRUCTURED_REGULAR_CUBIC` and the
+  structuredRegular `filter` parameter (nearest/linear via the 2D-atlas path,
+  cubic via the VDB voxel-attribute path). See §2.1.
 - **Curves/hair** → `KHR_GEOMETRY_CURVE` (Cycles `Hair`, ribbon/thick/linear shapes).
 - **Motion blur** → `KHR_INSTANCE_MOTION_TRANSFORM`, `KHR_CAMERA_SHUTTER`,
   geometry motion deformation (Cycles motion steps up to 129, `use_motion_blur`)

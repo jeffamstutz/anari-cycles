@@ -8,6 +8,7 @@
 // cycles
 #include "scene/mesh.h"
 #include "scene/scene.h"
+#include "scene/shader.h"
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
 
@@ -107,7 +108,8 @@ void FieldVolume::applyVolumeStepRate(const SpatialField *field)
   }
 }
 
-void FieldVolume::syncCyclesMesh()
+void FieldVolume::syncCyclesMesh(
+    std::initializer_list<const SpatialField *> fields)
 {
   auto &state = *deviceState();
 
@@ -168,6 +170,29 @@ void FieldVolume::syncCyclesMesh()
   used_shaders.push_back_slow(m_shader);
   m_mesh->set_used_shaders(used_shaders);
 
+  // Native VDB-backed fields sample a Cycles voxel-grid attribute; the
+  // clear() above dropped any previously attached grids, so re-attach them.
+  // Tricubic filtering is a shader-wide flag in Cycles, so it applies when
+  // any sampled field asks for it.
+  bool cubic = false;
+  bool nonCubicVoxelField = false;
+  for (const SpatialField *field : fields) {
+    if (!field)
+      continue;
+    field->attachVoxelAttributes(m_mesh);
+    cubic |= field->cubicVolumeInterpolation();
+    nonCubicVoxelField |=
+        field->usesVoxelAttributes() && !field->cubicVolumeInterpolation();
+  }
+  if (cubic && nonCubicVoxelField) {
+    reportMessage(ANARI_SEVERITY_WARNING,
+        "volume mixes a filter='cubic' spatial field with other grid-backed "
+        "fields; Cycles' tricubic volume interpolation is per-shader, so it "
+        "overrides those fields' 'filter' setting");
+  }
+  m_shader->set_volume_interpolation_method(
+      cubic ? ccl::VOLUME_INTERPOLATION_CUBIC : ccl::VOLUME_INTERPOLATION_LINEAR);
+
   m_mesh->tag_update(state.scene, true);
 }
 
@@ -221,7 +246,7 @@ void TransferFunction1D::finalize()
   m_bounds = m_field->bounds();
 
   rebuildCyclesShaderGraph();
-  syncCyclesMesh();
+  syncCyclesMesh({m_field.get()});
 
   Volume::finalize();
 }
@@ -370,7 +395,7 @@ void PrincipledVolume::finalize()
   m_bounds = m_field->bounds();
 
   rebuildCyclesShaderGraph();
-  syncCyclesMesh();
+  syncCyclesMesh({m_field.get(), m_temperatureField.get()});
 
   Volume::finalize();
 }

@@ -33,6 +33,33 @@ cmake -DANARI_CYCLES_USE_OIDN=ON \
   `FindOpenImageDenoise.cmake` (a CMake cache variable or an environment
   variable). Tested with OIDN 2.3 (the vendored Cycles supports 1.x and 2.x).
 
+## VDB volumes (KHR_SPATIAL_FIELD_NANOVDB, structuredRegular filter="cubic")
+
+The `nanovdb` spatial field subtype and tricubic filtering on
+`structuredRegular` fields use Cycles' native VDB volume path:
+
+```sh
+cmake -DWITH_CYCLES_OPENVDB=ON \
+      -DWITH_CYCLES_NANOVDB=ON \
+      -DOPENVDB_ROOT_DIR=<openvdb-install-prefix> \
+      <build-dir>
+```
+
+- Both flags are required together: NanoVDB itself is header-only, but
+  Cycles' VDB image pipeline (`scene/image_vdb.cpp`) hard-requires the
+  OpenVDB *library* — its `WITH_NANOVDB` code path builds the NanoVDB images
+  the kernel samples out of OpenVDB grids. The top-level CMakeLists enforces
+  this pairing.
+- The NanoVDB headers are searched next to OpenVDB
+  (`NANOVDB_ROOT_DIR`/`OPENVDB_ROOT_DIR`, cache or environment variables).
+  When not found — some distro OpenVDB packages omit them — they are fetched
+  automatically (FetchContent, network access required at configure time)
+  from the OpenVDB v11.0.0 release, which carries the NanoVDB 32.6 headers
+  this tree was tested against.
+- Without VDB support, `nanovdb` fields warn and yield an invalid field, and
+  `filter="cubic"` warns and falls back to `linear`.
+- Tested with OpenVDB 11.0.1 / NanoVDB 32.6.
+
 ### OptiX denoiser
 
 When the OptiX backend is enabled (`-DANARI_CYCLES_USE_OPTIX=ON`), the OptiX

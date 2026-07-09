@@ -144,3 +144,16 @@ noise differs). The CTS has no KHR_GEOMETRY_*_MOTION_DEFORMATION tests, so
 claiming the extensions flips nothing from skipped to scored. anariRenderTests
 is also identical to the parent commit (12/13 PNGs byte-equal;
 perf_spinning_cubes differs run-to-run even on one build — animated test).
+
+## Update after task 22 (nanovdb spatial field + cubic filter, 2026-07-08)
+
+Fresh helide ground truth (190 generated, 124 skipped) and the whole-suite
+command (128x128, --accumulation 16): **17 passed / 158 failed / 139
+skipped** — totals identical to the task 36 run. The CTS has no
+KHR_SPATIAL_FIELD_NANOVDB / STRUCTURED_REGULAR_CUBIC tests, so claiming them
+flips nothing from skipped to scored, and the default (linear) structuredRegular
+path is untouched (volume/volume verdicts unchanged). Primary verification was
+a standalone behavioral test (see the task file): a NanoVDB fog-volume sphere
+renders and matches a densely-resampled structuredRegular equivalent to <0.1%
+mean luminance, filter=nearest/linear differ on the nanovdb path, and
+nearest/linear/cubic all differ pairwise on an 8^3 structuredRegular field.

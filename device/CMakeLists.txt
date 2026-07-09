@@ -78,6 +78,22 @@ if(WITH_CYCLES_OPENSUBDIV)
   # degrade to linear dicing in a build without OpenSubdiv.
   target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPENSUBDIV)
 endif()
+if(WITH_CYCLES_OPENVDB)
+  # Must match the Cycles build: scene/image_vdb.h (included by
+  # SpatialField.cpp) changes layout with these defines.
+  target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_OPENVDB)
+  target_include_directories(${PROJECT_NAME} PRIVATE ${OPENVDB_INCLUDE_DIR})
+endif()
+if(WITH_CYCLES_NANOVDB)
+  # Enables the native VDB volume path: the 'nanovdb' spatial field subtype
+  # (KHR_SPATIAL_FIELD_NANOVDB) and structuredRegular filter="cubic"
+  # (KHR_SPATIAL_FIELD_STRUCTURED_REGULAR_CUBIC). Both also need
+  # WITH_CYCLES_OPENVDB (Cycles' VDBImageLoader converts through OpenVDB);
+  # without VDB support the subtype warns and yields an invalid field, and
+  # cubic falls back to linear.
+  target_compile_definitions(${PROJECT_NAME} PRIVATE WITH_NANOVDB)
+  target_include_directories(${PROJECT_NAME} PRIVATE ${NANOVDB_INCLUDE_DIR})
+endif()
 if(WITH_CYCLES_OSL)
   # Enables the CYCLES_MATERIAL_OSL runtime path ('osl' material subtype,
   # OSLMaterial in Material.cpp) and the session-wide OSL shading system

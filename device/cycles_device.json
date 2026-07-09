@@ -77,6 +77,8 @@
       "cycles_ext_material_osl",
       "cycles_ext_device_selection",
       "khr_spatial_field_structured_regular",
+      "khr_spatial_field_structured_regular_cubic",
+      "khr_spatial_field_nanovdb",
       "khr_volume_transfer_function1d",
       "cycles_ext_volume_principled",
       "khr_frame_channel_object_id"

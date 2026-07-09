@@ -20,10 +20,11 @@ void convertVoxelsToFloat(
     ANARIDataType type, const void *src, size_t offset, float *dst, size_t n);
 
 // Loads the voxels of a structuredRegular spatial field as a tiled 2D float
-// atlas (one Z slice per tile). Cycles removed dense 3D image textures and
-// this build has no NanoVDB/OpenVDB support, so the shader graph built by
-// StructuredRegularField reconstructs trilinear 3D sampling from two bilinear
-// atlas lookups.
+// atlas (one Z slice per tile). Cycles removed dense 3D image textures, so
+// the shader graph built by StructuredRegularField reconstructs trilinear 3D
+// sampling from two bilinear atlas lookups. (filter="cubic" and the 'nanovdb'
+// field instead use Cycles' native VDB voxel-attribute path when the build
+// has NanoVDB/OpenVDB support; see SpatialField.cpp.)
 class VolumeImageLoader : public ccl::ImageLoader
 {
  public:
