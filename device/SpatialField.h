@@ -36,16 +36,10 @@ struct SpatialField : public Object
   // Fields sampled through Cycles' native voxel-grid (VDB) path store their
   // grid image in m_voxelImage; the consuming volume re-attaches it to its
   // geometry here on every finalize (the geometry was just rebuilt, which
-  // drops previously attached attributes).
+  // drops previously attached attributes). Filtering — including tricubic —
+  // is carried per grid image (ImageParams::interpolation), so fields with
+  // different 'filter' settings can share one volume shader.
   void attachVoxelAttributes(ccl::Geometry *geom) const;
-
-  // True when this field's voxel-grid lookups need Cycles' shader-wide
-  // tricubic volume interpolation (structuredRegular filter="cubic").
-  virtual bool cubicVolumeInterpolation() const;
-
-  // True when this field samples through a Cycles voxel-grid attribute (the
-  // native VDB path) rather than shader-graph math.
-  bool usesVoxelAttributes() const { return !m_voxelImage.empty(); }
 
   virtual box3 bounds() const = 0;
 
@@ -68,7 +62,7 @@ struct SpatialField : public Object
  protected:
   // Shader-graph side of the voxel-grid path: an AttributeNode bound to
   // m_voxelAttributeName (the kernel samples the attached grid image at the
-  // shading position, honoring the image interpolation / cubic shader flag).
+  // shading position with the image's own interpolation mode).
   ccl::ShaderOutput *createVoxelSamplingNodes(ccl::ShaderGraph *graph);
 
   // Grid image sampled through the voxel attribute (empty when this field
@@ -93,7 +87,6 @@ struct StructuredRegularField : public SpatialField
   void finalize() override;
 
   ccl::ShaderOutput *createCyclesSamplingNodes(ccl::ShaderGraph *graph) override;
-  bool cubicVolumeInterpolation() const override;
 
   box3 bounds() const override;
   float stepSize() const override;
@@ -106,9 +99,9 @@ struct StructuredRegularField : public SpatialField
 
  private:
   // filter="cubic" (KHR_SPATIAL_FIELD_STRUCTURED_REGULAR_CUBIC): converts the
-  // dense voxels to a Cycles VDB grid image sampled with the shader-wide
-  // tricubic interpolation flag. Returns false (falling back to the 2D-atlas
-  // path) when the build lacks VDB support or the voxel type is unsupported.
+  // dense voxels to a Cycles VDB grid image whose per-image interpolation is
+  // tricubic. Returns false (falling back to the 2D-atlas path) when the
+  // build lacks VDB support or the voxel type is unsupported.
   bool finalizeCubicGrid();
   ccl::ShaderOutput *createAtlasSamplingNodes(ccl::ShaderGraph *graph);
 
@@ -151,6 +144,14 @@ struct NanoVDBField : public SpatialField
   box3 bounds() const override;
   float stepSize() const override;
   bool isValid() const override;
+
+  // Isosurface support: densely resamples the grid over its index-space
+  // bounds. Fails (empty isosurface) for non-axis-aligned grid transforms
+  // and for grids whose dense expansion exceeds a sanity cap.
+  bool getDenseVoxelGrid(std::vector<float> &voxels,
+      anari_vec::uint3 &dims,
+      anari_vec::float3 &origin,
+      anari_vec::float3 &spacing) const override;
 
  private:
   helium::ChangeObserverPtr<Array1D> m_data;
