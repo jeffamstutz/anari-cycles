@@ -62,3 +62,6 @@ ANARI_LIBRARY=cycles ~/opt/anari/bin/anariCts            # conformance suite
 - 31-ext-material-sss-volume-toon.md
 - 32-ext-device-selection.md
 - 33-ext-sky-light.md
+
+**Performance / interactivity**
+- 35-interactive-resolution-scaling.md
