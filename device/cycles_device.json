@@ -69,6 +69,7 @@
       "cycles_khr_renderer_background_image",
       "khr_renderer_denoise",
       "cycles_ext_renderer_sampling_controls",
+      "cycles_ext_renderer_interactive_scaling",
       "cycles_ext_frame_channels",
       "cycles_ext_surface_compositing",
       "cycles_ext_light_linking",

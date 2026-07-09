@@ -56,6 +56,19 @@ struct Frame : public helium::BaseFrame
     bool scaleBySamples; // sampleCount: rescale normalized value to counts
   };
 
+  // CYCLES_RENDERER_INTERACTIVE_SCALING: preview state of the render in
+  // flight (written in renderFrame() before the session starts, read by the
+  // output driver when the tile arrives). When 'active', the session renders
+  // a complete divider-scaled frame -- both the Cycles camera and the buffer
+  // params are set to 'size' -- and FrameOutputDriver::write_render_tile()
+  // nearest-upscales every extracted channel into the full-res buffers.
+  struct PreviewState
+  {
+    bool active{false};
+    int divider{1};
+    uint2 size = make_uint2(0, 0);
+  };
+
   // One entry per requested vendor frame channel this commit.
   struct AuxChannel
   {
@@ -98,6 +111,9 @@ struct Frame : public helium::BaseFrame
 
  private:
   bool resetAccumulationNextFrame() const;
+  // CYCLES_RENDERER_INTERACTIVE_SCALING: pick the resolution divider for a
+  // preview frame (fixed override or the Cycles-style timing heuristic).
+  int choosePreviewDivider() const;
   // Make the scene's set of per-lightgroup combined passes match this
   // frame's 'channel.lightgroup.*' channels (runs under the SceneLock on
   // every accumulation reset).
@@ -141,6 +157,14 @@ struct Frame : public helium::BaseFrame
   std::vector<AuxChannel> m_auxChannels;
 
   BackgroundComposite m_bgComposite;
+
+  // CYCLES_RENDERER_INTERACTIVE_SCALING bookkeeping: the preview state of
+  // the render in flight, whether the previous render of this frame was a
+  // preview (the next unchanged frame then forces one full-res reset), and
+  // the duration of the last full-res render (seeds the automatic divider).
+  PreviewState m_preview;
+  bool m_lastRenderWasPreview{false};
+  float m_fullResDuration{0.f};
 
   // KHR_FRAME_COMPLETION_CALLBACK: invoked by the FrameOutputDriver's
   // callback thread after each render of this frame finishes.

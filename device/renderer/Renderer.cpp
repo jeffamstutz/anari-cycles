@@ -113,6 +113,16 @@ void Renderer::commitParameters()
   m_needsUpdateStatus.denoise |= (m_denoise != denoise);
   m_denoise = denoise;
 
+  // CYCLES_RENDERER_INTERACTIVE_SCALING: low-res preview frames on
+  // accumulation resets. No change tracking needed -- a parameter change
+  // resets accumulation, and the values are only read per-render by
+  // Frame::renderFrame().
+  m_interactive.enabled = getParam<bool>("interactiveScaling", false);
+  m_interactive.divider =
+      std::max(0, getParam<int>("interactiveScalingDivider", 0));
+  m_interactive.targetFrameTime = std::max(
+      1e-3f, getParam<float>("interactiveScalingTargetFrameTime", 1.f / 30.f));
+
   // Vendor sampling/integrator controls -- no change tracking needed here:
   // any parameter change resets accumulation, which re-runs
   // makeRendererCurrent()/pushSamplingState(), and the Cycles socket setters
@@ -334,6 +344,21 @@ bool Renderer::runAsync() const
 int Renderer::pixelSamples() const
 {
   return m_pixelSamples;
+}
+
+bool Renderer::interactiveScaling() const
+{
+  return m_interactive.enabled;
+}
+
+int Renderer::interactiveScalingDivider() const
+{
+  return m_interactive.divider;
+}
+
+float Renderer::interactiveScalingTargetFrameTime() const
+{
+  return m_interactive.targetFrameTime;
 }
 
 math::float3 Renderer::backgroundColor() const

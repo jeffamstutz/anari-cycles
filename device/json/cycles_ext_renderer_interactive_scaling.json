@@ -1,0 +1,51 @@
+{
+ "info": {
+  "name": "CYCLES_RENDERER_INTERACTIVE_SCALING",
+  "type": "extension",
+  "comment": "Cycles vendor extension: device-side emulation of the Cycles viewport resolution divider for fast interaction. When enabled and the frame uses 'accumulation', any frame that restarts accumulation (camera/scene change) renders at a divider-scaled resolution and is upscaled (nearest) into the full-resolution channels; the next unchanged frame renders once at full resolution restarting accumulation from sample 0, then refinement proceeds as usual. Default off: behavior is then bit-identical to not having the extension.",
+  "dependencies": []
+ },
+ "objects": [
+  {
+   "type": "ANARI_RENDERER",
+   "name": "default",
+   "parameters": [
+    {
+     "name": "interactiveScaling",
+     "types": [
+      "ANARI_BOOL"
+     ],
+     "tags": [],
+     "default": [
+      false
+     ],
+     "description": "render accumulation-reset (camera/scene change) frames at reduced resolution, upscaled to the frame size; only engages while the frame's 'accumulation' is enabled. Preview frames upscale all channels, so depth/id channels are blocky until interaction stops"
+    },
+    {
+     "name": "interactiveScalingDivider",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      0
+     ],
+     "minimum": 0,
+     "description": "fixed resolution divider for preview frames (1 disables scaling); 0 picks a power-of-two divider automatically from the previous full-resolution frame time, targeting 'interactiveScalingTargetFrameTime' (capped at 8, long image axis kept >= 128 pixels)"
+    },
+    {
+     "name": "interactiveScalingTargetFrameTime",
+     "types": [
+      "ANARI_FLOAT32"
+     ],
+     "tags": [],
+     "default": [
+      0.0333
+     ],
+     "minimum": 0.001,
+     "description": "target preview frame time in seconds for the automatic divider selection (default ~1/30 s, matching the Cycles viewport heuristic)"
+    }
+   ]
+  }
+ ]
+}
