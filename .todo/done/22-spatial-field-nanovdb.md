@@ -57,3 +57,30 @@ identical totals to the task 36 baseline (no CTS coverage exists for these exten
 Build hygiene: clean reconfigure with only `OPENVDB_ROOT_DIR` set finds the NanoVDB
 headers; the FetchContent fallback (headers absent) was exercised in isolation and
 hash-verifies the OpenVDB v11.0.0 tarball.
+
+## Follow-up (2026-07-08, same day): isosurface, per-image cubic, skew guard
+
+1. `NanoVDBField::getDenseVoxelGrid` implemented (isosurfaces over nanovdb
+   fields work): densifies the grid over its index bbox (float/double/Fp4/
+   Fp8/Fp16/FpN value types), origin/spacing derived from the grid map with
+   an axis-alignment check, overflow-safe 64M-voxel cap. Verified by
+   `/tmp/anari-nanovdb-test/isosurface_test.cpp`: isosurface(0.5) over the
+   NanoVDB fog sphere renders (mean 0.237) and matches the same isosurface
+   over the densely-resampled structuredRegular equivalent exactly.
+2. Mixed-filter limitation properly fixed (not just warned): filter="cubic"
+   now sets the *grid image's* interpolation (`kernel_image_interp_3d` uses
+   `info.interpolation` when the shader-wide `SD_VOLUME_CUBIC` flag is
+   unset, which it now always is). Single-field renders are byte-identical
+   to the shader-flag implementation (test.cpp diffs unchanged), and
+   `/tmp/anari-nanovdb-test/mixed_test.cpp` (principled volume: cubic
+   structuredRegular density + nearest nanovdb temperature) renders with no
+   errors and no mixed-filter warning.
+3. CMake version-skew guard: when the NanoVDB-header fetch triggers and the
+   local OpenVDB major version differs from the pinned release (11), a
+   warning names both versions and points at NANOVDB_ROOT_DIR. Exercised in
+   isolation against a fake OpenVDB-12 prefix (warns) and an OpenVDB-11
+   prefix (silent).
+
+anariRenderTests after the follow-up: 12/13 PNGs byte-identical to the
+pre-follow-up run (perf_spinning_cubes is the known animated run-to-run
+variance); whole-suite CTS not rerun (volume renders byte-identical).

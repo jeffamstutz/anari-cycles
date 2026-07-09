@@ -55,7 +55,10 @@ cmake -DWITH_CYCLES_OPENVDB=ON \
   When not found — some distro OpenVDB packages omit them — they are fetched
   automatically (FetchContent, network access required at configure time)
   from the OpenVDB v11.0.0 release, which carries the NanoVDB 32.6 headers
-  this tree was tested against.
+  this tree was tested against. When the fetch kicks in and the local
+  OpenVDB is a different major release, configure emits a version-skew
+  warning; if the build then fails in NanoVDB/OpenVDB conversion code, set
+  `NANOVDB_ROOT_DIR` to the NanoVDB headers matching your OpenVDB release.
 - Without VDB support, `nanovdb` fields warn and yield an invalid field, and
   `filter="cubic"` warns and falls back to `linear`.
 - Tested with OpenVDB 11.0.1 / NanoVDB 32.6.
