@@ -178,14 +178,10 @@ set(WITH_CYCLES_OPENIMAGEDENOISE ${ANARI_CYCLES_USE_OIDN}  CACHE BOOL "" FORCE)
 # path lookup at that directory.
 set(WITH_CYCLES_CUDA_BINARIES ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "" FORCE)
 if(ANARI_CYCLES_USE_OPTIX)
-  if(NOT OPTIX_ROOT_DIR)
-    message(FATAL_ERROR
-      "ANARI_CYCLES_USE_OPTIX=ON requires -DOPTIX_ROOT_DIR=<path to OptiX "
-      "SDK (>= 8.0)> so the OptiX kernels can be precompiled at build time. "
-      "The SDK is only needed to build; the resulting plugin does not need "
-      "it at runtime."
-    )
-  endif()
+  # Building needs OptiX headers (>= 8.0) only — no SDK libraries. Use
+  # -DOPTIX_ROOT_DIR=<path> if you have the SDK or the optix-dev headers
+  # locally; otherwise the headers are fetched from github.com/NVIDIA/optix-dev.
+  include(cmake/FetchOptiXHeaders.cmake)
 
   # Trimmed architecture list (Cycles' default builds a dozen cubins, minutes
   # of nvcc time each). compute_75 PTX alone covers every Turing+ GPU: the

@@ -14,16 +14,19 @@ oneTBB. Point CMake at non-system installs with `CMAKE_PREFIX_PATH` (or
 ## GPU rendering (CUDA / OptiX)
 
 ```sh
-cmake -DANARI_CYCLES_USE_OPTIX=ON \
-      -DOPTIX_ROOT_DIR=<optix-sdk-root> \
-      <build-dir>
+cmake -DANARI_CYCLES_USE_OPTIX=ON <build-dir>
 ```
 
 - `ANARI_CYCLES_USE_OPTIX` drives Cycles' `WITH_CYCLES_DEVICE_CUDA`,
   `WITH_CYCLES_DEVICE_OPTIX`, and `WITH_CYCLES_CUDA_BINARIES` (all
   force-synced on reconfigure). Building needs the CUDA toolkit (`nvcc`) and
-  the OptiX SDK headers (>= 8.0, `OPTIX_ROOT_DIR` is required); **neither is
-  needed at runtime**.
+  the OptiX headers (>= 8.0); **neither is needed at runtime**. OptiX is a
+  header-only API (the implementation ships in the NVIDIA driver), so no SDK
+  install is required: when `OPTIX_ROOT_DIR` is not set, the headers are
+  fetched automatically from
+  [NVIDIA/optix-dev](https://github.com/NVIDIA/optix-dev) (pinned to v8.0.0,
+  see `cmake/FetchOptiXHeaders.cmake`). Set `-DOPTIX_ROOT_DIR=<path>` to use a
+  local OptiX SDK or a specific header version instead.
 - The GPU kernels are precompiled at build time and placed next to the plugin
   under `cycles/lib/` (`kernel_*.zst`) in both the build tree and the install
   tree (`<libdir>/cycles/lib`). The plugin locates them relative to its own
