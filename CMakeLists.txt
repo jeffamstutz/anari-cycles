@@ -202,7 +202,11 @@ if(ANARI_CYCLES_USE_OPTIX)
   endif()
 endif()
 
-add_subdirectory(cycles)
+# EXCLUDE_FROM_ALL keeps Cycles' install rules (standalone app, kernel
+# sources, headers, licenses) out of this project's install; only the ANARI
+# device is installed. The Cycles libraries still build as link dependencies
+# of the device, but the standalone 'cycles' app no longer builds by default.
+add_subdirectory(cycles EXCLUDE_FROM_ALL)
 
 # Cycles finds TBB headers and library independently, so a CMAKE_PREFIX_PATH
 # holding several TBB copies can pair legacy (2020) headers with a oneTBB
