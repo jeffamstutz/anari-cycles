@@ -167,6 +167,57 @@ anari_generate_queries(
   JSON_EXTENSION_FILES "${LOCAL_EXTENSION_JSONS}"
 )
 
+## Precompiled GPU kernels ##
+
+# Cycles registers every precompiled kernel (kernel_*.{cubin,ptx}.zst) with its
+# delayed-install machinery; the artifact paths are only exposed through the
+# DELAYED_INSTALL_FILES global property. Mirror the .zst files into
+# <plugin dir>/cycles/lib in both the build and install trees — Library.cpp
+# calls ccl::path_init() with the plugin-relative cycles/ root, and Cycles
+# resolves kernels at path_get("lib/...").
+if(WITH_CYCLES_CUDA_BINARIES)
+  get_property(_delayed_install_files GLOBAL PROPERTY DELAYED_INSTALL_FILES)
+  set(ANARI_CYCLES_KERNEL_FILES "")
+  foreach(_f IN LISTS _delayed_install_files)
+    if(_f MATCHES "/kernel_[^/]+\\.zst$")
+      list(APPEND ANARI_CYCLES_KERNEL_FILES ${_f})
+    endif()
+  endforeach()
+  list(REMOVE_DUPLICATES ANARI_CYCLES_KERNEL_FILES)
+  unset(_delayed_install_files)
+
+  if(NOT ANARI_CYCLES_KERNEL_FILES)
+    message(FATAL_ERROR
+      "WITH_CYCLES_CUDA_BINARIES is ON but no precompiled kernel artifacts "
+      "were registered by the Cycles build (check the CUDA/OptiX toolchain "
+      "detection output above)."
+    )
+  endif()
+
+  # The .zst files are custom-command outputs owned by Cycles' kernel targets,
+  # so depend on those targets (file-level dependencies do not cross
+  # directories with the Makefile generator) and copy after they are built.
+  # The plugin itself lives at ${CMAKE_BINARY_DIR}, so the build tree is
+  # usable in place.
+  add_custom_target(anari_cycles_gpu_kernels ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/cycles/lib"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      ${ANARI_CYCLES_KERNEL_FILES} "${CMAKE_BINARY_DIR}/cycles/lib"
+    COMMENT "Mirroring precompiled GPU kernels to cycles/lib"
+    VERBATIM
+  )
+  foreach(_kernel_target cycles_kernel_cuda cycles_kernel_optix)
+    if(TARGET ${_kernel_target})
+      add_dependencies(anari_cycles_gpu_kernels ${_kernel_target})
+    endif()
+  endforeach()
+  add_dependencies(${PROJECT_NAME} anari_cycles_gpu_kernels)
+
+  install(FILES ${ANARI_CYCLES_KERNEL_FILES}
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cycles/lib
+  )
+endif()
+
 ## Installation ##
 
 install(TARGETS ${PROJECT_NAME}

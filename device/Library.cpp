@@ -32,10 +32,50 @@
 #include "Device.h"
 #include "anari/backend/LibraryImpl.h"
 #include "anari_library_cycles_export.h"
+// cycles
+#include "util/log.h"
+#include "util/path.h"
+// std
+#include <cstdlib>
+#include <mutex>
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
 
 namespace anari_cycles {
 
 const char **query_extensions();
+
+// Point Cycles' runtime path lookup (ccl::path_get) at a root next to this
+// plugin instead of its default — the directory of the host *executable*,
+// which the plugin cannot control. Precompiled GPU kernels are installed at
+// <plugin dir>/cycles/lib/kernel_*.zst (see device/CMakeLists.txt), so with
+// root = <plugin dir>/cycles the kernels resolve without any runtime
+// dependency on the Cycles kernel source tree, nvcc, or the OptiX SDK.
+static void initCyclesRuntime()
+{
+  static std::once_flag onceFlag;
+  std::call_once(onceFlag, []() {
+    // Cycles logs (e.g. kernel resolution: "Using precompiled kernel") go to
+    // stdout/stderr, gated at 'info important' by default. Allow turning them
+    // up without code changes.
+    if (const char *level = std::getenv("ANARI_CYCLES_LOG_LEVEL"))
+      ccl::log_level_set(ccl::string(level));
+
+#ifndef _WIN32
+    Dl_info info;
+    if (dladdr(reinterpret_cast<void *>(&initCyclesRuntime), &info)
+        && info.dli_fname && info.dli_fname[0] != '\0') {
+      const ccl::string pluginDir = ccl::path_dirname(ccl::string(info.dli_fname));
+      ccl::path_init(ccl::path_join(pluginDir, "cycles"), "");
+    }
+#else
+    // TODO(Windows): resolve the module path via GetModuleHandleExA(
+    // GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS) + GetModuleFileNameA and call
+    // ccl::path_init() the same way.
+#endif
+  });
+}
 
 struct CyclesLibrary : public anari::LibraryImpl {
   CyclesLibrary(void *lib, ANARIStatusCallback defaultStatusCB, const void *statusCBPtr);
@@ -51,6 +91,7 @@ CyclesLibrary::CyclesLibrary(void *lib,
                              const void *statusCBPtr)
     : anari::LibraryImpl(lib, defaultStatusCB, statusCBPtr)
 {
+  initCyclesRuntime();
 }
 
 ANARIDevice CyclesLibrary::newDevice(const char * /*subtype*/)
@@ -75,5 +116,6 @@ extern "C" CYCLES_DEVICE_INTERFACE ANARI_DEFINE_LIBRARY_ENTRYPOINT(cycles, handl
 extern "C" CYCLES_DEVICE_INTERFACE ANARIDevice
 anariNewCyclesDevice(ANARIStatusCallback defaultCallback, const void *userPtr)
 {
+  anari_cycles::initCyclesRuntime();
   return (ANARIDevice) new anari_cycles::CyclesDevice(defaultCallback, userPtr);
 }

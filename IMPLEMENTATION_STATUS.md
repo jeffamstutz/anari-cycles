@@ -396,6 +396,16 @@ Device/session:
   warn-and-fallback branches only.
 - `pixelSize`, `threads`. (Progressive resolution divider for interactive use —
   **DONE** as `CYCLES_RENDERER_INTERACTIVE_SCALING`, see §4.2.)
+- Precompiled GPU kernels — **DONE** (task 37): `ANARI_CYCLES_USE_OPTIX=ON`
+  builds now precompile the CUDA/OptiX kernels (`kernel_*.zst`, arch list
+  `ANARI_CYCLES_CUDA_ARCHS`, default `compute_75`) and place them at
+  `<plugin dir>/cycles/lib` in both build and install trees;
+  `device/Library.cpp` self-locates via `dladdr` and points `ccl::path_init`
+  at that root. GPU rendering no longer needs the Cycles kernel source tree,
+  nvcc, or the OptiX SDK at runtime (first-run driver/OptiX JIT of the PTX is
+  cached). `ANARI_CYCLES_LOG_LEVEL` (fatal/error/warning/info/debug/trace)
+  exposes Cycles' own log stream, e.g. kernel resolution. See BUILDING.md.
+  Windows self-location is a TODO (`GetModuleHandleExA`).
 
 ---
 
