@@ -171,6 +171,41 @@ set(WITH_CYCLES_DEVICE_CUDA      ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "" FORCE)
 set(WITH_CYCLES_DEVICE_OPTIX     ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "" FORCE)
 set(WITH_CYCLES_OPENIMAGEDENOISE ${ANARI_CYCLES_USE_OIDN}  CACHE BOOL "" FORCE)
 
+# GPU builds precompile the CUDA/OptiX kernels at build time so the installed
+# plugin has no runtime dependency on the Cycles kernel source tree, nvcc, or
+# the OptiX SDK. The artifacts (kernel_*.zst) land next to the plugin under
+# cycles/lib/ (see device/CMakeLists.txt); device/Library.cpp points Cycles'
+# path lookup at that directory.
+set(WITH_CYCLES_CUDA_BINARIES ${ANARI_CYCLES_USE_OPTIX} CACHE BOOL "" FORCE)
+if(ANARI_CYCLES_USE_OPTIX)
+  if(NOT OPTIX_ROOT_DIR)
+    message(FATAL_ERROR
+      "ANARI_CYCLES_USE_OPTIX=ON requires -DOPTIX_ROOT_DIR=<path to OptiX "
+      "SDK (>= 8.0)> so the OptiX kernels can be precompiled at build time. "
+      "The SDK is only needed to build; the resulting plugin does not need "
+      "it at runtime."
+    )
+  endif()
+
+  # Trimmed architecture list (Cycles' default builds a dozen cubins, minutes
+  # of nvcc time each). compute_75 PTX alone covers every Turing+ GPU: the
+  # driver JIT-compiles it on first use and caches the result. Add sm_XX
+  # entries (e.g. sm_86) for instant startup on specific GPUs in
+  # distribution builds.
+  set(ANARI_CYCLES_CUDA_ARCHS compute_75 CACHE STRING
+    "CUDA architectures to precompile Cycles kernels for (compute_XX = PTX, sm_XX = cubin)"
+  )
+  set(CYCLES_CUDA_BINARIES_ARCH ${ANARI_CYCLES_CUDA_ARCHS} CACHE STRING "" FORCE)
+
+  # Belt-and-braces: bake the SDK path in so runtime JIT (adaptive compile, or
+  # an arch somehow not covered by the shipped kernels) can still find OptiX
+  # headers without the OPTIX_ROOT_DIR environment variable. This path never
+  # needs to exist on end-user machines.
+  if(NOT CYCLES_RUNTIME_OPTIX_ROOT_DIR)
+    set(CYCLES_RUNTIME_OPTIX_ROOT_DIR ${OPTIX_ROOT_DIR} CACHE PATH "" FORCE)
+  endif()
+endif()
+
 add_subdirectory(cycles)
 
 # Cycles finds TBB headers and library independently, so a CMAKE_PREFIX_PATH

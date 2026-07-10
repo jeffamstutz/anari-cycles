@@ -11,6 +11,35 @@ Required dependencies: ANARI SDK (>= 0.15), OpenImageIO, OpenColorIO (>= 2.2),
 oneTBB. Point CMake at non-system installs with `CMAKE_PREFIX_PATH` (or
 `TBB_ROOT`, `OpenColorIO_*` as needed).
 
+## GPU rendering (CUDA / OptiX)
+
+```sh
+cmake -DANARI_CYCLES_USE_OPTIX=ON \
+      -DOPTIX_ROOT_DIR=<optix-sdk-root> \
+      <build-dir>
+```
+
+- `ANARI_CYCLES_USE_OPTIX` drives Cycles' `WITH_CYCLES_DEVICE_CUDA`,
+  `WITH_CYCLES_DEVICE_OPTIX`, and `WITH_CYCLES_CUDA_BINARIES` (all
+  force-synced on reconfigure). Building needs the CUDA toolkit (`nvcc`) and
+  the OptiX SDK headers (>= 8.0, `OPTIX_ROOT_DIR` is required); **neither is
+  needed at runtime**.
+- The GPU kernels are precompiled at build time and placed next to the plugin
+  under `cycles/lib/` (`kernel_*.zst`) in both the build tree and the install
+  tree (`<libdir>/cycles/lib`). The plugin locates them relative to its own
+  path (`dladdr` + `ccl::path_init`), so installs are relocatable — keep the
+  `cycles/lib` directory next to `libanari_library_cycles.so` when packaging.
+  The Cycles kernel *source* tree does not need to be shipped.
+- `ANARI_CYCLES_CUDA_ARCHS` (default `compute_75`) selects the kernel
+  architectures. The default is a single PTX that covers every Turing+ GPU:
+  the driver JIT-compiles it on first use (slow first render, cached by the
+  driver; OptiX likewise JIT-compiles and caches per GPU). Add `sm_XX`
+  entries (cubins) for instant startup on known GPUs in distribution builds —
+  each arch costs minutes of nvcc time.
+- Diagnostics: set `ANARI_CYCLES_LOG_LEVEL=info` (fatal/error/warning/info/
+  debug/trace) to see Cycles' kernel resolution ("Using precompiled kernel")
+  and other internal logs on stdout/stderr.
+
 ## Denoising (KHR_RENDERER_DENOISE)
 
 The renderer's `denoise` parameter needs a denoiser compiled into Cycles.
