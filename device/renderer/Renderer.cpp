@@ -113,6 +113,14 @@ void Renderer::commitParameters()
   m_needsUpdateStatus.denoise |= (m_denoise != denoise);
   m_denoise = denoise;
 
+  // CYCLES_RENDERER_DENOISE_START: accumulated sample count at which
+  // 'channel.color' switches from the raw accumulation to the denoised
+  // result. Progressive accumulation has no sample limit to count back
+  // from, so negative values behave like 0 (denoise from the first sample).
+  auto denoiseStart = std::max(0, getParam<int>("denoiseStart", 0));
+  m_needsUpdateStatus.denoise |= (m_denoiseStart != denoiseStart);
+  m_denoiseStart = denoiseStart;
+
   // CYCLES_RENDERER_INTERACTIVE_SCALING: low-res preview frames on
   // accumulation resets. No change tracking needed -- a parameter change
   // resets accumulation, and the values are only read per-render by
@@ -258,17 +266,29 @@ void Renderer::makeRendererCurrent()
         "renderer -- set_use_denoise(%s)",
         m_denoise ? "true" : "false");
     deviceState()->scene->integrator->set_use_denoise(m_denoise);
+    // CYCLES_RENDERER_DENOISE_START: 'denoiseStart' maps to the native
+    // integrator socket, which suppresses the denoiser on intermediate
+    // scheduler works below the threshold. It cannot suppress the final
+    // one -- the Cycles render scheduler unconditionally denoises the last
+    // sample of every render, which in this device is the end of every
+    // ANARI frame -- so the user-visible gating happens on the read side:
+    // the output driver reads the noisy combined pass kept by
+    // syncNoisyColorPass() until the threshold is reached.
+    deviceState()->scene->integrator->set_denoise_start_sample(m_denoiseStart);
+    syncNoisyColorPass();
     // Cycles' finalize_passes() can only downgrade DENOISED→NOISY (when
     // denoise is off), never upgrade NOISY→DENOISED. Once a named pass
     // becomes NOISY it stays NOISY, causing the output driver to always
     // read the noisy buffer. Fix by restoring DENOISED mode on the named
     // combined pass before the scene update runs. Per-lightgroup combined
     // passes are skipped: they don't support denoising (Pass::get_info())
-    // and must stay NOISY.
+    // and must stay NOISY, and so is the deliberately-noisy pass kept by
+    // syncNoisyColorPass().
     if (m_denoise) {
       for (ccl::Pass *pass : deviceState()->scene->passes) {
         if (pass->get_type() == ccl::PASS_COMBINED && !pass->get_name().empty()
             && pass->get_lightgroup().empty()
+            && pass->get_name() != g_noisyCombinedPassName
             && pass->get_mode() != ccl::PassMode::DENOISED) {
           pass->set_mode(ccl::PassMode::DENOISED);
         }
@@ -284,6 +304,37 @@ void Renderer::makeRendererCurrent()
   }
 #endif
   pushSamplingState();
+}
+
+// CYCLES_RENDERER_DENOISE_START: while denoising is enabled, keep a named
+// NOISY combined pass in the scene. Film's finalize_passes() merges it with
+// the auto-generated (unnamed) noisy combined pass -- same type and mode,
+// and the merge adopts the name -- so it costs no extra buffer memory; it
+// only makes the raw accumulation addressable by name for the output
+// driver, which reads it instead of the denoised "combined" pass while the
+// accumulated sample count is below 'denoiseStart'. The pass is deleted
+// when denoising is off: the named "combined" pass is itself NOISY then,
+// and two differently named noisy combined passes would not merge (the
+// kernel only writes one of them). Runs under the frame's SceneLock right
+// before the session reset that rebuilds the buffer layout.
+void Renderer::syncNoisyColorPass()
+{
+  auto *scene = deviceState()->scene;
+  ccl::Pass *noisy = nullptr;
+  for (ccl::Pass *pass : scene->passes) {
+    if (pass->get_name() == g_noisyCombinedPassName) {
+      noisy = pass;
+      break;
+    }
+  }
+  if (m_denoise && !noisy) {
+    ccl::Pass *pass = scene->create_node<ccl::Pass>();
+    pass->set_name(OIIO::ustring(g_noisyCombinedPassName));
+    pass->set_type(ccl::PASS_COMBINED);
+    pass->set_mode(ccl::PassMode::NOISY);
+  } else if (!m_denoise && noisy) {
+    scene->delete_node(noisy);
+  }
 }
 
 // Push the vendor sampling/integrator controls to the shared Cycles
@@ -344,6 +395,20 @@ bool Renderer::runAsync() const
 int Renderer::pixelSamples() const
 {
   return m_pixelSamples;
+}
+
+bool Renderer::denoiseEnabled() const
+{
+#if defined(WITH_OPTIX) || defined(WITH_OPENIMAGEDENOISE)
+  return m_denoise;
+#else
+  return false;
+#endif
+}
+
+int Renderer::denoiseStart() const
+{
+  return m_denoiseStart;
 }
 
 bool Renderer::interactiveScaling() const

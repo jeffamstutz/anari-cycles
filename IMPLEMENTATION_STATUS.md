@@ -196,6 +196,27 @@ full-res 1-sample image (hence opt-in). Behavioral test:
 /tmp/anari-cycles-rendertests/interactive_scaling_test.c (fixed + auto divider + default-off
 sequences; asserts preview speedup, forced full-res restart cost, and `nextFrameReset`).
 
+Delayed denoising — **DONE** as `CYCLES_RENDERER_DENOISE_START`
+(json/cycles_ext_renderer_denoise_start.json): VisRTX-style `denoiseStart` renderer
+parameter (INT32, default 0) — with `denoise` on, `channel.color` shows the raw
+accumulation until the accumulated sample count reaches the threshold, then switches to
+the denoised result mid-accumulation (no reset). Implementation notes: Cycles'
+RenderScheduler unconditionally denoises the last sample of every render — the end of
+every ANARI frame here — so the native `denoise_start_sample` integrator socket (also
+set) only suppresses intermediate denoiser runs and cannot skip the per-frame one; and
+toggling `use_denoise` mid-accumulation is unsafe (it changes the pass set → kernel film
+offsets diverge from the frozen buffer layout). The gate is therefore on the read side:
+`Renderer::syncNoisyColorPass()` keeps a named NOISY combined pass (`combined_noisy`,
+merged by `finalize_passes()` with the auto noisy combined — zero extra buffer memory)
+and `FrameOutputDriver::extractColorPass()` reads it instead of the denoised `combined`
+while below the threshold. Unlike VisRTX the denoiser cost is still paid every frame;
+the threshold changes what is displayed. Negative values (VisRTX counts them back from
+its `sampleLimit`, which has no equivalent here) clamp to 0. Verified behaviorally:
+with `denoiseStart=8`, frames 1-7 byte-match the denoise-off run and frames 8+
+byte-match the always-denoised run (roughness metric, OIDN build,
+/tmp/anari-cycles-denoisestart/denoise_start_test.c); denoise-off and negative-start
+edge cases unchanged.
+
 Still-unexposed renderer candidates:
 - **Path guiding** (`use_guiding`) — not compiled in (needs OpenPGL/WITH_PATH_GUIDING);
   expose once the build enables it.

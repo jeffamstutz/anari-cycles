@@ -158,6 +158,13 @@ struct Frame : public helium::BaseFrame
 
   BackgroundComposite m_bgComposite;
 
+  // CYCLES_RENDERER_DENOISE_START: whether this render's 'channel.color'
+  // reads the raw (noisy) combined pass instead of the denoised one --
+  // true while denoising is on but the accumulated sample count is still
+  // below the renderer's 'denoiseStart' (written in renderFrame() before
+  // the session starts, read by the output driver when the tile arrives).
+  bool m_colorReadsNoisy{false};
+
   // CYCLES_RENDERER_INTERACTIVE_SCALING bookkeeping: the preview state of
   // the render in flight, whether the previous render of this frame was a
   // preview (the next unchanged frame then forces one full-res reset), and

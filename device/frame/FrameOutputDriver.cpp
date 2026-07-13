@@ -425,9 +425,16 @@ void FrameOutputDriver::extractColorPass(const Tile &tile)
 
   float *dst = isFloat ? (float *)m_impl->frame->m_pixelBuffer.data()
                        : (float *)m_impl->buffer.data();
-  if (!tile.get_pass_pixels("combined", 4, dst))
+  // CYCLES_RENDERER_DENOISE_START: below the renderer's 'denoiseStart'
+  // threshold the raw accumulation is shown instead of the denoised result;
+  // the noisy combined pass stays addressable by name while denoising is on
+  // (see Renderer::syncNoisyColorPass()).
+  const char *passName = m_impl->frame->m_colorReadsNoisy
+      ? g_noisyCombinedPassName
+      : "combined";
+  if (!tile.get_pass_pixels(passName, 4, dst))
     m_impl->frame->reportMessage(
-        ANARI_SEVERITY_ERROR, "Failed to read 'combined' pass");
+        ANARI_SEVERITY_ERROR, "Failed to read '%s' pass", passName);
 
   if (m_impl->frame->m_bgComposite.enabled)
     compositeBackground(m_impl->frame->m_bgComposite, dst, width, height);
