@@ -1,0 +1,30 @@
+{
+ "info": {
+  "name": "CYCLES_RENDERER_DENOISE_START",
+  "type": "extension",
+  "comment": "Cycles vendor extension: delayed denoising. When 'denoise' is enabled, 'denoiseStart' is the accumulated sample count at which 'channel.color' switches from the raw accumulation to the denoised result; frames below the threshold show the raw accumulation (useful to keep interaction responsive-looking and judge convergence before the denoiser smooths it over). Note the Cycles render scheduler still runs the denoiser at the end of every frame, so unlike some other implementations the threshold changes what is displayed, not the per-frame denoising cost. Accumulation is progressive with no sample limit to count back from, so negative values behave like 0 (denoise from the first sample).",
+  "dependencies": [
+   "khr_renderer_denoise"
+  ]
+ },
+ "objects": [
+  {
+   "type": "ANARI_RENDERER",
+   "name": "default",
+   "parameters": [
+    {
+     "name": "denoiseStart",
+     "types": [
+      "ANARI_INT32"
+     ],
+     "tags": [],
+     "default": [
+      0
+     ],
+     "minimum": 0,
+     "description": "accumulated sample count at which 'channel.color' switches from the raw accumulation to the denoised result (0 denoises from the first sample; negative values are treated as 0); only meaningful while 'denoise' is enabled"
+    }
+   ]
+  }
+ ]
+}

@@ -12,6 +12,12 @@
 
 namespace anari_cycles {
 
+// CYCLES_RENDERER_DENOISE_START: name of the noisy combined pass kept in
+// the scene while denoising is on (see Renderer::syncNoisyColorPass()); the
+// output driver reads it for 'channel.color' below the 'denoiseStart'
+// threshold.
+constexpr const char *g_noisyCombinedPassName = "combined_noisy";
+
 struct Renderer : public Object
 {
   // CPU copy of the 'background' image (KHR_RENDERER_BACKGROUND_IMAGE),
@@ -36,6 +42,15 @@ struct Renderer : public Object
 
   bool runAsync() const;
   int pixelSamples() const;
+
+  // Whether 'denoise' is on and a denoiser is compiled in. Only current
+  // after makeRendererCurrent().
+  bool denoiseEnabled() const;
+  // CYCLES_RENDERER_DENOISE_START: accumulated sample count at which
+  // 'channel.color' switches from the raw accumulation to the denoised
+  // result (never negative; 0 -- the default -- denoises from the first
+  // sample). Consumed by Frame::renderFrame().
+  int denoiseStart() const;
 
   // CYCLES_RENDERER_INTERACTIVE_SCALING: opt-in low-res preview frames on
   // accumulation resets (camera/scene changes); consumed by
@@ -75,6 +90,7 @@ struct Renderer : public Object
   float m_ambientRadiance;
   bool m_runAsync{false};
   bool m_denoise{false};
+  int m_denoiseStart{0};
   int m_pixelSamples{1};
 
   // CYCLES_RENDERER_INTERACTIVE_SCALING parameters (defaults keep the
@@ -121,6 +137,7 @@ struct Renderer : public Object
 
   void rebuildDefaultBackgroundShader();
   void rebakeBackgroundImage();
+  void syncNoisyColorPass();
   void pushSamplingState();
 };
 

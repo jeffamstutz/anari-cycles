@@ -389,6 +389,13 @@ void Frame::renderFrame()
     state.session->set_samples(state.sessionSamples);
     m_progressSampleTarget = state.sessionSamples;
 
+    // CYCLES_RENDERER_DENOISE_START: 'channel.color' shows the raw
+    // accumulation while the accumulated sample count stays below the
+    // renderer's 'denoiseStart'; the denoised result takes over once the
+    // threshold is reached, mid-accumulation, without a reset.
+    m_colorReadsNoisy = m_renderer->denoiseEnabled()
+        && m_progressSampleTarget < size_t(m_renderer->denoiseStart());
+
     m_lastRenderWasPreview = m_preview.active;
   }
 
