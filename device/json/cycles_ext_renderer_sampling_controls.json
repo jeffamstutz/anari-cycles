@@ -206,7 +206,7 @@
      ],
      "tags": [],
      "default": [
-      false
+      true
      ],
      "description": "skip sampling pixels that already converged below 'adaptiveThreshold' while accumulating (Cycles Integrator 'use_adaptive_sampling'); frames still complete normally, converged pixels just stop changing"
     },

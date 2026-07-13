@@ -168,17 +168,17 @@ bounce controls (`maxBounce` + per-type diffuse/glossy/transmission/volume/trans
 sample clamping (`clampDirect`/`clampIndirect` — tames indirect fireflies), light tree
 toggle + `lightSamplingThreshold`, caustics toggles + `filterGlossy`, fast-GI
 (`aoBounces`/`aoFactor`/`aoDistance`), adaptive sampling
-(`adaptiveSampling`/`adaptiveThreshold`/`adaptiveMinSamples` — verified to interoperate
+(`adaptiveSampling` (default on)/`adaptiveThreshold`/`adaptiveMinSamples` — verified to interoperate
 with the per-frame accumulation model: Cycles still delivers the render tile when pixels
 converge early, so frames complete normally), and Film `exposure` +
-`pixelFilter`/`pixelFilterWidth`. All defaults equal the Cycles socket defaults, and the
+`pixelFilter`/`pixelFilterWidth`. All defaults equal the Cycles socket defaults (except `adaptiveSampling`, on by default), and the
 state is pushed with change-detecting Cycles setters, so unset parameters change nothing.
 
 Interactive resolution scaling — **DONE** as `CYCLES_RENDERER_INTERACTIVE_SCALING`
 (json/cycles_ext_renderer_interactive_scaling.json, task 35): device-side emulation of
 the Cycles viewport resolution divider (the native `use_resolution_divider` path is
 incompatible with the OutputDriver/ANARI frame model — see the task's investigation).
-Opt-in renderer parameters `interactiveScaling` (default off) +
+Renderer parameters `interactiveScaling` (default on) +
 `interactiveScalingDivider` (0 = automatic from the previous full-res frame time,
 targeting `interactiveScalingTargetFrameTime`, capped at 8, long axis kept ≥ 128 px;
 Cycles' heuristic shape). Only engages while frame `accumulation` is on: an

@@ -96,7 +96,7 @@ struct Renderer : public Object
   // CYCLES_RENDERER_INTERACTIVE_SCALING parameters (defaults keep the
   // feature off -- behavior is then identical to not having it at all).
   struct {
-    bool enabled{false};
+    bool enabled{true};
     int divider{0}; // fixed divider override; 0 -> automatic
     float targetFrameTime{1.f / 30.f}; // automatic-divider target, seconds
   } m_interactive;
@@ -123,7 +123,7 @@ struct Renderer : public Object
     int aoBounces{0}; // 0 disables fast-GI approximation
     float aoFactor{0.f};
     float aoDistance{3.402823466e38f}; // FLT_MAX
-    bool adaptiveSampling{false}; // device default: off (see Device.cpp)
+    bool adaptiveSampling{true};
     float adaptiveThreshold{0.01f};
     int adaptiveMinSamples{0}; // 0 -> automatic
     float exposure{1.f};
