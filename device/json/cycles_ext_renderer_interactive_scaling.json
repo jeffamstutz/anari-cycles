@@ -17,7 +17,7 @@
      ],
      "tags": [],
      "default": [
-      false
+      true
      ],
      "description": "render accumulation-reset (camera/scene change) frames at reduced resolution, upscaled to the frame size; only engages while the frame's 'accumulation' is enabled. Preview frames upscale all channels, so depth/id channels are blocky until interaction stops"
     },

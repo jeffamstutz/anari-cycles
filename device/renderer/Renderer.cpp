@@ -125,7 +125,7 @@ void Renderer::commitParameters()
   // accumulation resets. No change tracking needed -- a parameter change
   // resets accumulation, and the values are only read per-render by
   // Frame::renderFrame().
-  m_interactive.enabled = getParam<bool>("interactiveScaling", false);
+  m_interactive.enabled = getParam<bool>("interactiveScaling", true);
   m_interactive.divider =
       std::max(0, getParam<int>("interactiveScalingDivider", 0));
   m_interactive.targetFrameTime = std::max(
@@ -156,7 +156,7 @@ void Renderer::commitParameters()
   sp.aoFactor = std::max(0.f, getParam<float>("aoFactor", 0.f));
   sp.aoDistance =
       std::max(0.f, getParam<float>("aoDistance", 3.402823466e38f));
-  sp.adaptiveSampling = getParam<bool>("adaptiveSampling", false);
+  sp.adaptiveSampling = getParam<bool>("adaptiveSampling", true);
   sp.adaptiveThreshold =
       std::max(0.f, getParam<float>("adaptiveThreshold", 0.01f));
   sp.adaptiveMinSamples = std::max(0, getParam<int>("adaptiveMinSamples", 0));
