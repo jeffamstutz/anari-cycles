@@ -287,6 +287,19 @@ CyclesDevice::~CyclesDevice()
     state.session->cancel(true);
     state.session->wait();
     state.commitBuffer.clear();
+
+    // Destroy the session (and with it the scene) now, not when the device
+    // state dies: helium::BaseDevice::~BaseDevice() runs its leaked-object
+    // check after this destructor but before the state is destroyed, and the
+    // Cycles ImageManager frees zero-user image slots only lazily (on the
+    // next device_update, or at scene teardown). Slots surviving to this
+    // point still own their SamplerImageLoader, which pins its source arrays
+    // -- those would be falsely reported as leaked. The render thread is
+    // already stopped, so no lock is needed.
+    state.retiredGeometry.clear(); // owned by the scene, freed by ~Scene
+    state.output_driver = nullptr; // owned by the session
+    state.scene = nullptr;
+    state.session.reset();
   }
 
   reportMessage(ANARI_SEVERITY_DEBUG, "destroyed cycles device (%p)", this);
