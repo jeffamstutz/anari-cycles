@@ -48,9 +48,10 @@ class VolumeImageLoader : public ccl::ImageLoader
  private:
   // Raw pointer (not IntrusivePtr): the StructuredRegularField that created
   // this loader owns both the array reference and the image handle, so the
-  // array outlives any load done through this loader. Holding a reference
-  // here would keep the array alive past device release and trip helium's
-  // leak detection (same pattern as SamplerImageLoader).
+  // array outlives any load done through this loader. (SamplerImageLoader
+  // pins its arrays instead because its image slots can be deduped against
+  // and outlive the sampler; such pins persist until ~CyclesDevice destroys
+  // the session, which deliberately happens before helium's leak check.)
   Array3D *m_data{nullptr};
   uint32_t m_dims[3]{0, 0, 0};
   uint32_t m_tilesX{1};
