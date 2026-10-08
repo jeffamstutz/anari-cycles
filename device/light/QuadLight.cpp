@@ -102,7 +102,7 @@ void QuadLight::finalize()
   // (see Light.h). For side='back'/'both' the flipped per-face transform
   // mirrors the profile about the quad's plane automatically.
   {
-    auto n = math::cross(m_edge1, m_edge2);
+    auto n = math::cross(m_edge2, m_edge1); // front normal, see quadXfm()
     const float nLen = math::length(n);
     n = nLen > 0.f ? n / nLen : math::float3{0.f, 0.f, 1.f};
     const float e1Len = math::length(m_edge1);
@@ -136,7 +136,9 @@ math::mat4 QuadLight::quadXfm(bool backSide) const
 {
   const auto center = m_position + 0.5f * (m_edge1 + m_edge2);
 
-  auto normal = math::cross(m_edge1, m_edge2);
+  // KHR_LIGHT_QUAD: the front side is edge2 x edge1. Cycles area lights
+  // emit along their local -Z, so the third column is the negated normal.
+  auto normal = math::cross(m_edge2, m_edge1);
   if (math::length(normal) > 0.f)
     normal = math::normalize(normal);
   else
