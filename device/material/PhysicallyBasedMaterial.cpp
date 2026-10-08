@@ -284,29 +284,36 @@ void PhysicallyBasedMaterial::finalize()
   // (the default 'original' base requests *_UNDISPLACED variants meant for
   // displacement, which nothing provides here); without displacement both
   // bases are equivalent.
+  //
+  // ANARI normal samplers already yield tangent-space normals in [-1, 1]
+  // (apps apply the 2 * texel - 1 decode via 'outTransform'/'outOffset'), but
+  // the NormalMapNode decodes its 'Color' input the same way itself, so
+  // re-encode with 0.5 * n + 0.5 first to cancel it.
+  const auto normalMapOutput = [&](Sampler *sampler) -> ccl::ShaderOutput * {
+    auto samplerOutputs = getSamplerOutputs(sampler);
+    if (!samplerOutputs.colorOutput)
+      return nullptr;
+    auto *encode = m_graph->create_node<ccl::VectorMathNode>();
+    encode->set_math_type(ccl::NODE_VECTOR_MATH_MULTIPLY_ADD);
+    encode->set_vector2(make_float3(0.5f, 0.5f, 0.5f));
+    encode->set_vector3(make_float3(0.5f, 0.5f, 0.5f));
+    m_graph->connect(samplerOutputs.colorOutput, encode->input("Vector1"));
+    auto *normalMap = m_graph->create_node<ccl::NormalMapNode>();
+    normalMap->set_space(ccl::NODE_NORMAL_MAP_TANGENT);
+    normalMap->set_base(ccl::NODE_NORMAL_MAP_BASE_DISPLACED);
+    normalMap->set_attribute(ccl::ustring(""));
+    m_graph->connect(encode->output("Vector"), normalMap->input("Color"));
+    return normalMap->output("Normal");
+  };
+
   if (m_normalSampler) {
-    auto samplerOutputs = getSamplerOutputs(m_normalSampler.get());
-    if (samplerOutputs.colorOutput) {
-      auto *normalMap = m_graph->create_node<ccl::NormalMapNode>();
-      normalMap->set_space(ccl::NODE_NORMAL_MAP_TANGENT);
-      normalMap->set_base(ccl::NODE_NORMAL_MAP_BASE_DISPLACED);
-      normalMap->set_attribute(ccl::ustring(""));
-      m_graph->connect(samplerOutputs.colorOutput, normalMap->input("Color"));
-      m_graph->connect(normalMap->output("Normal"), m_bsdf->input("Normal"));
-    }
+    if (auto *normal = normalMapOutput(m_normalSampler.get()))
+      m_graph->connect(normal, m_bsdf->input("Normal"));
   }
 
   if (m_clearcoatNormalSampler) {
-    auto samplerOutputs = getSamplerOutputs(m_clearcoatNormalSampler.get());
-    if (samplerOutputs.colorOutput) {
-      auto *normalMap = m_graph->create_node<ccl::NormalMapNode>();
-      normalMap->set_space(ccl::NODE_NORMAL_MAP_TANGENT);
-      normalMap->set_base(ccl::NODE_NORMAL_MAP_BASE_DISPLACED);
-      normalMap->set_attribute(ccl::ustring(""));
-      m_graph->connect(samplerOutputs.colorOutput, normalMap->input("Color"));
-      m_graph->connect(
-          normalMap->output("Normal"), m_bsdf->input("Coat Normal"));
-    }
+    if (auto *normal = normalMapOutput(m_clearcoatNormalSampler.get()))
+      m_graph->connect(normal, m_bsdf->input("Coat Normal"));
   }
 
   Material::finalize();

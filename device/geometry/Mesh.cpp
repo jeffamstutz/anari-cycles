@@ -674,9 +674,9 @@ void Mesh::setTangents(ccl::Mesh *mesh) const
 {
   // faceVarying.tangent > vertex.tangent; uploaded as the standard Cycles UV
   // tangent (+ handedness sign) that tangent-space normal mapping consumes
-  // (see the NormalMapNode setup in material/Material.cpp). Both are per-corner
-  // attributes in Cycles, so vertex tangents replicate through the triangle
-  // index.
+  // (see the NormalMapNode setup in material/PhysicallyBasedMaterial.cpp).
+  // Both are per-corner attributes in Cycles, so vertex tangents replicate
+  // through the triangle index.
   const Array1D *src =
       m_faceVaryingTangent ? m_faceVaryingTangent.get() : m_vertexTangent.get();
   if (!src || src->size() == 0) {
