@@ -109,15 +109,12 @@ void Isosurface::syncCyclesNode(ccl::Geometry *node) const
   const size_t numVerts = m_mesh.verts.size();
   const size_t numTris = m_mesh.tris.size() / 3;
 
-  ccl::array<ccl::float3> P;
-  auto *dstP = P.resize(numVerts);
+  mesh->resize_mesh(numVerts, numTris);
+  auto *dstP = mesh->get_position_for_write();
   for (size_t i = 0; i < numVerts; i++) {
     const auto &p = m_mesh.verts[i];
     dstP[i] = make_float3(p[0], p[1], p[2]);
   }
-  mesh->set_verts(P);
-
-  mesh->resize_mesh(numVerts, numTris);
   auto *triangles = mesh->get_triangles().data();
   auto *shader = mesh->get_shader().data();
   auto *smooth = mesh->get_smooth().data();
@@ -137,7 +134,7 @@ void Isosurface::syncCyclesNode(ccl::Geometry *node) const
   if (numVerts > 0) {
     Attribute *attr =
         attrs.add(ATTR_STD_VERTEX_NORMAL, ustring("vertex.normal"));
-    packed_normal *dst = attr->data_normal_for_write();
+    packed_normal *dst = attr->data_for_write<packed_normal>();
     for (size_t i = 0; i < numVerts; i++) {
       const auto &n = m_mesh.normals[i];
       dst[i] = packed_normal(make_float3(n[0], n[1], n[2]));

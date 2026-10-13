@@ -101,7 +101,7 @@ inline void writeAttributeArray(ccl::AttributeSet &attrs,
   // opacity (see Material::connectAlpha). AttributeNode reads float4
   // attributes fine, exposing xyz as 'Color' and w as 'Alpha'.
   Attribute *attr = attrs.add(name, ccl::TypeFloat4, element);
-  float4 *dst = attr->data_float4_for_write();
+  float4 *dst = attr->data_for_write<float4>();
   for (size_t i = 0; i < count; i++) {
     const auto &c = converted[std::min<size_t>(srcIndex(i), maxIdx)];
     dst[i] = make_float4(c[0], c[1], c[2], c[3]);
@@ -117,7 +117,7 @@ inline void writeAttributeConstant(
 {
   const ustring name(CHANNEL_CYCLES_NAME[channel]);
   Attribute *attr = attrs.add(name, ccl::TypeFloat4, ATTR_ELEMENT_MESH);
-  attr->data_float4_for_write()[0] = make_float4(v[0], v[1], v[2], v[3]);
+  attr->data_for_write<float4>()[0] = make_float4(v[0], v[1], v[2], v[3]);
   attr->modified = true;
 }
 
@@ -143,7 +143,7 @@ inline void writePrimitiveId(ccl::AttributeSet &attrs,
   }
 
   Attribute *attr = attrs.add(ustring("primitiveId"), ccl::TypeFloat, element);
-  float *dst = attr->data_float_for_write();
+  float *dst = attr->data_for_write<float>();
   for (size_t i = 0; i < count; i++) {
     const size_t prim = primIndex(i);
     uint64_t id = prim;

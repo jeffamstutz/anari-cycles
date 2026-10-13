@@ -73,7 +73,7 @@ Registry source: `~/opt/anari/share/anari/code_gen/api/*.json`. Device claims 17
 ### 2.1 Missing object subtypes
 | Category | Implemented | Missing (KHR) | Cycles mapping difficulty |
 |---|---|---|---|
-| Geometry | triangle, quad, sphere, triangle/quad motion deformation (DONE 2026-07-08: nested `vertex.position`/`normal`/`tangent` key arrays + `time`, baked onto the camera shutter as Cycles `motion_steps` + `ATTR_STD_MOTION_VERTEX_POSITION/_NORMAL`; re-baked per shutter via `Surface::bakeGeometryMotion()`) | **cylinder, cone, curve, isosurface** | curve → Cycles `Hair` (easy fit); cylinder/cone → mesh tessellation or hair-with-linear (medium); isosurface → needs volume field first (hard) |
+| Geometry | triangle, quad, sphere, triangle/quad motion deformation (DONE 2026-07-08: nested `vertex.position`/`normal`/`tangent` key arrays + `time`, baked onto the camera shutter as Cycles `motion_steps` + motion steps on the `ATTR_STD_POSITION`/`ATTR_STD_VERTEX_NORMAL` attributes; re-baked per shutter via `Surface::bakeGeometryMotion()`) | **cylinder, cone, curve, isosurface** | curve → Cycles `Hair` (easy fit); cylinder/cone → mesh tessellation or hair-with-linear (medium); isosurface → needs volume field first (hard) |
 | Camera | perspective, orthographic | **omnidirectional** | trivial — Cycles `CAMERA_PANORAMA` + `PANORAMA_EQUIRECTANGULAR` |
 | Light | directional, hdri, point, spot, quad | **ring** | Cycles `AreaLight` with `ellipse=true` (easy) |
 | Sampler | image1D, image2D | **image3D, primitive, transform** | transform = pure graph math (easy); primitive = per-prim attribute lookup (medium); image3D blocked by Cycles dropping dense 3D textures (consider NanoVDB conversion) |

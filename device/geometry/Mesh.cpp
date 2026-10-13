@@ -251,8 +251,6 @@ void Mesh::syncCyclesNode(ccl::Geometry *node) const
     reportMessage(ANARI_SEVERITY_WARNING,
         "Mesh::syncCyclesNode() detected incomplete %s geometry",
         m_subtype);
-    ccl::array<ccl::float3> P;
-    mesh->set_verts(P);
     mesh->resize_mesh(0, 0);
     clearSubdivisionState(mesh);
     clearDeformationMotionState(mesh);
@@ -272,7 +270,8 @@ void Mesh::syncCyclesNode(ccl::Geometry *node) const
   // re-sync.
   if (!hasDeformationMotion())
     clearDeformationMotionState(mesh);
-  setVertexPosition(mesh);
+  mesh->resize_mesh(int(m_vertexPosition->size()), int(numTriangles()));
+  setVertexPosition(mesh->attributes);
   setPrimitiveIndex(mesh);
   setAttributes(mesh);
   setNormals(mesh);
@@ -311,10 +310,11 @@ void Mesh::syncSubdCyclesNode(ccl::Mesh *mesh) const
   // still re-interpolate onto the diced mesh).
   mesh->clear_non_sockets();
 
-  setVertexPosition(mesh);
   // Triangles are produced by the tessellator at scene-update time; clear
   // any previously synced triangle data so it cannot linger.
   mesh->resize_mesh(int(m_vertexPosition->size()), 0);
+  // The tessellator reads the control cage from the subd position attribute.
+  setVertexPosition(mesh->subd_attributes);
 
   // Drop plain-path attributes from a previous non-subdivided sync: the
   // tessellator copies interpolated subd attributes into 'attributes' under
@@ -533,15 +533,18 @@ size_t Mesh::fvIndex(size_t corner) const
   return 4 * (tri / 2) + size_t((tri & 1) ? oddCorner[c] : c);
 }
 
-void Mesh::setVertexPosition(ccl::Mesh *mesh) const
+void Mesh::setVertexPosition(ccl::AttributeSet &attrs) const
 {
-  ccl::array<ccl::float3> P;
-  auto *dst = P.resize(m_vertexPosition->size());
+  Attribute *attr = attrs.add(ATTR_STD_POSITION);
+  attr->resize(m_vertexPosition->size());
   std::transform(m_vertexPosition->beginAs<anari_vec::float3>(),
       m_vertexPosition->endAs<anari_vec::float3>(),
-      dst,
-      [](const anari_vec::float3 &v) { return make_float3(v[0], v[1], v[2]); });
-  mesh->set_verts(P);
+      attr->data_for_write<ccl::packed_float3>(),
+      [](const anari_vec::float3 &v) {
+        return ccl::packed_float3(make_float3(v[0], v[1], v[2]));
+      });
+  attr->modified = true;
+  attrs.geometry->tag_modified();
 }
 
 void Mesh::setPrimitiveIndex(ccl::Mesh *mesh) const
@@ -640,7 +643,7 @@ void Mesh::setNormals(ccl::Mesh *mesh) const
   if (m_vertexNormal && m_vertexNormal->size() > 0) {
     Attribute *attr =
         mesh->attributes.add(ATTR_STD_VERTEX_NORMAL, ustring("vertex.normal"));
-    packed_normal *dst = attr->data_normal_for_write();
+    packed_normal *dst = attr->data_for_write<packed_normal>();
     const auto converted = convertToFloat4(*m_vertexNormal);
     const size_t maxIdx = converted.size() - 1;
     for (size_t i = 0; i < numVerts; i++) {
@@ -657,7 +660,7 @@ void Mesh::setNormals(ccl::Mesh *mesh) const
   if (m_faceVaryingNormal && m_faceVaryingNormal->size() > 0) {
     Attribute *attr = mesh->attributes.add(
         ATTR_STD_CORNER_NORMAL, ustring("faceVarying.normal"));
-    packed_normal *dst = attr->data_normal_for_write();
+    packed_normal *dst = attr->data_for_write<packed_normal>();
     const auto converted = convertToFloat4(*m_faceVaryingNormal);
     const size_t maxIdx = converted.size() - 1;
     for (size_t k = 0; k < nCorners; k++) {
@@ -694,8 +697,8 @@ void Mesh::setTangents(ccl::Mesh *mesh) const
 
   Attribute *attrT = mesh->attributes.add(ATTR_STD_UV_TANGENT);
   Attribute *attrS = mesh->attributes.add(ATTR_STD_UV_TANGENT_SIGN);
-  float3 *dstT = attrT->data_float3_for_write();
-  float *dstS = attrS->data_float_for_write();
+  packed_float3 *dstT = attrT->data_for_write<packed_float3>();
+  float *dstS = attrS->data_for_write<float>();
   for (size_t k = 0; k < nCorners; k++) {
     const size_t i =
         faceVarying ? fvIndex(k) : size_t(std::max(triangles[k], 0));
@@ -750,7 +753,7 @@ void Mesh::readVertexKeys(const ObjectArray *data,
   }
 }
 
-void Mesh::samplePositionKeys(float t, ccl::float3 *dst) const
+void Mesh::samplePositionKeys(float t, ccl::packed_float3 *dst) const
 {
   const size_t numVerts = m_vertexPosition->size();
   size_t j;
@@ -804,14 +807,17 @@ void Mesh::sampleNormalKeys(const ConvertedKeys &keys,
 // common case overhead-free.
 void Mesh::clearDeformationMotionState(ccl::Mesh *mesh)
 {
-  const bool haveAttrs =
-      mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION) != nullptr
-      || mesh->attributes.find(ATTR_STD_MOTION_VERTEX_NORMAL) != nullptr;
-  if (!haveAttrs && mesh->get_motion_steps() == 0
+  Attribute *attrP = mesh->attributes.find(ATTR_STD_POSITION);
+  Attribute *attrN = mesh->attributes.find(ATTR_STD_VERTEX_NORMAL);
+  const bool haveMotion =
+      (attrP && attrP->has_motion()) || (attrN && attrN->has_motion());
+  if (!haveMotion && mesh->get_motion_steps() == 0
       && !mesh->get_use_motion_blur())
     return;
-  mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_POSITION);
-  mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_NORMAL);
+  if (attrP)
+    attrP->remove_motion();
+  if (attrN)
+    attrN->remove_motion();
   mesh->set_motion_steps(0);
   mesh->set_use_motion_blur(false);
 }
@@ -851,7 +857,7 @@ bool Mesh::bakeDeformationMotion(
   // Sample every step up front so a track that does not actually move across
   // the shutter (or a degenerate shutter, n == 1) collapses to a static pose
   // and keeps all motion machinery off.
-  std::vector<ccl::float3> steps(n * numVerts);
+  std::vector<ccl::packed_float3> steps(n * numVerts);
   bool allEqual = true;
   for (size_t s = 0; s < n; s++) {
     const float t = n > 1 ? shutter.lower + extent * float(s) / float(n - 1)
@@ -864,39 +870,37 @@ bool Mesh::bakeDeformationMotion(
   const bool motion = n > 1 && !allEqual;
   const size_t center = motion ? (n - 1) / 2 : 0;
 
-  // Base verts hold the center step: the shutter-midpoint pose (for the
-  // static collapse every sampled step is the same pose, and a degenerate
+  // The position attribute's center step holds the shutter-midpoint pose (for
+  // the static collapse every sampled step is the same pose, and a degenerate
   // shutter's single sample at s0 == its midpoint).
-  {
-    ccl::array<ccl::float3> P;
-    auto *dst = P.resize(numVerts);
-    std::copy_n(steps.data() + center * numVerts, numVerts, dst);
-    mesh->set_verts(P);
-  }
+  std::copy_n(steps.data() + center * numVerts,
+      numVerts,
+      mesh->get_position_for_write());
 
   if (!motion) {
     clearDeformationMotionState(mesh);
   } else {
     mesh->set_motion_steps(uint(n));
     mesh->set_use_motion_blur(true);
-    // Remove-then-add so the attribute is (re)allocated for the current step
-    // and vertex counts (add() reuses an existing allocation as-is).
-    mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_POSITION);
-    Attribute *attr = mesh->attributes.add(ATTR_STD_MOTION_VERTEX_POSITION);
-    ccl::float3 *dst = attr->data_float3_for_write();
+    // Attribute motion steps 1..n-1 are the non-center time steps in time
+    // order (see Attribute::time_step_to_attr_step()). add_motion() resizes
+    // an existing set of steps to the current count.
+    Attribute *attr = mesh->attributes.find(ATTR_STD_POSITION);
+    attr->add_motion(mesh);
     for (size_t s = 0; s < n; s++) {
       if (s == center)
         continue;
-      std::copy_n(steps.data() + s * numVerts, numVerts, dst);
-      dst += numVerts;
+      std::copy_n(steps.data() + s * numVerts,
+          numVerts,
+          attr->data_for_write<ccl::packed_float3>(
+              attr->time_step_to_attr_step(int(s), int(n))));
     }
     attr->modified = true;
   }
 
-  // Nested vertex normals: the center pose goes into the regular normal
-  // attribute (the kernel's center step reads it), the other steps into the
-  // motion normal attribute. Keys are converted to float4 once up front (not
-  // per sampled step).
+  // Nested vertex normals: the center pose goes into the normal attribute's
+  // center step, the other poses into its motion steps. Keys are converted
+  // to float4 once up front (not per sampled step).
   ConvertedKeys normalKeys;
   normalKeys.reserve(m_normalKeys.size());
   for (const auto &key : m_normalKeys)
@@ -907,24 +911,33 @@ bool Mesh::bakeDeformationMotion(
     const float tCenter = n > 1
         ? shutter.lower + extent * float(center) / float(n - 1)
         : shutter.lower;
-    sampleNormalKeys(normalKeys, tCenter, attrN->data_normal_for_write(), numVerts);
-    attrN->modified = true;
-  }
-  if (motion && normalKeys.size() > 1) {
-    mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_NORMAL);
-    Attribute *attrMN = mesh->attributes.add(ATTR_STD_MOTION_VERTEX_NORMAL);
-    packed_normal *dst = attrMN->data_normal_for_write();
-    for (size_t s = 0; s < n; s++) {
-      if (s == center)
-        continue;
-      const float t = shutter.lower + extent * float(s) / float(n - 1);
-      sampleNormalKeys(normalKeys, t, dst, numVerts);
-      dst += numVerts;
+    sampleNormalKeys(normalKeys,
+        tCenter,
+        attrN->data_for_write<packed_normal>(),
+        numVerts);
+    if (motion && normalKeys.size() > 1) {
+      attrN->add_motion(mesh);
+      for (size_t s = 0; s < n; s++) {
+        if (s == center)
+          continue;
+        const float t = shutter.lower + extent * float(s) / float(n - 1);
+        sampleNormalKeys(normalKeys,
+            t,
+            attrN->data_for_write<packed_normal>(
+                attrN->time_step_to_attr_step(int(s), int(n))),
+            numVerts);
+      }
+    } else {
+      attrN->remove_motion();
     }
-    attrMN->modified = true;
-  } else {
-    mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_NORMAL);
+    attrN->modified = true;
+  } else if (Attribute *attrN = mesh->attributes.find(ATTR_STD_VERTEX_NORMAL)) {
+    // Drop motion normals from a previous bake (including ones Cycles derived
+    // itself) so they are re-derived from the new motion positions.
+    attrN->remove_motion();
   }
+  // Without explicit motion normals, Cycles derives the motion steps'
+  // normals from the motion positions (Mesh::add_vertex_normals()).
 
   // The bake changes the mesh's BVH primitive layout whenever the motion
   // step count flips or changes (static triangles vs. motion triangles with

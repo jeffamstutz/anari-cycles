@@ -112,14 +112,15 @@ box3 Sphere::bounds() const
 
 void Sphere::setSpheres(ccl::PointCloud *pc) const
 {
-  ccl::array<ccl::float3> points;
-  ccl::array<float> radius;
   ccl::array<int> shader;
 
   const size_t n = numSpheres();
 
-  auto *dstPoint = (ccl::float3 *)points.resize(n);
-  auto *dstRadius = (float *)radius.resize(n);
+  // Sizes the position/radius attributes (and any attributes added on a
+  // previous sync) to the new point count before they are written below.
+  pc->resize(int(n));
+  auto *dstPoint = pc->get_position_for_write();
+  auto *dstRadius = pc->get_radius_for_write();
   auto *dstShader = (int *)shader.resize(n);
 
   const auto *srcPoint = m_vertexPosition
@@ -138,13 +139,7 @@ void Sphere::setSpheres(ccl::PointCloud *pc) const
     dstShader[i] = 0;
   }
 
-  pc->set_points(points);
-  pc->set_radius(radius);
   pc->set_shader(shader);
-
-  // Attributes added on a previous sync keep their old element count; resize
-  // them to the new point count before setAttributes() writes them.
-  pc->attributes.resize();
 }
 
 void Sphere::setAttributes(ccl::PointCloud *pc) const

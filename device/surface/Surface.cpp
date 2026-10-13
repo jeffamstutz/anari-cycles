@@ -29,12 +29,13 @@ void Surface::commitParameters()
   // Core 'visible' plus the CYCLES_SURFACE_COMPOSITING per-ray-type flags.
   // Each 'visible.*' flag defaults to 'visible', so visible=false hides the
   // surface from every ray type while e.g. visible.shadow=true keeps its
-  // shadows. Only the named PATH_RAY_* bits are raised (mirroring Blender's
-  // object_ray_visibility()): ray/object visibility is an AND-nonzero test,
-  // so stray extra bits (e.g. PATH_RAY_TRANSPARENT, carried by continuation
-  // rays alongside their original type) must stay clear or a "fully
-  // invisible" object would still be hit. Fully-visible surfaces keep the
-  // Cycles socket default (~0u) so the setter no-ops.
+  // shadows. Only the named PATH_RAY_VISIBILITY_* bits are raised (mirroring
+  // Blender's object_ray_visibility()): ray/object visibility is an
+  // AND-nonzero test, so any extra bit would let a "fully invisible" object
+  // still be hit. Fully-visible surfaces keep the
+  // Cycles socket default (PATH_RAY_VISIBILITY_ALL) so the setter no-ops.
+  // Bits outside PATH_RAY_VISIBILITY_ALL are invalid (Cycles asserts on
+  // them), so ~0u must not be used as "all visible".
   const bool visible = getParam<bool>("visible", true);
   const bool visCamera = getParam<bool>("visible.camera", visible);
   const bool visDiffuse = getParam<bool>("visible.diffuse", visible);
@@ -45,16 +46,17 @@ void Surface::commitParameters()
       getParam<bool>("visible.volumeScatter", visible);
   if (visCamera && visDiffuse && visGlossy && visTransmission && visShadow
       && visVolumeScatter) {
-    m_visibilityMask = ~0u;
+    m_visibilityMask = ccl::PATH_RAY_VISIBILITY_ALL;
   } else {
     uint32_t mask = 0;
-    mask |= visCamera ? ccl::PATH_RAY_CAMERA : 0;
-    mask |= visDiffuse ? ccl::PATH_RAY_DIFFUSE : 0;
-    // sharp specular rays carry GLOSSY|SINGULAR, so raise both
-    mask |= visGlossy ? (ccl::PATH_RAY_GLOSSY | ccl::PATH_RAY_SINGULAR) : 0;
-    mask |= visTransmission ? ccl::PATH_RAY_TRANSMIT : 0;
-    mask |= visShadow ? ccl::PATH_RAY_SHADOW : 0;
-    mask |= visVolumeScatter ? ccl::PATH_RAY_VOLUME_SCATTER : 0;
+    mask |= visCamera ? ccl::PATH_RAY_VISIBILITY_CAMERA : 0;
+    mask |= visDiffuse ? ccl::PATH_RAY_VISIBILITY_DIFFUSE : 0;
+    mask |= visGlossy ? ccl::PATH_RAY_VISIBILITY_GLOSSY : 0;
+    mask |= visTransmission ? ccl::PATH_RAY_VISIBILITY_TRANSMIT : 0;
+    mask |= visShadow ? ccl::PATH_RAY_VISIBILITY_SHADOW : 0;
+    mask |= visVolumeScatter ? ccl::PATH_RAY_VISIBILITY_VOLUME_SCATTER : 0;
+    // Ray-cast node queries have no ANARI flag of their own; follow 'visible'.
+    mask |= visible ? ccl::PATH_RAY_VISIBILITY_RAYCAST : 0;
     m_visibilityMask = mask;
   }
 

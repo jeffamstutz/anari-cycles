@@ -67,7 +67,7 @@ struct Mesh : public Geometry
   // primitive that map to split-triangle corners {0,1,2} and {0,2,3}).
   size_t fvIndex(size_t corner) const;
 
-  void setVertexPosition(ccl::Mesh *mesh) const;
+  void setVertexPosition(ccl::AttributeSet &attrs) const;
   void setPrimitiveIndex(ccl::Mesh *mesh) const;
   void setAttributes(ccl::Mesh *mesh) const;
   void setNormals(ccl::Mesh *mesh) const;
@@ -97,7 +97,7 @@ struct Mesh : public Geometry
       KeyVector &out);
   // Interpolated vertex positions at absolute frame time 't' (linear between
   // the bracketing keys, clamped outside 'time').
-  void samplePositionKeys(float t, ccl::float3 *dst) const;
+  void samplePositionKeys(float t, ccl::packed_float3 *dst) const;
   // Interpolated (renormalized) vertex normals at frame time 't', from
   // per-key float4 conversions computed once per bake (normal keys may be
   // FIXED16, so they cannot be read in place like position keys).

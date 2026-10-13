@@ -158,13 +158,14 @@ void Curve::setCurves(ccl::Hair *hair,
     const std::vector<int> &firstKey,
     const std::vector<uint32_t> &keyVertex) const
 {
-  ccl::array<ccl::float3> keys;
-  ccl::array<float> radius;
   ccl::array<int> first;
   ccl::array<int> shader;
 
-  auto *dstKey = keys.resize(keyVertex.size());
-  auto *dstRadius = radius.resize(keyVertex.size());
+  // Sizes the position/radius attributes (and any attributes added on a
+  // previous sync) to the new key count before they are written below.
+  hair->resize_curves(int(firstKey.size()), int(keyVertex.size()));
+  auto *dstKey = hair->get_position_for_write();
+  auto *dstRadius = hair->get_radius_for_write();
   auto *dstFirst = first.resize(firstKey.size());
   auto *dstShader = shader.resize(firstKey.size());
 
@@ -183,15 +184,8 @@ void Curve::setCurves(ccl::Hair *hair,
     dstShader[c] = 0;
   }
 
-  hair->set_curve_keys(keys);
-  hair->set_curve_radius(radius);
   hair->set_curve_first_key(first);
   hair->set_curve_shader(shader);
-
-  // Attributes added on a previous sync keep their old element count;
-  // resize them to the new key count before setAttributes() writes them
-  // (the mesh path gets this implicitly from resize_mesh()).
-  hair->attributes.resize();
 }
 
 void Curve::setAttributes(ccl::Hair *hair,

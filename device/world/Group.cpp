@@ -144,7 +144,7 @@ bool Group::addGroupToCurrentCyclesScene(const math::mat4 &xfm,
         // rays (Cycles turns this into SHADER_EXCLUDE_CAMERA on the light);
         // illumination of the scene is unaffected.
         if (!l->visibleToCamera())
-          o->set_visibility(o->get_visibility() & ~ccl::PATH_RAY_CAMERA);
+          o->set_visibility(o->get_visibility() & ~ccl::PATH_RAY_VISIBILITY_CAMERA);
         // CYCLES_LIGHT_LINKING: which receiver sets this light illuminates
         // and which blocker sets shadow it (default ~0 = all sets), plus the
         // CYCLES_LIGHTGROUPS pass its emission accumulates into. Setters

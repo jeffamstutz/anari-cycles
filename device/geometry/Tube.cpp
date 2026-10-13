@@ -89,12 +89,8 @@ void Tube::syncCyclesNode(ccl::Geometry *node) const
   const size_t numVerts = md.verts.size();
   const size_t numTris = md.tris.size() / 3;
 
-  ccl::array<ccl::float3> P;
-  auto *dstP = P.resize(numVerts);
-  std::copy(md.verts.begin(), md.verts.end(), dstP);
-  mesh->set_verts(P);
-
   mesh->resize_mesh(numVerts, numTris);
+  std::copy(md.verts.begin(), md.verts.end(), mesh->get_position_for_write());
   auto *triangles = mesh->get_triangles().data();
   auto *shader = mesh->get_shader().data();
   auto *smooth = mesh->get_smooth().data();
@@ -113,7 +109,7 @@ void Tube::syncCyclesNode(ccl::Geometry *node) const
   {
     Attribute *attr =
         mesh->attributes.add(ATTR_STD_VERTEX_NORMAL, ustring("vertex.normal"));
-    packed_normal *dst = attr->data_normal_for_write();
+    packed_normal *dst = attr->data_for_write<packed_normal>();
     for (size_t i = 0; i < numVerts; i++)
       dst[i] = packed_normal(md.normals[i]);
     attr->modified = true;

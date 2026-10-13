@@ -67,7 +67,7 @@ struct Surface : public Object
 
   ccl::Geometry *m_cyclesGeometryNode{nullptr};
   uint32_t m_id{~0u};
-  uint32_t m_visibilityMask{~0u};
+  uint32_t m_visibilityMask{ccl::PATH_RAY_VISIBILITY_ALL};
   bool m_holdout{false};
   bool m_shadowCatcher{false};
   uint32_t m_receiverLightSet{0};

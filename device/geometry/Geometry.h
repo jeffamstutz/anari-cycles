@@ -39,11 +39,11 @@ struct Geometry : public Object
   // Re-bake the deformation keys onto 'shutter' (per the shutter contract in
   // MotionTrack.h: Cycles kernel ray-time [0,1] spans exactly [s0,s1], so
   // motion step i of N samples the keys at s0 + (s1-s0)*i/(N-1)). Writes the
-  // node's base vertices (the shutter-midpoint pose -- Cycles' center step)
-  // plus the ATTR_STD_MOTION_VERTEX_POSITION/_NORMAL attributes. Returns
-  // 'true' when motion steps are active on the node afterwards (the caller
-  // then enables integrator motion blur); a degenerate shutter or keys that
-  // do not move across it collapse to a sharp midpoint pose and return
+  // node's position (and nested vertex normal) attributes: the center step
+  // holds the shutter-midpoint pose, the attribute motion steps the rest.
+  // Returns 'true' when motion steps are active on the node afterwards (the
+  // caller then enables integrator motion blur); a degenerate shutter or keys
+  // that do not move across it collapse to a sharp midpoint pose and return
   // 'false'. Called by Surface::bakeGeometryMotion() during world rebuilds.
   virtual bool bakeDeformationMotion(
       ccl::Geometry *node, const helium::box1 &shutter) const;

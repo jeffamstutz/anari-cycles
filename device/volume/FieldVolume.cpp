@@ -107,12 +107,9 @@ void FieldVolume::syncCyclesMesh(
       make_int3(5, 4, 1),
       make_int3(1, 4, 0)};
 
-  ccl::array<ccl::float3> P;
-  P.resize(vertices.size());
-  std::copy(vertices.cbegin(), vertices.cend(), P.begin());
-  m_mesh->set_verts(P);
-
   m_mesh->resize_mesh(int(vertices.size()), int(faces.size()));
+  std::copy(
+      vertices.cbegin(), vertices.cend(), m_mesh->get_position_for_write());
   auto *triangles = m_mesh->get_triangles().data();
   auto *shader = m_mesh->get_shader().data();
   auto *smooth = m_mesh->get_smooth().data();
